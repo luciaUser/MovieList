@@ -85,12 +85,13 @@
 
   function imdbColor(score) {
     const stops = [
-      [5, "#bc4036"],
-      [6.4, "#d4783a"],
-      [7.2, "#d4b048"],
-      [8, "#8fbe45"],
+      [0, "#8d1f1c"],
+      [2.5, "#c44532"],
+      [4.5, "#d4783a"],
+      [6, "#d4b048"],
+      [7.5, "#a8c44a"],
       [9, "#3cba6a"],
-      [10, "#12824c"],
+      [10, "#149255"],
     ];
     if (score == null) return "#cfcfcf";
     if (score <= stops[0][0]) return stops[0][1];
@@ -104,8 +105,15 @@
     return stops[stops.length - 1][1];
   }
 
+  function withAlpha(color, alpha) {
+    const [r, g, b] = color.startsWith("#")
+      ? hex(color)
+      : color.match(/\d+/g).slice(0, 3).map(Number);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
   function radius() {
-    return 15.8;
+    return 12;
   }
 
   function placeDisc(list, cx, cy, gap) {
@@ -416,6 +424,7 @@
       const next = Math.round(Number(range.value) * 10) / 10;
       value.textContent = formatScore(next);
       writeEntry(film.id, { rating: next });
+      draw();
     });
     rateRow.append(range, value);
     const memoLabel = el("label", null, "Notiz");
@@ -512,8 +521,8 @@
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    ctx.strokeStyle = "rgba(255,255,255,0.9)";
-    ctx.lineWidth = 1.15;
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 1.75;
     if (tier === "strong") ctx.setLineDash([]);
     else if (tier === "mid") ctx.setLineDash([8, 9]);
     else ctx.setLineDash([2, 16]);
@@ -524,14 +533,17 @@
   function drawNode(node) {
     const film = node.film;
     const row = entry(film.id);
+    const selected = film.id === selectedId;
     const at = worldToScreen(node.x, node.y);
     const base = Math.max(radius(film) * cam.z, 1.4);
     const r = base * pulseScale(film.id);
-    const fill = row.watched ? imdbColor(film.imdb) : "#f7f7f7";
-    const glowR = base * 1.7;
-    const glow = ctx.createRadialGradient(at.x, at.y, base * 0.55, at.x, at.y, glowR);
-    glow.addColorStop(0, "rgba(255,255,255,0.34)");
-    glow.addColorStop(1, "rgba(0,0,0,0)");
+    const fill = row.watched && row.rating != null ? imdbColor(row.rating) : "#f7f7f7";
+    const glowR = base * (selected ? 3.1 : 1.7);
+    const glow = ctx.createRadialGradient(at.x, at.y, r * 0.4, at.x, at.y, glowR);
+    glow.addColorStop(0, withAlpha(fill, selected ? 0.85 : 0.34));
+    glow.addColorStop(1, withAlpha(fill, 0));
+    ctx.save();
+    ctx.globalAlpha = selectedId && !selected ? 0.65 : 1;
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(at.x, at.y, glowR, 0, Math.PI * 2);
@@ -559,6 +571,7 @@
       ctx.strokeRect(-2.2, -2.2, 4.4, 4.4);
       ctx.restore();
     }
+    ctx.restore();
     return { at, r };
   }
 
@@ -583,14 +596,16 @@
     }
 
     ctx.lineCap = "round";
+    nodes.forEach((node) => {
+      if (node.film.id !== selectedId) drawNode(node);
+    });
     links.forEach((link) => {
       const a = worldToScreen(byId.get(selectedId).x, byId.get(selectedId).y);
       const other = byId.get(link.id);
       const b = worldToScreen(other.x, other.y);
       drawLink(a, b, link.tier);
     });
-
-    nodes.forEach((node) => drawNode(node));
+    if (selectedId) drawNode(byId.get(selectedId));
 
     if (hoverId) {
       const node = byId.get(hoverId);
