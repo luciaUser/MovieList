@@ -26,8 +26,11 @@
   let cssW = window.innerWidth;
   let cssH = window.innerHeight;
   let mode = "genre";
+  let hoverId = null;
   let selectedId = null;
   let links = [];
+  let pulseAt = 0;
+  let pulseRaf = 0;
   let panning = false;
   let moved = false;
   let panX = 0;
@@ -100,9 +103,9 @@
   }
 
   function radius(film) {
-    if (film.imdb == null) return 3.3;
+    if (film.imdb == null) return 6.2;
     const t = Math.min(1, Math.max(0, (film.imdb - 5.2) / 4.2));
-    return 2.7 + t * 5.2;
+    return 3.4 + t ** 1.45 * 12.4;
   }
 
   function placeDisc(list, cx, cy, gap) {
@@ -134,7 +137,7 @@
       const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
       const cx = Math.cos(a) * rx;
       const cy = Math.sin(a) * ry;
-      placeDisc(list, cx, cy, 20);
+      placeDisc(list, cx, cy, 36);
       list.center = { x: cx, y: cy, label };
     });
     return ordered;
@@ -194,7 +197,7 @@
       const a = -Math.PI / 2 + (i / on) * Math.PI * 2;
       const cx = Math.cos(a) * 1680;
       const cy = Math.sin(a) * 1080;
-      placeDisc(list, cx, cy, 18);
+      placeDisc(list, cx, cy, 32);
       clusterMarks.push({ x: cx, y: cy, label });
     });
   }
@@ -232,9 +235,9 @@
   }
 
   function focusNode(node) {
-    cam.x = node.x;
+    const panelW = Math.min(360, cssW);
+    cam.x = node.x + panelW / (2 * cam.z);
     cam.y = node.y;
-    cam.z = Math.max(cam.z, 0.85);
   }
 
   function worldToScreen(x, y) {
@@ -264,10 +267,10 @@
   function hitTest(event) {
     const point = screenToWorld(event.offsetX, event.offsetY);
     let found = null;
-    let best = 18 / cam.z;
+    let best = Infinity;
     nodes.forEach((node) => {
       const dist = Math.hypot(node.x - point.x, node.y - point.y);
-      const reach = Math.max(radius(node.film) + 6, best);
+      const reach = radius(node.film) + 6 / cam.z;
       if (dist <= reach && dist < best) {
         best = dist;
         found = node;
@@ -334,12 +337,30 @@
     return kept.slice(0, 16);
   }
 
-  function openFilm(node) {
+  function pulseScale(id) {
+    if (id !== selectedId) return 1;
+    const t = (performance.now() - pulseAt) / 460;
+    if (t < 0 || t >= 1) return 1;
+    return 1 - 0.18 * Math.sin(t * Math.PI * 2);
+  }
+
+  function startPulse() {
+    pulseAt = performance.now();
+    if (pulseRaf) cancelAnimationFrame(pulseRaf);
+    const step = () => {
+      draw();
+      if (performance.now() - pulseAt < 480) pulseRaf = requestAnimationFrame(step);
+      else pulseRaf = 0;
+    };
+    pulseRaf = requestAnimationFrame(step);
+  }
+
+  function openFilm(node, focus) {
     selectedId = node.film.id;
     links = linksFor(node.film);
-    focusNode(node);
+    if (focus) focusNode(node);
     renderPanel(node);
-    draw();
+    startPulse();
   }
 
   function clearSelection() {
@@ -441,7 +462,7 @@
         const title = el("span", "link-title", other.film.title);
         const meta = el("span", "link-meta", linkMeta(film, other.film, link, name));
         button.append(title, meta);
-        button.addEventListener("click", () => openFilm(other));
+        button.addEventListener("click", () => openFilm(other, true));
         group.append(button);
       });
       panel.append(group);
@@ -498,19 +519,17 @@
     const film = node.film;
     const row = entry(film.id);
     const at = worldToScreen(node.x, node.y);
-    const r = Math.max(radius(film) * cam.z, 1.6);
-    const selected = film.id === selectedId;
+    const base = Math.max(radius(film) * cam.z, 1.4);
+    const r = base * pulseScale(film.id);
     const fill = row.watched ? imdbColor(film.imdb) : "#f7f7f7";
-
-    if (r > 4.5 || selected) {
-      const glow = ctx.createRadialGradient(at.x, at.y, r * 0.2, at.x, at.y, r * (selected ? 7 : 4.2));
-      glow.addColorStop(0, selected ? "rgba(242,214,90,0.55)" : "rgba(255,255,255,0.28)");
-      glow.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(at.x, at.y, r * (selected ? 7 : 4.2), 0, Math.PI * 2);
-      ctx.fill();
-    }
+    const glowR = base * 1.7;
+    const glow = ctx.createRadialGradient(at.x, at.y, base * 0.55, at.x, at.y, glowR);
+    glow.addColorStop(0, "rgba(255,255,255,0.34)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(at.x, at.y, glowR, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.beginPath();
     ctx.fillStyle = fill;
@@ -566,6 +585,15 @@
     });
 
     nodes.forEach((node) => drawNode(node));
+
+    if (hoverId) {
+      const node = byId.get(hoverId);
+      const at = worldToScreen(node.x, node.y);
+      const r = radius(node.film) * cam.z * pulseScale(node.film.id);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      label(node.film.title, at.x + r + 10, at.y, 0.92);
+    }
   }
 
   function setMode(next) {
@@ -623,7 +651,7 @@
       button.addEventListener("click", () => {
         search.value = film.title;
         results.hidden = true;
-        openFilm(byId.get(film.id));
+        openFilm(byId.get(film.id), true);
       });
       item.append(button);
       results.append(item);
@@ -682,7 +710,13 @@
       return;
     }
     if (!panning) {
-      canvas.classList.toggle("is-pointing", !!hitTest(event));
+      const hit = hitTest(event);
+      const next = hit ? hit.film.id : null;
+      canvas.classList.toggle("is-pointing", !!hit);
+      if (next !== hoverId) {
+        hoverId = next;
+        draw();
+      }
       return;
     }
     const dx = event.clientX - panX;
@@ -705,8 +739,15 @@
     canvas.classList.remove("is-grabbing");
     if (moved) return;
     const hit = hitTest(event);
-    if (hit) openFilm(hit);
+    if (hit) openFilm(hit, false);
     else clearSelection();
+  });
+
+  canvas.addEventListener("pointerleave", () => {
+    if (!hoverId) return;
+    hoverId = null;
+    canvas.classList.remove("is-pointing");
+    draw();
   });
 
   canvas.addEventListener("pointercancel", (event) => {
