@@ -29,6 +29,8 @@
   let hoverId = null;
   let selectedId = null;
   let links = [];
+  let activeLinkId = null;
+  let pixelRatio = 1;
   let pulseAt = 0;
   let pulseRaf = 0;
   let lastTapAt = 0;
@@ -236,12 +238,12 @@
   }
 
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     cssW = window.innerWidth;
     cssH = window.innerHeight;
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    canvas.width = Math.round(cssW * pixelRatio);
+    canvas.height = Math.round(cssH * pixelRatio);
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     draw();
   }
 
@@ -340,14 +342,25 @@
   function openFilm(node, focus) {
     selectedId = node.film.id;
     links = linksFor(node.film);
+    activeLinkId = links[0] ? links[0].id : null;
     if (focus) focusNode(node);
     renderPanel(node);
     startPulse();
   }
 
+  function setActiveLink(id) {
+    if (!id || id === activeLinkId || !links.some((link) => link.id === id)) return;
+    activeLinkId = id;
+    panel.querySelectorAll(".link").forEach((button) => {
+      button.classList.toggle("is-active", button.dataset.id === id);
+    });
+    draw();
+  }
+
   function clearSelection() {
     selectedId = null;
     links = [];
+    activeLinkId = null;
     panel.hidden = true;
     panel.replaceChildren();
     draw();
@@ -451,9 +464,15 @@
         const button = document.createElement("button");
         button.type = "button";
         button.className = "link";
+        button.dataset.id = other.film.id;
+        if (other.film.id === activeLinkId) button.classList.add("is-active");
         const title = el("span", "link-title", other.film.title);
         const meta = el("span", "link-meta", linkMeta(film, other.film, link, name));
         button.append(title, meta);
+        button.addEventListener("pointerenter", (event) => {
+          if (event.pointerType === "touch") return;
+          setActiveLink(other.film.id);
+        });
         button.addEventListener("click", () => openFilm(other, true));
         group.append(button);
       });
@@ -491,13 +510,24 @@
     return button;
   }
 
+  const LIFT = 5;
+
   function gridRoute(from, to) {
-    const lane = Math.min(from.y, to.y) - STEP;
+    const liftWorld = LIFT / cam.z;
+    const top = (node) => node.y - radius() - (node.film.id === selectedId ? liftWorld : 0);
+    const fromTop = top(from);
+    const toTop = top(to);
+    const higherCenter = Math.min(from.y, to.y);
+    const rowAboveBottom = higherCenter - STEP + radius();
+    const pad = 3 / cam.z;
+    let lane = Math.min(fromTop, toTop) - pad;
+    const ceiling = rowAboveBottom + pad;
+    if (lane < ceiling) lane = ceiling;
     return [
-      { x: from.x, y: from.y - radius() },
+      { x: from.x, y: fromTop },
       { x: from.x, y: lane },
       { x: to.x, y: lane },
-      { x: to.x, y: to.y - radius() },
+      { x: to.x, y: toTop },
     ];
   }
 
@@ -538,7 +568,7 @@
       || (selectedId && byId.get(selectedId).group === node.group);
     const colored = revealed && row.watched && row.rating != null;
     const fill = colored ? imdbColor(row.rating) : "#d2d2d2";
-    const lift = selected ? 8 : 0;
+    const lift = selected ? LIFT : 0;
     ctx.save();
     ctx.globalAlpha = selectedId && !selected ? 0.65 : 1;
     if (selected) {
@@ -576,6 +606,7 @@
   }
 
   function draw() {
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, cssW, cssH);
@@ -608,10 +639,8 @@
       ctx.arc(at.x, at.y, reach, 0, Math.PI * 2);
       ctx.fill();
     }
-    links.forEach((link) => {
-      const selected = byId.get(selectedId);
-      drawRoute(selected, byId.get(link.id), link.tier);
-    });
+    const active = links.find((link) => link.id === activeLinkId) || links[0];
+    if (active && selectedId) drawRoute(byId.get(selectedId), byId.get(active.id), active.tier);
     if (selectedId) drawNode(byId.get(selectedId));
 
     if (hoverId) {
@@ -696,6 +725,25 @@
     if (first) first.click();
   });
   search.addEventListener("input", () => showResults(search.value));
+  panel.addEventListener("scroll", () => {
+    if (!window.matchMedia("(pointer: coarse)").matches) return;
+    const buttons = [...panel.querySelectorAll(".link")];
+    if (!buttons.length) return;
+    const frame = panel.getBoundingClientRect();
+    const focus = frame.top + frame.height * 0.42;
+    let best = null;
+    let bestDist = Infinity;
+    buttons.forEach((button) => {
+      const rect = button.getBoundingClientRect();
+      if (rect.bottom < frame.top || rect.top > frame.bottom) return;
+      const dist = Math.abs((rect.top + rect.bottom) / 2 - focus);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = button;
+      }
+    });
+    if (best) setActiveLink(best.dataset.id);
+  }, { passive: true });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       results.hidden = true;

@@ -9,12 +9,19 @@
 
 * { box-sizing: border-box; }
 
+html {
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
 html, body {
   margin: 0;
   height: 100%;
   background: #000;
   color: var(--ink);
   overflow: hidden;
+  font-size: 16px;
+  touch-action: none;
 }
 
 button, input { font: inherit; color: inherit; }
@@ -145,6 +152,7 @@ header > * { pointer-events: auto; }
   padding: 28px 26px 48px;
   background: #000;
   border-left: 1px solid var(--line);
+  touch-action: pan-y;
 }
 
 #panel h1 {
@@ -327,7 +335,9 @@ header > * { pointer-events: auto; }
   text-align: left;
 }
 
-.link-title { display: block; color: rgba(255, 255, 255, 0.88); }
+.link-title { display: block; color: rgba(255, 255, 255, 0.4); }
+
+.link.is-active .link-title { color: #fff; }
 
 .link-meta {
   display: none;
@@ -339,7 +349,8 @@ header > * { pointer-events: auto; }
 .link:hover .link-meta,
 .link:focus-visible .link-meta { display: block; }
 
-.link:hover .link-title { color: var(--yellow); }
+.link:hover .link-title,
+.link:focus-visible .link-title { color: #fff; }
 
 .close {
   margin-top: 28px;
