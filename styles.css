@@ -155,11 +155,60 @@ header > * { pointer-events: auto; }
   line-height: 1.15;
 }
 
-.sub {
+.sub,
+.credit {
   margin: 8px 0 0;
   color: var(--dim);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.4;
+}
+
+.credit { color: rgba(255, 255, 255, 0.82); }
+
+.imdb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 0;
+  font-size: 18px;
+}
+
+.star { color: rgba(255, 255, 255, 0.92); }
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pills li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+}
+
+.rate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rate {
+  flex: 1;
+  margin: 0;
+  accent-color: #fff;
+}
+
+.rate-value {
+  min-width: 2.4em;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .block {

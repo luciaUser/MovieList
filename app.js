@@ -31,6 +31,8 @@
   let links = [];
   let pulseAt = 0;
   let pulseRaf = 0;
+  let lastTapAt = 0;
+  let lastTapId = null;
   let panning = false;
   let moved = false;
   let panX = 0;
@@ -55,7 +57,7 @@
       watched: !!row.watched,
       favorite: !!row.favorite,
       next: !!row.next,
-      note: typeof row.note === "string" ? row.note : "",
+      rating: typeof row.rating === "number" && Number.isFinite(row.rating) ? row.rating : null,
       memo: typeof row.memo === "string" ? row.memo : "",
     };
   }
@@ -102,10 +104,8 @@
     return stops[stops.length - 1][1];
   }
 
-  function radius(film) {
-    if (film.imdb == null) return 6.2;
-    const t = Math.min(1, Math.max(0, (film.imdb - 5.2) / 4.2));
-    return 3.4 + t ** 1.45 * 12.4;
+  function radius() {
+    return 15.8;
   }
 
   function placeDisc(list, cx, cy, gap) {
@@ -387,28 +387,37 @@
     const head = el("div", "panel-head");
     head.append(el("h1", null, film.title));
     if (film.year) head.append(el("p", "sub", film.year));
+    if (film.director) head.append(el("p", "credit", `Regie ${film.director}`));
+    const imdb = el("p", "imdb-line");
+    imdb.append(el("span", "star", "★"), el("span", null, film.imdbLabel));
+    head.append(imdb);
+    if (film.genres.length) {
+      const pills = el("ul", "pills");
+      film.genres.forEach((genre) => pills.append(el("li", null, genre)));
+      head.append(pills);
+    }
     panel.append(head);
-
-    const scoreBlock = el("div", "block");
-    const score = el("div", "score-row");
-    const swatch = el("span", "swatch-inline");
-    swatch.style.background = row.watched ? imdbColor(film.imdb) : "#f4f4f4";
-    score.append(swatch, el("strong", null, film.imdbLabel));
-    scoreBlock.append(score);
-    panel.append(scoreBlock);
 
     const field = el("div", "block");
     const rateLabel = el("label", null, "Bewertung");
-    rateLabel.htmlFor = "own-note";
-    const input = document.createElement("input");
-    input.id = "own-note";
-    input.className = "note";
-    input.type = "text";
-    input.maxLength = 40;
-    input.value = row.note;
-    input.addEventListener("input", () => {
-      writeEntry(film.id, { note: input.value });
+    rateLabel.htmlFor = "own-rate";
+    const rateRow = el("div", "rate-row");
+    const range = document.createElement("input");
+    range.id = "own-rate";
+    range.className = "rate";
+    range.type = "range";
+    range.min = "0";
+    range.max = "10";
+    range.step = "0.1";
+    range.value = row.rating == null ? "0" : String(row.rating);
+    const value = el("output", "rate-value", formatScore(row.rating));
+    value.htmlFor = "own-rate";
+    range.addEventListener("input", () => {
+      const next = Math.round(Number(range.value) * 10) / 10;
+      value.textContent = formatScore(next);
+      writeEntry(film.id, { rating: next });
     });
+    rateRow.append(range, value);
     const memoLabel = el("label", null, "Notiz");
     memoLabel.htmlFor = "own-memo";
     memoLabel.style.marginTop = "16px";
@@ -420,7 +429,7 @@
     memo.addEventListener("input", () => {
       writeEntry(film.id, { memo: memo.value });
     });
-    field.append(rateLabel, input, memoLabel, memo);
+    field.append(rateLabel, rateRow, memoLabel, memo);
     panel.append(field);
 
     const toggles = el("div", "toggles block");
@@ -474,6 +483,11 @@
     panel.append(close);
   }
 
+  function formatScore(value) {
+    if (value == null || Number.isNaN(value)) return "–";
+    return value.toFixed(1).replace(".", ",");
+  }
+
   function linkMeta(film, other, link, group) {
     if (group === "Regisseur") return film.director || "gleiche Regie";
     if (group === "Kontext") {
@@ -498,19 +512,11 @@
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
-    if (tier === "strong") {
-      ctx.strokeStyle = "rgba(255,255,255,0.88)";
-      ctx.lineWidth = 1.15;
-      ctx.setLineDash([]);
-    } else if (tier === "mid") {
-      ctx.strokeStyle = "rgba(255,255,255,0.5)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([8, 9]);
-    } else {
-      ctx.strokeStyle = "rgba(255,255,255,0.28)";
-      ctx.lineWidth = 1;
-      ctx.setLineDash([2, 16]);
-    }
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 1.15;
+    if (tier === "strong") ctx.setLineDash([]);
+    else if (tier === "mid") ctx.setLineDash([8, 9]);
+    else ctx.setLineDash([2, 16]);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -739,8 +745,18 @@
     canvas.classList.remove("is-grabbing");
     if (moved) return;
     const hit = hitTest(event);
-    if (hit) openFilm(hit, false);
-    else clearSelection();
+    if (hit) {
+      const now = performance.now();
+      if (hit.film.id === lastTapId && now - lastTapAt < 340) {
+        writeEntry(hit.film.id, { watched: true });
+      }
+      lastTapAt = now;
+      lastTapId = hit.film.id;
+      openFilm(hit, false);
+    } else {
+      lastTapId = null;
+      clearSelection();
+    }
   });
 
   canvas.addEventListener("pointerleave", () => {
