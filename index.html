@@ -13,7 +13,6 @@
       <button type="button" id="mode-genre" role="tab" aria-selected="true">Genre</button>
       <button type="button" id="mode-director" role="tab" aria-selected="false">Regie</button>
     </div>
-    <p id="mode-note" hidden>Ohne eingetragene Regie liegen die Punkte außen, weiter nach Genre.</p>
     <form id="search-form" role="search">
       <label class="sr" for="search">Film suchen</label>
       <input id="search" type="search" placeholder="Film suchen" autocomplete="off" enterkeyhint="search">
@@ -21,18 +20,9 @@
     </form>
   </header>
 
-  <canvas id="sky" aria-label="Filmnetz. Doppelklick markiert einen Film als gesehen und zeigt seine Verbindungen."></canvas>
+  <canvas id="sky" aria-label="Filmnetz. Ein Klick öffnet einen Film."></canvas>
 
   <aside id="panel" hidden aria-live="polite"></aside>
-
-  <footer id="legend">
-    <p>Doppelklick markiert als gesehen und zeichnet die Linien.</p>
-    <p><span class="swatch white"></span> noch nicht gesehen</p>
-    <p><span class="swatch scale"></span> gesehen, Farbe nach IMDb</p>
-    <p><span class="swatch glow"></span> ausgewählt</p>
-    <p><span class="mark ring"></span> Favorit <span class="mark diamond"></span> als Nächstes</p>
-    <p class="lines"><span class="ln strong"></span> eng <span class="ln mid"></span> verwandt <span class="ln weak"></span> kaum</p>
-  </footer>
 
   <script src="films.js"></script>
   <script src="app.js"></script>

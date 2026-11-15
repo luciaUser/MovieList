@@ -15,7 +15,6 @@
   const panel = document.getElementById("panel");
   const search = document.getElementById("search");
   const results = document.getElementById("results");
-  const modeNote = document.getElementById("mode-note");
   const modeGenre = document.getElementById("mode-genre");
   const modeDirector = document.getElementById("mode-director");
 
@@ -27,7 +26,6 @@
   let cssW = window.innerWidth;
   let cssH = window.innerHeight;
   let mode = "genre";
-  let hoverId = null;
   let selectedId = null;
   let links = [];
   let panning = false;
@@ -36,9 +34,6 @@
   let panY = 0;
   let downX = 0;
   let downY = 0;
-  let clearTimer = 0;
-  let lastTap = 0;
-  let lastTapId = null;
   const pointers = new Map();
   let pinchDist = 0;
 
@@ -58,6 +53,7 @@
       favorite: !!row.favorite,
       next: !!row.next,
       note: typeof row.note === "string" ? row.note : "",
+      memo: typeof row.memo === "string" ? row.memo : "",
     };
   }
 
@@ -338,9 +334,8 @@
     return kept.slice(0, 16);
   }
 
-  function openFilm(node, markWatched) {
+  function openFilm(node) {
     selectedId = node.film.id;
-    if (markWatched) writeEntry(node.film.id, { watched: true });
     links = linksFor(node.film);
     focusNode(node);
     renderPanel(node);
@@ -368,43 +363,46 @@
     panel.replaceChildren();
     panel.hidden = false;
 
-    panel.append(el("h1", null, film.title));
-    const bits = [];
-    if (film.original && film.original !== film.title) bits.push(film.original);
-    if (film.year) bits.push(film.year);
-    if (film.kind === "serie") bits.push("Serie");
-    if (film.director) bits.push(film.director);
-    else bits.push("Regie offen");
-    panel.append(el("p", "sub", bits.join(" · ")));
+    const head = el("div", "panel-head");
+    head.append(el("h1", null, film.title));
+    if (film.year) head.append(el("p", "sub", film.year));
+    panel.append(head);
 
+    const scoreBlock = el("div", "block");
     const score = el("div", "score-row");
     const swatch = el("span", "swatch-inline");
     swatch.style.background = row.watched ? imdbColor(film.imdb) : "#f4f4f4";
-    const strong = el("strong", null, film.imdbLabel);
-    const caption = el("span", null, row.watched ? "gesehen · IMDb" : "IMDb · noch weiß");
-    score.append(swatch, strong, caption);
-    panel.append(score);
+    score.append(swatch, el("strong", null, film.imdbLabel));
+    scoreBlock.append(score);
+    panel.append(scoreBlock);
 
-    const genres = el("p", "sub", film.genres.join(" · "));
-    panel.append(genres);
-
-    const field = el("div", "field");
-    const label = el("label", null, "Eigene Note");
-    label.htmlFor = "own-note";
+    const field = el("div", "block");
+    const rateLabel = el("label", null, "Bewertung");
+    rateLabel.htmlFor = "own-note";
     const input = document.createElement("input");
     input.id = "own-note";
     input.className = "note";
     input.type = "text";
     input.maxLength = 40;
-    input.placeholder = "nur Text, ändert die Farbe nicht";
     input.value = row.note;
     input.addEventListener("input", () => {
       writeEntry(film.id, { note: input.value });
     });
-    field.append(label, input);
+    const memoLabel = el("label", null, "Notiz");
+    memoLabel.htmlFor = "own-memo";
+    memoLabel.style.marginTop = "16px";
+    const memo = document.createElement("textarea");
+    memo.id = "own-memo";
+    memo.className = "memo";
+    memo.maxLength = 500;
+    memo.value = row.memo;
+    memo.addEventListener("input", () => {
+      writeEntry(film.id, { memo: memo.value });
+    });
+    field.append(rateLabel, input, memoLabel, memo);
     panel.append(field);
 
-    const toggles = el("div", "toggles");
+    const toggles = el("div", "toggles block");
     toggles.append(
       toggle("Gesehen", row.watched, (on) => {
         writeEntry(film.id, { watched: on });
@@ -424,12 +422,6 @@
     );
     panel.append(toggles);
 
-    if (film.tags.length) {
-      const tags = el("ul", "tags");
-      film.tags.forEach((tag) => tags.append(el("li", null, tag)));
-      panel.append(tags);
-    }
-
     const groups = [
       ["Regisseur", (link) => link.reasons.includes("Regisseur")],
       ["Kontext", (link) => link.reasons.includes("Kontext")],
@@ -438,11 +430,9 @@
     ];
     groups.forEach(([name, test]) => {
       const group = el("section", "group");
-      group.append(el("h2", null, name));
       const items = links.filter(test).slice(0, 6);
-      if (!items.length) {
-        group.append(el("p", "sub", "keine"));
-      }
+      if (!items.length) return;
+      group.append(el("h2", null, name));
       items.forEach((link) => {
         const other = byId.get(link.id);
         const button = document.createElement("button");
@@ -451,7 +441,7 @@
         const title = el("span", "link-title", other.film.title);
         const meta = el("span", "link-meta", linkMeta(film, other.film, link, name));
         button.append(title, meta);
-        button.addEventListener("click", () => openFilm(other, false));
+        button.addEventListener("click", () => openFilm(other));
         group.append(button);
       });
       panel.append(group);
@@ -576,34 +566,12 @@
     });
 
     nodes.forEach((node) => drawNode(node));
-
-    ctx.textAlign = "left";
-    const labeled = new Set();
-    if (selectedId) {
-      const node = byId.get(selectedId);
-      const at = worldToScreen(node.x, node.y);
-      label(node.film.title, at.x + 10, at.y - 8, 0.92);
-      labeled.add(selectedId);
-      links.forEach((link) => {
-        const other = byId.get(link.id);
-        const pos = worldToScreen(other.x, other.y);
-        if (pos.x < 0 || pos.y < 12 || pos.x > cssW - 20 || pos.y > cssH - 8) return;
-        label(other.film.title, pos.x + 8, pos.y - 6, link.tier === "weak" ? 0.45 : 0.78);
-        labeled.add(link.id);
-      });
-    }
-    if (hoverId && !labeled.has(hoverId)) {
-      const node = byId.get(hoverId);
-      const at = worldToScreen(node.x, node.y);
-      label(node.film.title, at.x + 10, at.y - 8, 0.85);
-    }
   }
 
   function setMode(next) {
     mode = next;
     modeGenre.setAttribute("aria-selected", next === "genre" ? "true" : "false");
     modeDirector.setAttribute("aria-selected", next === "director" ? "true" : "false");
-    modeNote.hidden = next !== "director";
     layout();
     animateToTargets();
   }
@@ -652,12 +620,10 @@
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = film.title;
-      const small = el("small", null, [film.year, film.director || film.cluster].filter(Boolean).join(" · "));
-      button.append(small);
       button.addEventListener("click", () => {
         search.value = film.title;
         results.hidden = true;
-        openFilm(byId.get(film.id), false);
+        openFilm(byId.get(film.id));
       });
       item.append(button);
       results.append(item);
@@ -716,13 +682,7 @@
       return;
     }
     if (!panning) {
-      const hit = hitTest(event);
-      const next = hit ? hit.film.id : null;
-      canvas.classList.toggle("is-pointing", !!hit);
-      if (next !== hoverId) {
-        hoverId = next;
-        draw();
-      }
+      canvas.classList.toggle("is-pointing", !!hitTest(event));
       return;
     }
     const dx = event.clientX - panX;
@@ -745,19 +705,8 @@
     canvas.classList.remove("is-grabbing");
     if (moved) return;
     const hit = hitTest(event);
-    const now = performance.now();
-    if (hit && now - lastTap < 320 && lastTapId === hit.film.id) {
-      window.clearTimeout(clearTimer);
-      lastTap = 0;
-      openFilm(hit, true);
-      return;
-    }
-    lastTap = now;
-    lastTapId = hit ? hit.film.id : null;
-    if (!hit) {
-      window.clearTimeout(clearTimer);
-      clearTimer = window.setTimeout(clearSelection, 280);
-    }
+    if (hit) openFilm(hit);
+    else clearSelection();
   });
 
   canvas.addEventListener("pointercancel", (event) => {
