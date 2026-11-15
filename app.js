@@ -117,17 +117,22 @@
   }
 
   function placeDisc(list, cx, cy, gap) {
-    const golden = Math.PI * (3 - Math.sqrt(5));
+    const count = list.length;
+    if (count === 1) {
+      list[0].tx = cx;
+      list[0].ty = cy;
+      return;
+    }
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+    const height = (rows - 1) * gap;
     list.forEach((node, i) => {
-      if (list.length === 1) {
-        node.tx = cx;
-        node.ty = cy;
-        return;
-      }
-      const r = gap * Math.sqrt(i);
-      const a = i * golden;
-      node.tx = cx + Math.cos(a) * r;
-      node.ty = cy + Math.sin(a) * r * 0.92;
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const inRow = Math.min(cols, count - row * cols);
+      const width = (inRow - 1) * gap;
+      node.tx = cx - width / 2 + col * gap;
+      node.ty = cy - height / 2 + row * gap;
     });
   }
 
@@ -277,10 +282,11 @@
     let found = null;
     let best = Infinity;
     nodes.forEach((node) => {
-      const dist = Math.hypot(node.x - point.x, node.y - point.y);
-      const reach = radius(node.film) + 6 / cam.z;
-      if (dist <= reach && dist < best) {
-        best = dist;
+      const reach = radius() + 3 / cam.z;
+      const dx = Math.abs(node.x - point.x);
+      const dy = Math.abs(node.y - point.y);
+      if (dx <= reach && dy <= reach && dx + dy < best) {
+        best = dx + dy;
         found = node;
       }
     });
@@ -549,17 +555,13 @@
     ctx.arc(at.x, at.y, glowR, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.beginPath();
     ctx.fillStyle = fill;
-    ctx.arc(at.x, at.y, r, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(at.x - r, at.y - r, r * 2, r * 2);
 
     if (row.favorite) {
-      ctx.beginPath();
       ctx.strokeStyle = "rgba(255,255,255,0.92)";
       ctx.lineWidth = 1;
-      ctx.arc(at.x, at.y, r + 4, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.strokeRect(at.x - r - 4, at.y - r - 4, (r + 4) * 2, (r + 4) * 2);
     }
     if (row.next) {
       const d = r + 9;
