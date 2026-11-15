@@ -116,50 +116,50 @@
     return 12;
   }
 
-  function placeDisc(list, cx, cy, gap) {
-    const count = list.length;
-    if (count === 1) {
-      list[0].tx = cx;
-      list[0].ty = cy;
-      return;
-    }
-    const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
-    const height = (rows - 1) * gap;
-    list.forEach((node, i) => {
-      const row = Math.floor(i / cols);
-      const col = i % cols;
-      const inRow = Math.min(cols, count - row * cols);
-      const width = (inRow - 1) * gap;
-      node.tx = cx - width / 2 + col * gap;
-      node.ty = cy - height / 2 + row * gap;
-    });
-  }
-
-  function spread(groups) {
-    const ordered = [];
-    const rest = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
-    while (rest.length) {
-      ordered.push(rest.shift());
-      if (rest.length) ordered.push(rest.pop());
-    }
-    const n = Math.max(ordered.length, 1);
-    const rx = 460 + n * 28;
-    const ry = rx * 0.62;
-    ordered.forEach(([label, list], i) => {
-      const a = -Math.PI / 2 + (i / n) * Math.PI * 2;
-      const cx = Math.cos(a) * rx;
-      const cy = Math.sin(a) * ry;
-      placeDisc(list, cx, cy, 36);
-      list.center = { x: cx, y: cy, label };
-    });
-    return ordered;
-  }
+  const COLS = 4;
+  const STEP = 36;
 
   let clusterMarks = [];
+  let genreBoxes = [];
+  let activeGroup = null;
+
+  function averageScore(list) {
+    const scores = list.map((node) => node.film.imdb).filter((value) => value != null);
+    if (!scores.length) return null;
+    return scores.reduce((sum, value) => sum + value, 0) / scores.length;
+  }
+
+  function layoutColumns(groups) {
+    clusterMarks = [];
+    genreBoxes = [];
+    const ranked = [...groups.entries()].sort((a, b) => {
+      const score = (averageScore(b[1]) ?? -1) - (averageScore(a[1]) ?? -1);
+      return score || a[0].localeCompare(b[0], "de");
+    });
+    let x = 0;
+    ranked.forEach(([label, list]) => {
+      const cols = Math.min(COLS, Math.max(list.length, 1));
+      const width = (cols - 1) * STEP;
+      list.forEach((node, i) => {
+        node.group = label;
+        node.tx = x + (i % cols) * STEP;
+        node.ty = 52 + Math.floor(i / cols) * STEP;
+      });
+      const rows = Math.ceil(list.length / cols);
+      const score = averageScore(list);
+      clusterMarks.push({ x: x + width / 2, y: 0, label, score });
+      genreBoxes.push({
+        key: label,
+        minX: x - 22,
+        maxX: x + width + 22,
+        minY: -28,
+        maxY: 52 + Math.max(rows - 1, 0) * STEP + 22,
+      });
+      x += width + 168;
+    });
+  }
 
   function layout() {
-    clusterMarks = [];
     if (mode === "genre") {
       const groups = new Map();
       nodes.forEach((node) => {
@@ -167,52 +167,16 @@
         if (!groups.has(key)) groups.set(key, []);
         groups.get(key).push(node);
       });
-      spread(groups).forEach(([, list]) => {
-        clusterMarks.push(list.center);
-      });
+      layoutColumns(groups);
       return;
     }
-
-    const byDirector = new Map();
+    const groups = new Map();
     nodes.forEach((node) => {
-      const key = node.film.director || "";
-      if (!byDirector.has(key)) byDirector.set(key, []);
-      byDirector.get(key).push(node);
+      const key = node.film.director || "Ohne Regie";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(node);
     });
-    const multi = [];
-    const singles = [];
-    const unknown = [];
-    byDirector.forEach((list, name) => {
-      if (!name) unknown.push(...list);
-      else if (list.length >= 2) multi.push([name, list]);
-      else singles.push(list[0]);
-    });
-
-    const inner = spread(new Map(multi));
-    inner.forEach(([, list]) => clusterMarks.push(list.center));
-
-    const singleRing = singles.length;
-    singles.forEach((node, i) => {
-      const a = -Math.PI / 2 + (i / Math.max(singleRing, 1)) * Math.PI * 2;
-      node.tx = Math.cos(a) * 1180;
-      node.ty = Math.sin(a) * 760;
-    });
-
-    const outer = new Map();
-    unknown.forEach((node) => {
-      const key = node.film.cluster || "Andere";
-      if (!outer.has(key)) outer.set(key, []);
-      outer.get(key).push(node);
-    });
-    const outerGroups = [...outer.entries()].sort((a, b) => b[1].length - a[1].length);
-    const on = Math.max(outerGroups.length, 1);
-    outerGroups.forEach(([label, list], i) => {
-      const a = -Math.PI / 2 + (i / on) * Math.PI * 2;
-      const cx = Math.cos(a) * 1680;
-      const cy = Math.sin(a) * 1080;
-      placeDisc(list, cx, cy, 32);
-      clusterMarks.push({ x: cx, y: cy, label });
-    });
+    layoutColumns(groups);
   }
 
   function settle() {
@@ -233,18 +197,22 @@
       maxX = Math.max(maxX, node.x);
       maxY = Math.max(maxY, node.y);
     });
+    genreBoxes.forEach((box) => {
+      minX = Math.min(minX, box.minX);
+      minY = Math.min(minY, box.minY);
+      maxX = Math.max(maxX, box.maxX);
+      maxY = Math.max(maxY, box.maxY);
+    });
     return { minX, minY, maxX, maxY };
   }
 
   function fit() {
     const box = bounds();
-    const dx = Math.max(box.maxX - box.minX, 1);
-    const dy = Math.max(box.maxY - box.minY, 1);
-    const pad = 120;
-    cam.z = Math.min((cssW - 40) / (dx + pad), (cssH - 40) / (dy + pad), 1.35);
-    cam.z = Math.max(cam.z, 0.18);
-    cam.x = (box.minX + box.maxX) / 2;
-    cam.y = (box.minY + box.maxY) / 2;
+    cam.z = 22 / (radius() * 2);
+    const viewW = cssW / cam.z;
+    const viewH = cssH / cam.z;
+    cam.x = box.minX + viewW / 2 - 48;
+    cam.y = box.minY + Math.min(viewH, box.maxY - box.minY + 80) / 2;
   }
 
   function focusNode(node) {
@@ -523,17 +491,40 @@
     return button;
   }
 
-  function drawLink(a, b, tier) {
+  function gridRoute(from, to) {
+    const lane = Math.min(from.y, to.y) - STEP;
+    return [
+      { x: from.x, y: from.y - radius() },
+      { x: from.x, y: lane },
+      { x: to.x, y: lane },
+      { x: to.x, y: to.y - radius() },
+    ];
+  }
+
+  function drawRoute(from, to, tier) {
+    const points = gridRoute(from, to).map((point) => worldToScreen(point.x, point.y));
     ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
+    ctx.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
     ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.75;
+    ctx.lineWidth = 1.6;
     if (tier === "strong") ctx.setLineDash([]);
-    else if (tier === "mid") ctx.setLineDash([8, 9]);
-    else ctx.setLineDash([2, 16]);
+    else if (tier === "mid") ctx.setLineDash([7, 8]);
+    else ctx.setLineDash([2, 11]);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.fillStyle = "#fff";
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i];
+      const b = points[i + 1];
+      const dist = Math.hypot(b.x - a.x, b.y - a.y);
+      const steps = Math.max(1, Math.round(dist / 28));
+      for (let step = 1; step < steps; step += 1) {
+        const x = a.x + ((b.x - a.x) * step) / steps;
+        const y = a.y + ((b.y - a.y) * step) / steps;
+        ctx.fillRect(x - 2.2, y - 2.2, 4.4, 4.4);
+      }
+    }
   }
 
   function drawNode(node) {
@@ -541,32 +532,33 @@
     const row = entry(film.id);
     const selected = film.id === selectedId;
     const at = worldToScreen(node.x, node.y);
-    const base = Math.max(radius(film) * cam.z, 1.4);
+    const base = Math.max(radius() * cam.z, 1.4);
     const r = base * pulseScale(film.id);
-    const fill = row.watched && row.rating != null ? imdbColor(row.rating) : "#f7f7f7";
-    const glowR = base * (selected ? 3.1 : 1.7);
-    const glow = ctx.createRadialGradient(at.x, at.y, r * 0.4, at.x, at.y, glowR);
-    glow.addColorStop(0, withAlpha(fill, selected ? 0.85 : 0.34));
-    glow.addColorStop(1, withAlpha(fill, 0));
+    const revealed = node.group === activeGroup
+      || (selectedId && byId.get(selectedId).group === node.group);
+    const colored = revealed && row.watched && row.rating != null;
+    const fill = colored ? imdbColor(row.rating) : "#d2d2d2";
+    const lift = selected ? 8 : 0;
     ctx.save();
     ctx.globalAlpha = selectedId && !selected ? 0.65 : 1;
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(at.x, at.y, glowR, 0, Math.PI * 2);
-    ctx.fill();
-
+    if (selected) {
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 26;
+      ctx.shadowOffsetY = 16;
+    }
     ctx.fillStyle = fill;
-    ctx.fillRect(at.x - r, at.y - r, r * 2, r * 2);
+    ctx.fillRect(at.x - r, at.y - r - lift, r * 2, r * 2);
+    ctx.shadowColor = "transparent";
 
     if (row.favorite) {
       ctx.strokeStyle = "rgba(255,255,255,0.92)";
       ctx.lineWidth = 1;
-      ctx.strokeRect(at.x - r - 4, at.y - r - 4, (r + 4) * 2, (r + 4) * 2);
+      ctx.strokeRect(at.x - r - 4, at.y - r - 4 - lift, (r + 4) * 2, (r + 4) * 2);
     }
     if (row.next) {
       const d = r + 9;
       ctx.save();
-      ctx.translate(at.x + d * 0.72, at.y - d * 0.72);
+      ctx.translate(at.x + d * 0.72, at.y - d * 0.72 - lift);
       ctx.rotate(Math.PI / 4);
       ctx.strokeStyle = "rgba(255,255,255,0.9)";
       ctx.lineWidth = 1;
@@ -588,24 +580,37 @@
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, cssW, cssH);
 
-    if (cam.z > 0.28) {
-      ctx.textAlign = "center";
-      clusterMarks.forEach((mark) => {
-        const at = worldToScreen(mark.x, mark.y);
-        if (at.x < -40 || at.y < -20 || at.x > cssW + 40 || at.y > cssH + 20) return;
-        label(mark.label, at.x, at.y, 0.22);
-      });
-    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "15px Helvetica, Arial, sans-serif";
+    clusterMarks.forEach((mark) => {
+      const at = worldToScreen(mark.x, mark.y);
+      if (at.x < -80 || at.y < -30 || at.x > cssW + 80 || at.y > cssH + 30) return;
+      const score = mark.score == null ? "" : mark.score.toFixed(1).replace(".", ",");
+      ctx.fillStyle = "rgba(255,255,255,0.92)";
+      ctx.fillText(score ? `★  ${score}  ${mark.label}` : mark.label, at.x, at.y);
+    });
 
-    ctx.lineCap = "round";
+    ctx.lineCap = "square";
     nodes.forEach((node) => {
       if (node.film.id !== selectedId) drawNode(node);
     });
+    if (selectedId) {
+      const selected = byId.get(selectedId);
+      const at = worldToScreen(selected.x, selected.y);
+      const reach = Math.max(radius() * cam.z, 1.4) * 5.2;
+      const shade = ctx.createRadialGradient(at.x, at.y, reach * 0.08, at.x, at.y, reach);
+      shade.addColorStop(0, "rgba(0,0,0,0.72)");
+      shade.addColorStop(0.42, "rgba(0,0,0,0.4)");
+      shade.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = shade;
+      ctx.beginPath();
+      ctx.arc(at.x, at.y, reach, 0, Math.PI * 2);
+      ctx.fill();
+    }
     links.forEach((link) => {
-      const a = worldToScreen(byId.get(selectedId).x, byId.get(selectedId).y);
-      const other = byId.get(link.id);
-      const b = worldToScreen(other.x, other.y);
-      drawLink(a, b, link.tier);
+      const selected = byId.get(selectedId);
+      drawRoute(selected, byId.get(link.id), link.tier);
     });
     if (selectedId) drawNode(byId.get(selectedId));
 
@@ -733,11 +738,17 @@
       return;
     }
     if (!panning) {
+      const world = screenToWorld(event.offsetX, event.offsetY);
+      const box = genreBoxes.find((item) => (
+        world.x >= item.minX && world.x <= item.maxX && world.y >= item.minY && world.y <= item.maxY
+      ));
+      const nextGroup = box ? box.key : null;
       const hit = hitTest(event);
       const next = hit ? hit.film.id : null;
       canvas.classList.toggle("is-pointing", !!hit);
-      if (next !== hoverId) {
+      if (next !== hoverId || nextGroup !== activeGroup) {
         hoverId = next;
+        activeGroup = nextGroup;
         draw();
       }
       return;
@@ -777,8 +788,9 @@
   });
 
   canvas.addEventListener("pointerleave", () => {
-    if (!hoverId) return;
+    if (!hoverId && !activeGroup) return;
     hoverId = null;
+    activeGroup = null;
     canvas.classList.remove("is-pointing");
     draw();
   });
