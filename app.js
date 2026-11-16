@@ -176,7 +176,7 @@
   function myAverage(films) {
     const scores = films
       .map((film) => entry(film.id))
-      .filter((row) => row.watched && row.rating != null)
+      .filter((row) => row.rating != null)
       .map((row) => row.rating);
     if (!scores.length) return null;
     return scores.reduce((sum, value) => sum + value, 0) / scores.length;
@@ -223,7 +223,7 @@
       const bar = document.createElement("div");
       bar.className = "genre-bar";
       bar.dataset.ids = group.films.map((film) => film.id).join(",");
-      bar.append(el("span", "genre-score", "–"), el("span", "genre-name", group.label), el("span", "genre-count", ""));
+      bar.append(el("span", "genre-name", group.label), el("span", "genre-count", ""), el("span", "genre-score", "–"));
       wall.append(bar);
       group.films.forEach((film) => {
         const button = document.createElement("button");
@@ -237,7 +237,9 @@
         image.src = posterSrc(film);
         const tint = document.createElement("span");
         tint.className = "tint";
-        button.append(image, tint);
+        const score = document.createElement("span");
+        score.className = "poster-score";
+        button.append(image, tint, score);
         button.addEventListener("click", () => choose(film));
         wall.append(button);
       });
@@ -310,6 +312,9 @@
       button.classList.toggle("is-next", row.next);
       const tint = button.querySelector(".tint");
       tint.style.background = row.rating == null ? "" : ratingColor(row.rating);
+      button.querySelector(".poster-score").textContent = row.rating == null
+        ? ""
+        : `★  ${row.rating.toFixed(1).replace(".", ",")}`;
     });
     wall.querySelectorAll(".genre-bar").forEach((bar) => {
       const films = bar.dataset.ids.split(",").filter(Boolean).map((id) => byId.get(id)).filter(Boolean);
