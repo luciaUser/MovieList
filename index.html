@@ -12,6 +12,7 @@
     <div class="modes" role="tablist" aria-label="Ansicht">
       <button type="button" id="mode-genre" role="tab" aria-selected="true">Genre</button>
       <button type="button" id="mode-director" role="tab" aria-selected="false">Regie</button>
+      <button type="button" id="mode-rating" aria-pressed="false">Bewertung</button>
     </div>
     <form id="search-form" role="search">
       <label class="sr" for="search">Film suchen</label>
@@ -20,7 +21,7 @@
     </form>
   </header>
 
-  <canvas id="sky" aria-label="Filmnetz. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></canvas>
+  <main id="wall" aria-label="Filmcover. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></main>
 
   <aside id="panel" hidden aria-live="polite"></aside>
 
