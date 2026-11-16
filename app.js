@@ -156,7 +156,7 @@
     return scores.reduce((sum, value) => sum + value, 0) / scores.length;
   }
 
-  function orderedFilms() {
+  function filmGroups() {
     const groups = new Map();
     FILMS.forEach((film) => {
       const key = mode === "director" ? (film.director || "Ohne Regie") : (film.cluster || "Andere");
@@ -165,18 +165,21 @@
     });
     return [...groups.entries()]
       .sort((a, b) => average(b[1]) - average(a[1]) || a[0].localeCompare(b[0], "de"))
-      .flatMap(([, list]) => list.slice().sort((a, b) => (
-        (b.imdb ?? -1) - (a.imdb ?? -1) || a.title.localeCompare(b.title, "de")
-      )));
+      .map(([label, list]) => ({
+        label,
+        films: list.slice().sort((a, b) => (
+          (b.imdb ?? -1) - (a.imdb ?? -1) || a.title.localeCompare(b.title, "de")
+        )),
+      }));
   }
 
-  function columns() {
-    const width = wall.clientWidth || window.innerWidth;
-    if (width >= 1500) return 8;
-    if (width >= 1200) return 6;
-    if (width >= 860) return 5;
-    if (width >= 560) return 3;
-    return 2;
+  function myAverage(films) {
+    const scores = films
+      .map((film) => entry(film.id))
+      .filter((row) => row.watched && row.rating != null)
+      .map((row) => row.rating);
+    if (!scores.length) return null;
+    return scores.reduce((sum, value) => sum + value, 0) / scores.length;
   }
 
   function placeholder(film) {
@@ -216,25 +219,28 @@
   function buildWall() {
     const selected = selectedId;
     wall.replaceChildren();
-    wall.style.setProperty("--cols", String(columns()));
-    orderedFilms().forEach((film) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "poster";
-      button.dataset.id = film.id;
-      const image = document.createElement("img");
-      image.alt = "";
-      image.draggable = false;
-      image.decoding = "async";
-      image.src = posterSrc(film);
-      const tint = document.createElement("span");
-      tint.className = "tint";
-      const caption = document.createElement("span");
-      caption.className = "caption";
-      caption.textContent = film.title;
-      button.append(image, tint, caption);
-      button.addEventListener("click", () => choose(film));
-      wall.append(button);
+    filmGroups().forEach((group) => {
+      const bar = document.createElement("div");
+      bar.className = "genre-bar";
+      bar.dataset.ids = group.films.map((film) => film.id).join(",");
+      bar.append(el("span", "genre-score", "–"), el("span", "genre-name", group.label), el("span", "genre-count", ""));
+      wall.append(bar);
+      group.films.forEach((film) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "poster";
+        button.dataset.id = film.id;
+        const image = document.createElement("img");
+        image.alt = "";
+        image.draggable = false;
+        image.decoding = "async";
+        image.src = posterSrc(film);
+        const tint = document.createElement("span");
+        tint.className = "tint";
+        button.append(image, tint);
+        button.addEventListener("click", () => choose(film));
+        wall.append(button);
+      });
     });
     wires = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     wires.setAttribute("class", "wires");
@@ -296,14 +302,12 @@
       button.classList.toggle("is-next", row.next);
       const tint = button.querySelector(".tint");
       tint.style.background = row.rating == null ? "" : ratingColor(row.rating);
-      const caption = button.querySelector(".caption");
-      if (selected && ratingView && row.rating != null) {
-        caption.style.background = ratingColor(row.rating);
-        caption.style.color = row.rating > 4 && row.rating < 7.2 ? "#161616" : "#fff";
-      } else {
-        caption.style.background = "";
-        caption.style.color = "";
-      }
+    });
+    wall.querySelectorAll(".genre-bar").forEach((bar) => {
+      const films = bar.dataset.ids.split(",").filter(Boolean).map((id) => byId.get(id)).filter(Boolean);
+      const avg = myAverage(films);
+      bar.querySelector(".genre-score").textContent = avg == null ? "–" : `★  ${avg.toFixed(1).replace(".", ",")}`;
+      bar.querySelector(".genre-count").textContent = films.length === 1 ? "1 Film" : `${films.length} Filme`;
     });
     requestAnimationFrame(() => requestAnimationFrame(drawLink));
   }
@@ -420,6 +424,7 @@
       toggle("Gesehen", row.watched, (on) => {
         writeEntry(film.id, { watched: on });
         renderPanel(film);
+        paint();
       }),
       toggle("Favorit", row.favorite, (on) => {
         writeEntry(film.id, { favorite: on });
@@ -572,11 +577,7 @@
       clearSelection();
     }
   });
-  window.addEventListener("resize", () => {
-    const next = String(columns());
-    if (wall.style.getPropertyValue("--cols") !== next) buildWall();
-    else drawLink();
-  });
+  window.addEventListener("resize", () => drawLink());
 
   buildWall();
   loadPosters();
