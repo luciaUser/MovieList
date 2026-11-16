@@ -200,7 +200,7 @@
     const text = shown.map((part, index) => (
       `<text x="250" y="${start + index * 56}" text-anchor="middle" fill="#f2f2f2" font-family="Helvetica, Arial, sans-serif" font-size="34">${escapeXml(part)}</text>`
     )).join("");
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750" viewBox="0 0 500 750"><rect width="500" height="750" fill="#2a2a2a"/>${text}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750" viewBox="0 0 500 750"><rect width="500" height="750" fill="#000"/>${text}</svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
   }
 
@@ -252,11 +252,19 @@
 
   function choose(film) {
     const now = performance.now();
-    if (film.id === lastTapId && now - lastTapAt < 340) {
-      writeEntry(film.id, { watched: true });
-    }
+    const again = film.id === lastTapId && now - lastTapAt < 340;
     lastTapAt = now;
     lastTapId = film.id;
+    if (again) {
+      writeEntry(film.id, { watched: true });
+      if (selectedId !== film.id) openFilm(film, false);
+      else paint();
+      return;
+    }
+    if (selectedId === film.id) {
+      clearSelection();
+      return;
+    }
     openFilm(film, false);
   }
 
