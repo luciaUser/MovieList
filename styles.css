@@ -134,7 +134,7 @@ header > * { pointer-events: auto; }
   display: block;
   width: 100vw;
   height: 100vh;
-  cursor: grab;
+  cursor: default;
   touch-action: none;
 }
 

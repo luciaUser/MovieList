@@ -114,16 +114,25 @@
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
-  function radius() {
-    return 12;
-  }
+  let tileSize = 22;
 
-  const COLS = 4;
-  const STEP = 36;
+  function radius() {
+    return tileSize / 2;
+  }
 
   let clusterMarks = [];
   let genreBoxes = [];
+  let columnGuides = [];
+  let contentTop = 0;
+  let contentBottom = 0;
+  let laidWidth = 0;
+  let aligned = false;
   let activeGroup = null;
+
+  function viewWidth() {
+    const panelOpen = panel && !panel.hidden && cssW >= 760;
+    return cssW - (panelOpen ? Math.min(360, cssW) : 0);
+  }
 
   function averageScore(list) {
     const scores = list.map((node) => node.film.imdb).filter((value) => value != null);
@@ -134,31 +143,82 @@
   function layoutColumns(groups) {
     clusterMarks = [];
     genreBoxes = [];
+    columnGuides = [];
     const ranked = [...groups.entries()].sort((a, b) => {
       const score = (averageScore(b[1]) ?? -1) - (averageScore(a[1]) ?? -1);
       return score || a[0].localeCompare(b[0], "de");
     });
-    let x = 0;
-    ranked.forEach(([label, list]) => {
-      const cols = Math.min(COLS, Math.max(list.length, 1));
-      const width = (cols - 1) * STEP;
-      list.forEach((node, i) => {
-        node.group = label;
-        node.tx = x + (i % cols) * STEP;
-        node.ty = 52 + Math.floor(i / cols) * STEP;
+    const marginX = 28;
+    const marginTop = 156;
+    const board = Math.max(240, viewWidth() - marginX * 2);
+    let blockCols = 1;
+    if (board >= 1080) blockCols = 4;
+    else if (board >= 760) blockCols = 3;
+    else if (board >= 460) blockCols = 2;
+    blockCols = Math.min(blockCols, Math.max(ranked.length, 1));
+
+    const blockGapX = 26;
+    const blockGapY = 46;
+    const blockW = (board - blockGapX * (blockCols - 1)) / blockCols;
+    const inner = Math.max(36, blockW - 12);
+    const gapRatio = 0.42;
+    const maxTile = 28;
+    const widest = Math.max(...ranked.map(([, list]) => list.length), 1);
+    let filmCols = Math.min(4, widest);
+    while (filmCols < widest) {
+      const next = inner / (filmCols + Math.max(0, filmCols - 1) * gapRatio);
+      if (next <= maxTile) break;
+      filmCols += 1;
+    }
+    let tile = inner / (filmCols + Math.max(0, filmCols - 1) * gapRatio);
+    tile = Math.max(13, Math.min(maxTile, tile));
+    const gap = tile * gapRatio;
+    tileSize = tile;
+    const step = tile + gap;
+    const headerH = 34;
+    const originX = (viewWidth() - board) / 2;
+    let y = marginTop;
+
+    for (let start = 0; start < ranked.length; start += blockCols) {
+      const slice = ranked.slice(start, start + blockCols);
+      const rowH = Math.max(...slice.map(([, list]) => {
+        const cols = Math.min(filmCols, Math.max(list.length, 1));
+        const rows = Math.ceil(list.length / cols);
+        return headerH + rows * step - gap;
+      }));
+      slice.forEach(([label, list], col) => {
+        const cols = Math.min(filmCols, Math.max(list.length, 1));
+        const usedW = cols * tile + Math.max(0, cols - 1) * gap;
+        const blockX = originX + col * (blockW + blockGapX);
+        const x0 = blockX + (blockW - usedW) / 2;
+        list.forEach((node, i) => {
+          node.group = label;
+          node.tx = x0 + (i % cols) * step + tile / 2;
+          node.ty = y + headerH + Math.floor(i / cols) * step + tile / 2;
+        });
+        const rows = Math.ceil(list.length / cols);
+        clusterMarks.push({
+          x: blockX + blockW / 2,
+          y: y + 10,
+          label,
+          score: averageScore(list),
+        });
+        genreBoxes.push({
+          key: label,
+          minX: blockX,
+          maxX: blockX + blockW,
+          minY: y - 8,
+          maxY: y + headerH + rows * step + 10,
+        });
       });
-      const rows = Math.ceil(list.length / cols);
-      const score = averageScore(list);
-      clusterMarks.push({ x: x + width / 2, y: 0, label, score });
-      genreBoxes.push({
-        key: label,
-        minX: x - 22,
-        maxX: x + width + 22,
-        minY: -28,
-        maxY: 52 + Math.max(rows - 1, 0) * STEP + 22,
-      });
-      x += width + 168;
-    });
+      y += rowH + blockGapY;
+    }
+
+    contentTop = 20;
+    contentBottom = y + 28;
+    for (let col = 1; col < blockCols; col += 1) {
+      columnGuides.push(originX + col * (blockW + blockGapX) - blockGapX / 2);
+    }
   }
 
   function layout() {
@@ -188,39 +248,36 @@
     });
   }
 
-  function bounds() {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    nodes.forEach((node) => {
-      minX = Math.min(minX, node.x);
-      minY = Math.min(minY, node.y);
-      maxX = Math.max(maxX, node.x);
-      maxY = Math.max(maxY, node.y);
-    });
-    genreBoxes.forEach((box) => {
-      minX = Math.min(minX, box.minX);
-      minY = Math.min(minY, box.minY);
-      maxX = Math.max(maxX, box.maxX);
-      maxY = Math.max(maxY, box.maxY);
-    });
-    return { minX, minY, maxX, maxY };
-  }
-
-  function fit() {
-    const box = bounds();
-    cam.z = 22 / (radius() * 2);
-    const viewW = cssW / cam.z;
-    const viewH = cssH / cam.z;
-    cam.x = box.minX + viewW / 2 - 48;
-    cam.y = box.minY + Math.min(viewH, box.maxY - box.minY + 80) / 2;
+  function clampScroll() {
+    cam.z = 1;
+    cam.x = cssW / 2;
+    const span = contentBottom - contentTop;
+    if (span <= cssH) {
+      cam.y = contentTop + cssH / 2;
+      return;
+    }
+    const atTop = contentTop + cssH / 2;
+    const atBottom = contentBottom - cssH / 2;
+    cam.y = Math.min(atBottom, Math.max(atTop, cam.y));
   }
 
   function focusNode(node) {
-    const panelW = Math.min(360, cssW);
-    cam.x = node.x + panelW / (2 * cam.z);
-    cam.y = node.y;
+    cam.z = 1;
+    cam.x = cssW / 2;
+    cam.y = node.y - (cssH * 0.4 - cssH / 2);
+    clampScroll();
+  }
+
+  function ensureLayout() {
+    const width = viewWidth();
+    if (Math.abs(width - laidWidth) < 1) return;
+    const keep = selectedId ? byId.get(selectedId) : null;
+    const beforeY = keep ? worldToScreen(keep.x, keep.y).y : null;
+    layout();
+    settle();
+    laidWidth = width;
+    if (keep && beforeY != null) cam.y = keep.y - (beforeY - cssH / 2);
+    clampScroll();
   }
 
   function worldToScreen(x, y) {
@@ -244,6 +301,14 @@
     canvas.width = Math.round(cssW * pixelRatio);
     canvas.height = Math.round(cssH * pixelRatio);
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    const previousTop = contentTop;
+    const previousY = cam.y;
+    layout();
+    settle();
+    laidWidth = viewWidth();
+    cam.y = aligned ? contentTop + (previousY - previousTop) : contentTop + cssH / 2;
+    aligned = true;
+    clampScroll();
     draw();
   }
 
@@ -343,8 +408,9 @@
     selectedId = node.film.id;
     links = linksFor(node.film);
     activeLinkId = links[0] ? links[0].id : null;
-    if (focus) focusNode(node);
     renderPanel(node);
+    ensureLayout();
+    if (focus) focusNode(node);
     startPulse();
   }
 
@@ -363,6 +429,7 @@
     activeLinkId = null;
     panel.hidden = true;
     panel.replaceChildren();
+    ensureLayout();
     draw();
   }
 
@@ -513,21 +580,10 @@
   const LIFT = 5;
 
   function gridRoute(from, to) {
-    const liftWorld = LIFT / cam.z;
-    const top = (node) => node.y - radius() - (node.film.id === selectedId ? liftWorld : 0);
-    const fromTop = top(from);
-    const toTop = top(to);
-    const higherCenter = Math.min(from.y, to.y);
-    const rowAboveBottom = higherCenter - STEP + radius();
-    const pad = 3 / cam.z;
-    let lane = Math.min(fromTop, toTop) - pad;
-    const ceiling = rowAboveBottom + pad;
-    if (lane < ceiling) lane = ceiling;
     return [
-      { x: from.x, y: fromTop },
-      { x: from.x, y: lane },
-      { x: to.x, y: lane },
-      { x: to.x, y: toTop },
+      { x: from.x, y: from.y },
+      { x: from.x, y: to.y },
+      { x: to.x, y: to.y },
     ];
   }
 
@@ -537,24 +593,21 @@
     ctx.moveTo(points[0].x, points[0].y);
     points.slice(1).forEach((point) => ctx.lineTo(point.x, point.y));
     ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.25;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
     if (tier === "strong") ctx.setLineDash([]);
-    else if (tier === "mid") ctx.setLineDash([7, 8]);
-    else ctx.setLineDash([2, 11]);
+    else if (tier === "mid") ctx.setLineDash([6, 7]);
+    else ctx.setLineDash([2, 8]);
     ctx.stroke();
     ctx.setLineDash([]);
+  }
+
+  function drawLinkMark(node) {
+    const at = worldToScreen(node.x, node.y);
+    const side = Math.max(5, radius() * 0.7);
     ctx.fillStyle = "#fff";
-    for (let i = 0; i < points.length - 1; i += 1) {
-      const a = points[i];
-      const b = points[i + 1];
-      const dist = Math.hypot(b.x - a.x, b.y - a.y);
-      const steps = Math.max(1, Math.round(dist / 28));
-      for (let step = 1; step < steps; step += 1) {
-        const x = a.x + ((b.x - a.x) * step) / steps;
-        const y = a.y + ((b.y - a.y) * step) / steps;
-        ctx.fillRect(x - 2.2, y - 2.2, 4.4, 4.4);
-      }
-    }
+    ctx.fillRect(at.x - side / 2, at.y - side / 2, side, side);
   }
 
   function drawNode(node) {
@@ -611,6 +664,18 @@
     ctx.fillStyle = "#000";
     ctx.fillRect(0, 0, cssW, cssH);
 
+    ctx.strokeStyle = "rgba(255,255,255,0.14)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    columnGuides.forEach((x) => {
+      const top = worldToScreen(x, contentTop);
+      const bottom = worldToScreen(x, contentBottom);
+      ctx.beginPath();
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(bottom.x, bottom.y);
+      ctx.stroke();
+    });
+
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = "15px Helvetica, Arial, sans-serif";
@@ -640,7 +705,11 @@
       ctx.fill();
     }
     const active = links.find((link) => link.id === activeLinkId) || links[0];
-    if (active && selectedId) drawRoute(byId.get(selectedId), byId.get(active.id), active.tier);
+    if (active && selectedId) {
+      const target = byId.get(active.id);
+      drawRoute(byId.get(selectedId), target, active.tier);
+      drawLinkMark(target);
+    }
     if (selectedId) drawNode(byId.get(selectedId));
 
     if (hoverId) {
@@ -672,12 +741,11 @@
         node.x = start[i].x + (node.tx - start[i].x) * ease;
         node.y = start[i].y + (node.ty - start[i].y) * ease;
       });
-      if (t > 0.45 && t < 0.55) fit();
       draw();
       if (t < 1) requestAnimationFrame(step);
       else {
         settle();
-        fit();
+        clampScroll();
         if (selectedId) focusNode(byId.get(selectedId));
         draw();
       }
@@ -770,21 +838,6 @@
     if (pointers.has(event.pointerId)) {
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     }
-    if (pointers.size === 2 && pinchDist) {
-      const [a, b] = [...pointers.values()];
-      const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      const rect = canvas.getBoundingClientRect();
-      const before = screenToWorld(mid.x - rect.left, mid.y - rect.top);
-      cam.z = Math.min(4, Math.max(0.18, cam.z * (dist / pinchDist)));
-      const after = screenToWorld(mid.x - rect.left, mid.y - rect.top);
-      cam.x += before.x - after.x;
-      cam.y += before.y - after.y;
-      pinchDist = dist;
-      moved = true;
-      draw();
-      return;
-    }
     if (!panning) {
       const world = screenToWorld(event.offsetX, event.offsetY);
       const box = genreBoxes.find((item) => (
@@ -801,14 +854,13 @@
       }
       return;
     }
-    const dx = event.clientX - panX;
     const dy = event.clientY - panY;
-    if (Math.hypot(event.clientX - downX, event.clientY - downY) > 4) {
+    if (Math.abs(event.clientY - downY) > 4) {
       moved = true;
       canvas.classList.add("is-grabbing");
     }
-    cam.x -= dx / cam.z;
-    cam.y -= dy / cam.z;
+    cam.y -= dy;
+    clampScroll();
     panX = event.clientX;
     panY = event.clientY;
     draw();
@@ -850,19 +902,13 @@
 
   canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
-    const before = screenToWorld(event.offsetX, event.offsetY);
-    cam.z = Math.min(4, Math.max(0.18, cam.z * Math.exp(-event.deltaY * 0.0011)));
-    const after = screenToWorld(event.offsetX, event.offsetY);
-    cam.x += before.x - after.x;
-    cam.y += before.y - after.y;
+    const dy = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    cam.y += dy;
+    clampScroll();
     draw();
   }, { passive: false });
 
   window.addEventListener("resize", resize);
 
-  layout();
-  settle();
   resize();
-  fit();
-  draw();
 })();
