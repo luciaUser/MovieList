@@ -48,36 +48,45 @@ input:focus-visible {
 header {
   position: fixed;
   z-index: 8;
-  top: 22px;
-  left: 24px;
-  width: min(280px, calc(100vw - 48px));
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  align-items: center;
+  gap: 28px;
+  padding: 18px 28px 56px;
   pointer-events: none;
+}
+
+header::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(12, 12, 12, 0.55), rgba(12, 12, 12, 0));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 46%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 46%, transparent 100%);
 }
 
 header > * { pointer-events: auto; }
 
-.brand {
-  margin: 0;
-  font-size: 13px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.78);
+.modes {
+  display: flex;
+  align-items: center;
+  gap: 28px;
 }
 
-.modes { display: flex; gap: 16px; }
-
 .modes button {
-  padding: 0 0 4px;
+  padding: 0;
   border: 0;
   border-bottom: 1px solid transparent;
   background: transparent;
-  color: var(--dim);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 22px;
+  font-weight: 500;
 }
 
 .modes button[aria-selected="true"],
@@ -86,15 +95,20 @@ header > * { pointer-events: auto; }
   border-bottom-color: #fff;
 }
 
-#search-form { position: relative; }
+#search-form {
+  position: relative;
+  margin-left: auto;
+  width: min(240px, 34vw);
+}
 
 #search {
   width: 100%;
   padding: 6px 0;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
   background: transparent;
   border-radius: 0;
+  font-size: 16px;
 }
 
 #search::placeholder { color: rgba(255, 255, 255, 0.35); }
@@ -136,7 +150,7 @@ header > * { pointer-events: auto; }
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
-  margin-top: 132px;
+  margin-top: 0;
   background: #111;
 }
 
@@ -233,6 +247,18 @@ body.has-selection .poster.is-selected {
 
 @media (min-width: 721px) {
   body.has-selection #wall { margin-right: min(360px, 100vw); }
+  body.has-selection header { right: min(360px, 100vw); }
+}
+
+@media (max-width: 720px) {
+  header {
+    gap: 16px;
+    padding: 14px 16px 44px;
+  }
+
+  .modes { gap: 16px; }
+
+  .modes button { font-size: 16px; }
 }
 
 #panel {
