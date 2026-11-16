@@ -526,19 +526,32 @@
     results.hidden = false;
   }
 
+  async function readPosters() {
+    try {
+      const res = await fetch("/api/posters");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.posters && Object.keys(data.posters).length) return data;
+      }
+    } catch {
+      /* a static host has no API */
+    }
+    try {
+      const res = await fetch("data/posters.json");
+      if (!res.ok) return null;
+      return { posters: await res.json(), done: true, configured: false };
+    } catch {
+      return null;
+    }
+  }
+
   async function loadPosters() {
     for (let attempt = 0; attempt < 24; attempt += 1) {
-      let data = null;
-      try {
-        const res = await fetch("/api/posters");
-        if (res.ok) data = await res.json();
-      } catch {
-        return;
-      }
+      const data = await readPosters();
       if (!data) return;
       let changed = false;
       Object.entries(data.posters || {}).forEach(([id, url]) => {
-        if (url && posters.get(id) !== url) {
+        if (typeof url === "string" && url && posters.get(id) !== url) {
           posters.set(id, url);
           const image = wall.querySelector(`[data-id="${id}"] img`);
           if (image) image.src = url;
