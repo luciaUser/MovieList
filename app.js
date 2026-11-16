@@ -73,13 +73,12 @@
 
   function ratingColor(score) {
     const stops = [
-      [0, "#8d1f1c"],
-      [2.5, "#c44532"],
-      [4.5, "#d4783a"],
-      [6, "#d4b048"],
-      [7.5, "#a8c44a"],
-      [9, "#3cba6a"],
-      [10, "#149255"],
+      [0, "#9a221c"],
+      [5, "#e4231a"],
+      [6.2, "#f08a1a"],
+      [7.4, "#f0d04a"],
+      [8.6, "#8fce3a"],
+      [10, "#12a34a"],
     ];
     if (score == null) return "#cfcfcf";
     if (score <= stops[0][0]) return stops[0][1];
