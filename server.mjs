@@ -8,15 +8,21 @@ const CACHE_PATH = path.join(ROOT, "data", "posters.json");
 const PORT = Number(process.env.PORT || 8741);
 const TOKEN = process.env.TMDB_ACCESS_TOKEN || "";
 
-const films = loadFilms();
 let posters = loadCache();
 let refreshing = null;
+let filmList = null;
 
 function loadFilms() {
-  const source = fs.readFileSync(path.join(ROOT, "films.js"), "utf8");
-  const start = source.indexOf("[");
-  const end = source.lastIndexOf("]");
-  return JSON.parse(source.slice(start, end + 1));
+  if (filmList) return filmList;
+  try {
+    const source = fs.readFileSync(path.join(ROOT, "films.js"), "utf8");
+    const start = source.indexOf("[");
+    const end = source.lastIndexOf("]");
+    filmList = JSON.parse(source.slice(start, end + 1));
+  } catch {
+    filmList = [];
+  }
+  return filmList;
 }
 
 function loadCache() {
@@ -70,6 +76,7 @@ async function lookup(film) {
 
 async function refresh() {
   if (!TOKEN) return;
+  const films = loadFilms();
   let writes = 0;
   for (const film of films) {
     if (Object.prototype.hasOwnProperty.call(posters, film.id)) continue;
@@ -86,6 +93,7 @@ async function refresh() {
 }
 
 function payload() {
+  const films = loadFilms();
   const done = !TOKEN || films.every((film) => Object.prototype.hasOwnProperty.call(posters, film.id));
   const known = {};
   films.forEach((film) => {
@@ -113,20 +121,30 @@ function send(res, status, body, type) {
   res.end(body);
 }
 
-const server = http.createServer((req, res) => {
-  const url = new URL(req.url || "/", "http://127.0.0.1");
-  if (url.pathname === "/api/posters") {
-    if (!refreshing && TOKEN) refreshing = refresh().finally(() => { refreshing = null; });
-    send(res, 200, JSON.stringify(payload()), "application/json; charset=utf-8");
-    return;
+function handle(req, res) {
+  try {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (url.pathname === "/api/posters") {
+      if (!refreshing && TOKEN) refreshing = refresh().finally(() => { refreshing = null; });
+      send(res, 200, JSON.stringify(payload()), "application/json; charset=utf-8");
+      return;
+    }
+    const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
+    const file = path.resolve(ROOT, `.${requested}`);
+    if (!file.startsWith(`${ROOT}${path.sep}`) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      send(res, 404, "Not found", "text/plain; charset=utf-8");
+      return;
+    }
+    send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || "application/octet-stream");
+  } catch {
+    if (!res.headersSent) send(res, 500, "Not available", "text/plain; charset=utf-8");
   }
-  const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
-  const file = path.resolve(ROOT, `.${requested}`);
-  if (!file.startsWith(`${ROOT}${path.sep}`) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-    send(res, 404, "Not found", "text/plain; charset=utf-8");
-    return;
-  }
-  send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || "application/octet-stream");
-});
+}
 
-server.listen(PORT, "127.0.0.1");
+export default handle;
+
+const invokedDirectly = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  http.createServer(handle).listen(PORT, "0.0.0.0");
+}

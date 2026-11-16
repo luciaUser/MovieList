@@ -8,4 +8,4 @@ Eine Coverwand der eigenen Film- und Serienliste. Die Poster stehen ohne Abstand
 node server.mjs
 ```
 
-Der Server liest `TMDB_ACCESS_TOKEN` und holt die Poster von TMDB. Ohne Schlüssel zeigt die Wand den Filmtitel auf einem dunklen Cover.
+Die Cover liegen bereits in `data/posters.json`. Die Seite braucht dafür keinen Schlüssel und keinen laufenden Server.
