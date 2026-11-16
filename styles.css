@@ -344,8 +344,57 @@ body.has-selection .poster.is-selected {
 
 .rate {
   flex: 1;
+  height: 22px;
   margin: 0;
+  appearance: none;
+  background: transparent;
   accent-color: #fff;
+}
+
+.rate::-webkit-slider-runnable-track {
+  height: 10px;
+  border: 0;
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.72) 0,
+      rgba(255, 255, 255, 0.72) calc(1% - 1px),
+      transparent calc(1% - 1px),
+      transparent 1%
+    );
+}
+
+.rate::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 18px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
+}
+
+.rate::-moz-range-track {
+  height: 10px;
+  border: 0;
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(
+      to right,
+      rgba(255, 255, 255, 0.72) 0,
+      rgba(255, 255, 255, 0.72) calc(1% - 1px),
+      transparent calc(1% - 1px),
+      transparent 1%
+    );
+}
+
+.rate::-moz-range-thumb {
+  width: 12px;
+  height: 18px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
 }
 
 .rate-value {

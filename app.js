@@ -46,7 +46,7 @@
       watched: !!row.watched,
       favorite: !!row.favorite,
       next: !!row.next,
-      rating: typeof row.rating === "number" && Number.isFinite(row.rating) ? row.rating : null,
+      rating: typeof row.rating === "number" && Number.isFinite(row.rating) && row.rating > 0 ? row.rating : null,
       memo: typeof row.memo === "string" ? row.memo : "",
     };
   }
@@ -414,8 +414,9 @@
     value.htmlFor = "own-rate";
     range.addEventListener("input", () => {
       const next = Math.round(Number(range.value) * 10) / 10;
-      value.textContent = formatScore(next);
-      writeEntry(film.id, { rating: next });
+      const rating = next > 0 ? next : null;
+      value.textContent = formatScore(rating);
+      writeEntry(film.id, { rating });
       paint();
     });
     rateRow.append(range, value);
