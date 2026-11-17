@@ -1,6 +1,8 @@
 (() => {
   const ADDED_KEY = "moviebylucia-added-v1";
-  let FILMS = window.FILMS || [];
+  const REMOVED_KEY = "moviebylucia-removed-v1";
+  let removed = new Set(loadRemoved());
+  let FILMS = (window.FILMS || []).filter((film) => !removed.has(film.id));
   const STORE = "moviebylucia-v1";
   const GENERIC = new Set([
     "Serie", "Miniserie", "Kult", "Klassiker", "PlotTwist", "Buchverfilmung",
@@ -22,7 +24,7 @@
   const state = loadState();
   const byId = new Map(FILMS.map((film) => [film.id, film]));
   const posters = new Map();
-  let added = loadAdded().filter((film) => !FILMS.some((item) => item.id === film.id));
+  let added = loadAdded().filter((film) => !removed.has(film.id) && !FILMS.some((item) => item.id === film.id));
   FILMS = FILMS.concat(added);
   added.forEach((film) => byId.set(film.id, film));
   added.forEach((film) => {
@@ -37,6 +39,23 @@
   let lastTapAt = 0;
   let lastTapId = null;
   let wires = null;
+
+  function loadRemoved() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(REMOVED_KEY) || "[]");
+      return Array.isArray(raw) ? raw.filter((id) => typeof id === "string" && id) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveRemoved() {
+    try {
+      localStorage.setItem(REMOVED_KEY, JSON.stringify([...removed]));
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+  }
 
   function loadAdded() {
     try {
@@ -65,6 +84,28 @@
       rating: typeof row.rating === "number" && Number.isFinite(row.rating) && row.rating > 0 ? row.rating : null,
       memo: typeof row.memo === "string" ? row.memo : "",
     };
+  }
+
+  function removeFilm(id) {
+    removed.add(id);
+    saveRemoved();
+    added = added.filter((film) => film.id !== id);
+    try {
+      localStorage.setItem(ADDED_KEY, JSON.stringify(added));
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+    delete state[id];
+    try {
+      localStorage.setItem(STORE, JSON.stringify(state));
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+    FILMS = FILMS.filter((film) => film.id !== id);
+    byId.delete(id);
+    posters.delete(id);
+    clearSelection();
+    buildWall();
   }
 
   function writeEntry(id, patch) {
@@ -438,6 +479,13 @@
     panel.replaceChildren();
     panel.hidden = false;
 
+    const remove = el("button", "remove-film");
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Film entfernen");
+    remove.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.4h6v2.2H9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.8 6.4h16.4v2.1H3.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5.6 8.5h12.8l-.9 12.1H6.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.4v6.2M12 11.4v6.2M15 11.4v6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    remove.addEventListener("click", () => removeFilm(film.id));
+    panel.append(remove);
+
     const head = el("div", "panel-head");
     head.append(el("h1", null, film.title));
     if (film.year) head.append(el("p", "sub", film.year));
@@ -674,6 +722,7 @@
   }
 
   function placeFilm(film) {
+    if (removed.delete(film.id)) saveRemoved();
     if (byId.has(film.id)) {
       closeAdd();
       openFilm(byId.get(film.id), true);
