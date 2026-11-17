@@ -73,6 +73,64 @@ header::before {
 
 header > * { pointer-events: auto; }
 
+.add-film { position: relative; flex: none; }
+
+#add-film {
+  display: block;
+  width: 46px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+
+#add-film svg { display: block; width: 46px; height: 34px; }
+
+#add-form {
+  position: absolute;
+  z-index: 6;
+  top: calc(100% + 12px);
+  left: 0;
+  display: grid;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+  padding: 14px 14px 12px;
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+#add-form[hidden] { display: none; }
+
+#add-query {
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.45);
+  background: transparent;
+  border-radius: 0;
+  font-size: 16px;
+}
+
+#add-query::placeholder { color: rgba(255, 255, 255, 0.35); }
+
+#add-status {
+  margin: 0;
+  min-height: 1.2em;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 14px;
+  text-align: left;
+}
+
+#add-form button[type="submit"] {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+}
+
 .modes {
   display: flex;
   align-items: center;

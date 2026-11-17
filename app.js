@@ -1,5 +1,6 @@
 (() => {
-  const FILMS = window.FILMS || [];
+  const ADDED_KEY = "moviebylucia-added-v1";
+  let FILMS = window.FILMS || [];
   const STORE = "moviebylucia-v1";
   const GENERIC = new Set([
     "Serie", "Miniserie", "Kult", "Klassiker", "PlotTwist", "Buchverfilmung",
@@ -21,6 +22,12 @@
   const state = loadState();
   const byId = new Map(FILMS.map((film) => [film.id, film]));
   const posters = new Map();
+  let added = loadAdded().filter((film) => !FILMS.some((item) => item.id === film.id));
+  FILMS = FILMS.concat(added);
+  added.forEach((film) => byId.set(film.id, film));
+  added.forEach((film) => {
+    if (film.poster) posters.set(film.id, film.poster);
+  });
 
   let mode = "genre";
   let ratingView = false;
@@ -30,6 +37,15 @@
   let lastTapAt = 0;
   let lastTapId = null;
   let wires = null;
+
+  function loadAdded() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(ADDED_KEY) || "[]");
+      return Array.isArray(raw) ? raw.filter((film) => film && film.id && film.title) : [];
+    } catch {
+      return [];
+    }
+  }
 
   function loadState() {
     try {
@@ -597,9 +613,72 @@
     });
     if (best) setActiveLink(best.dataset.id);
   }, { passive: true });
+  const addButton = document.getElementById("add-film");
+  const addForm = document.getElementById("add-form");
+  const addQuery = document.getElementById("add-query");
+  const addStatus = document.getElementById("add-status");
+
+  function closeAdd() {
+    addForm.hidden = true;
+    addButton.setAttribute("aria-expanded", "false");
+    addStatus.textContent = "";
+  }
+
+  function placeFilm(film) {
+    if (byId.has(film.id)) {
+      closeAdd();
+      openFilm(byId.get(film.id), true);
+      return;
+    }
+    added.push(film);
+    localStorage.setItem(ADDED_KEY, JSON.stringify(added));
+    FILMS.push(film);
+    byId.set(film.id, film);
+    if (film.poster) posters.set(film.id, film.poster);
+    closeAdd();
+    buildWall();
+    openFilm(film, true);
+  }
+
+  addButton.addEventListener("click", () => {
+    const open = addForm.hidden;
+    addForm.hidden = !open;
+    addButton.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) addQuery.focus();
+  });
+
+  addForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const query = addQuery.value.trim();
+    if (!query) {
+      addStatus.textContent = "Titel oder IMDb-Link eintragen.";
+      return;
+    }
+    addStatus.textContent = "Ich hole Cover und IMDb-Wertung.";
+    addForm.querySelector("button[type=submit]").disabled = true;
+    try {
+      const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
+      const data = response.ok ? await response.json() : null;
+      if (!data?.film) {
+        addStatus.textContent = "Dazu finde ich keinen Film.";
+        return;
+      }
+      addQuery.value = "";
+      placeFilm(data.film);
+    } catch {
+      addStatus.textContent = "Der Abruf ist gerade nicht möglich.";
+    } finally {
+      addForm.querySelector("button[type=submit]").disabled = false;
+    }
+  });
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       results.hidden = true;
+      if (!addForm.hidden) {
+        closeAdd();
+        return;
+      }
       clearSelection();
     }
   });

@@ -1,4 +1,5 @@
 import http from "node:http";
+import { lookupFilm } from "./lookup.mjs";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -135,10 +136,14 @@ function reply(res, status, body, type) {
   });
 }
 
-function handle(req, res) {
+async function handle(req, res) {
   try {
     const raw = typeof req === "string" ? req : req?.url || "/";
     const url = new URL(raw, "http://127.0.0.1");
+    if (url.pathname === "/api/film") {
+      const film = await lookupFilm(url.searchParams.get("q") || "");
+      return reply(res, film ? 200 : 404, JSON.stringify({ film }), "application/json; charset=utf-8");
+    }
     if (url.pathname === "/api/posters") {
       if (!refreshing && TOKEN) refreshing = refresh().finally(() => { refreshing = null; });
       return reply(res, 200, JSON.stringify(payload()), "application/json; charset=utf-8");
@@ -159,5 +164,9 @@ export default handle;
 const invokedDirectly = process.argv[1]
   && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
-  http.createServer(handle).listen(PORT, "0.0.0.0");
+  http.createServer((req, res) => {
+    Promise.resolve(handle(req, res)).catch(() => {
+      if (!res.headersSent) reply(res, 500, "Not available", "text/plain; charset=utf-8");
+    });
+  }).listen(PORT, "0.0.0.0");
 }

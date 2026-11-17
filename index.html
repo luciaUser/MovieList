@@ -8,6 +8,21 @@
 </head>
 <body>
   <header>
+    <div class="add-film">
+      <button type="button" id="add-film" aria-expanded="false" aria-controls="add-form">
+        <span class="sr">Film ablegen</span>
+        <svg viewBox="0 0 64 48" aria-hidden="true">
+          <rect x="3" y="3" width="58" height="42" fill="none" stroke="currentColor" stroke-width="2.5"></rect>
+          <path d="M32 14v20M22 24h20" fill="none" stroke="currentColor" stroke-width="2.5"></path>
+        </svg>
+      </button>
+      <form id="add-form" hidden>
+        <label class="sr" for="add-query">Titel oder IMDb-Link</label>
+        <input id="add-query" type="text" placeholder="Titel oder IMDb-Link" autocomplete="off" enterkeyhint="done">
+        <p id="add-status" role="status"></p>
+        <button type="submit">Ablegen</button>
+      </form>
+    </div>
     <div class="modes" role="tablist" aria-label="Ansicht">
       <button type="button" id="mode-genre" role="tab" aria-selected="true">Genre</button>
       <button type="button" id="mode-director" role="tab" aria-selected="false">Regie</button>
