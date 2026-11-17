@@ -171,7 +171,40 @@
     return scores.reduce((sum, value) => sum + value, 0) / scores.length;
   }
 
+  function ratingBucket(score) {
+    if (score == null) return "none";
+    if (score >= 9) return 9;
+    return Math.floor(score);
+  }
+
+  function ratingLabel(bucket) {
+    if (bucket === "none") return "Ohne Wertung";
+    if (bucket >= 9) return "★  9+";
+    return `★  ${bucket}`;
+  }
+
   function filmGroups() {
+    if (ratingView) {
+      const groups = new Map();
+      FILMS.forEach((film) => {
+        const bucket = ratingBucket(entry(film.id).rating);
+        if (!groups.has(bucket)) groups.set(bucket, []);
+        groups.get(bucket).push(film);
+      });
+      return [...groups.keys()]
+        .sort((a, b) => {
+          if (a === "none") return 1;
+          if (b === "none") return -1;
+          return b - a;
+        })
+        .map((bucket) => ({
+          label: ratingLabel(bucket),
+          films: groups.get(bucket).slice().sort((a, b) => (
+            (entry(b.id).rating ?? -1) - (entry(a.id).rating ?? -1)
+            || a.title.localeCompare(b.title, "de")
+          )),
+        }));
+    }
     const groups = new Map();
     FILMS.forEach((film) => {
       const key = mode === "director" ? (film.director || "Ohne Regie") : (film.cluster || "Andere");
@@ -431,9 +464,15 @@
     range.addEventListener("input", () => {
       const next = Math.round(Number(range.value) * 10) / 10;
       const rating = next > 0 ? next : null;
+      const previous = entry(film.id).rating;
       value.textContent = formatScore(rating);
       writeEntry(film.id, { rating });
-      paint();
+      if (ratingView && ratingBucket(previous) !== ratingBucket(rating)) {
+        buildWall();
+        wall.querySelector(`[data-id="${film.id}"]`)?.scrollIntoView({ block: "center", inline: "nearest" });
+      } else {
+        paint();
+      }
     });
     rateRow.append(range, value);
     const memoLabel = el("label", null, "Notiz");
@@ -507,6 +546,8 @@
 
   function setMode(next) {
     mode = next;
+    ratingView = false;
+    modeRating.setAttribute("aria-pressed", "false");
     modeGenre.setAttribute("aria-selected", next === "genre" ? "true" : "false");
     modeDirector.setAttribute("aria-selected", next === "director" ? "true" : "false");
     buildWall();
@@ -585,7 +626,9 @@
   modeRating.addEventListener("click", () => {
     ratingView = !ratingView;
     modeRating.setAttribute("aria-pressed", ratingView ? "true" : "false");
-    paint();
+    modeGenre.setAttribute("aria-selected", !ratingView && mode === "genre" ? "true" : "false");
+    modeDirector.setAttribute("aria-selected", !ratingView && mode === "director" ? "true" : "false");
+    buildWall();
   });
 
   document.getElementById("search-form").addEventListener("submit", (event) => {
