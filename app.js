@@ -275,7 +275,7 @@
       const bar = document.createElement("div");
       bar.className = "genre-bar";
       bar.dataset.ids = group.films.map((film) => film.id).join(",");
-      bar.append(el("span", "genre-name", group.label), el("span", "genre-count", ""), el("span", "genre-score", "–"));
+      bar.append(el("span", "genre-name", group.label), el("span", "genre-count", ""), el("span", "genre-score", ""));
       wall.append(bar);
       group.films.forEach((film) => {
         const button = document.createElement("button");
@@ -372,7 +372,7 @@
     wall.querySelectorAll(".genre-bar").forEach((bar) => {
       const films = bar.dataset.ids.split(",").filter(Boolean).map((id) => byId.get(id)).filter(Boolean);
       const avg = myAverage(films);
-      bar.querySelector(".genre-score").textContent = avg == null ? "–" : `★  ${avg.toFixed(1).replace(".", ",")}`;
+      bar.querySelector(".genre-score").textContent = avg == null ? "" : `★  ${avg.toFixed(1).replace(".", ",")}`;
       bar.querySelector(".genre-count").textContent = films.length === 1 ? "1 Film" : `${films.length} Filme`;
     });
     requestAnimationFrame(() => requestAnimationFrame(drawLink));
