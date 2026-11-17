@@ -121,23 +121,36 @@ function send(res, status, body, type) {
   res.end(body);
 }
 
+function reply(res, status, body, type) {
+  if (res && typeof res.writeHead === "function") {
+    if (!res.headersSent) send(res, status, body, type);
+    return undefined;
+  }
+  return new Response(body, {
+    status,
+    headers: {
+      "Content-Type": type,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 function handle(req, res) {
   try {
-    const url = new URL(req.url || "/", "http://127.0.0.1");
+    const raw = typeof req === "string" ? req : req?.url || "/";
+    const url = new URL(raw, "http://127.0.0.1");
     if (url.pathname === "/api/posters") {
       if (!refreshing && TOKEN) refreshing = refresh().finally(() => { refreshing = null; });
-      send(res, 200, JSON.stringify(payload()), "application/json; charset=utf-8");
-      return;
+      return reply(res, 200, JSON.stringify(payload()), "application/json; charset=utf-8");
     }
     const requested = url.pathname === "/" ? "/index.html" : decodeURIComponent(url.pathname);
     const file = path.resolve(ROOT, `.${requested}`);
     if (!file.startsWith(`${ROOT}${path.sep}`) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-      send(res, 404, "Not found", "text/plain; charset=utf-8");
-      return;
+      return reply(res, 404, "Not found", "text/plain; charset=utf-8");
     }
-    send(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || "application/octet-stream");
+    return reply(res, 200, fs.readFileSync(file), TYPES[path.extname(file)] || "application/octet-stream");
   } catch {
-    if (!res.headersSent) send(res, 500, "Not available", "text/plain; charset=utf-8");
+    return reply(res, 500, "Not available", "text/plain; charset=utf-8");
   }
 }
 
