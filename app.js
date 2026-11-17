@@ -165,12 +165,6 @@
     return kept.slice(0, 16);
   }
 
-  function average(list) {
-    const scores = list.map((film) => film.imdb).filter((value) => value != null);
-    if (!scores.length) return -1;
-    return scores.reduce((sum, value) => sum + value, 0) / scores.length;
-  }
-
   function ratingBucket(score) {
     if (score == null) return "none";
     if (score >= 9) return 9;
@@ -212,13 +206,23 @@
       groups.get(key).push(film);
     });
     return [...groups.entries()]
-      .sort((a, b) => average(b[1]) - average(a[1]) || a[0].localeCompare(b[0], "de"))
+      .sort((a, b) => {
+        const watched = watchedCount(b[1]) - watchedCount(a[1]);
+        if (watched) return watched;
+        const size = b[1].length - a[1].length;
+        if (size) return size;
+        return a[0].localeCompare(b[0], "de");
+      })
       .map(([label, list]) => ({
         label,
         films: list.slice().sort((a, b) => (
           (b.imdb ?? -1) - (a.imdb ?? -1) || a.title.localeCompare(b.title, "de")
         )),
       }));
+  }
+
+  function watchedCount(list) {
+    return list.reduce((sum, film) => sum + (entry(film.id).watched ? 1 : 0), 0);
   }
 
   function myAverage(films) {
@@ -307,6 +311,7 @@
     lastTapId = film.id;
     if (again) {
       writeEntry(film.id, { watched: true });
+      if (!ratingView) buildWall();
       if (selectedId !== film.id) openFilm(film, false);
       else paint();
       return;
@@ -491,6 +496,7 @@
     toggles.append(
       toggle("Gesehen", row.watched, (on) => {
         writeEntry(film.id, { watched: on });
+        if (!ratingView) buildWall();
         renderPanel(film);
         paint();
       }),
