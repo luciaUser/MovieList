@@ -1,34 +1,26 @@
-import { lookupFilm } from '../lookup.mjs';
+import { filmResponse } from '../lookup.mjs';
+
+function send(res, status, body, cache) {
+  const headers = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': cache,
+  };
+  if (res && typeof res.writeHead === 'function') {
+    res.writeHead(status, headers);
+    res.end(body);
+    return undefined;
+  }
+  return new Response(body, { status, headers });
+}
 
 export default async function handler(req, res) {
   try {
     const raw = typeof req === 'string' ? req : req?.url || '/';
     const url = new URL(raw, 'http://127.0.0.1');
-    const film = await lookupFilm(url.searchParams.get('q') || '');
-    const body = JSON.stringify({ film });
-    const status = film ? 200 : 404;
-    if (res && typeof res.writeHead === 'function') {
-      res.writeHead(status, {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-      });
-      res.end(body);
-      return;
-    }
-    return new Response(body, {
-      status,
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Cache-Control': 'no-store',
-      },
-    });
+    const result = await filmResponse(url.searchParams.get('q') || '');
+    return send(res, result.status, result.body, result.cache);
   } catch {
-    const body = JSON.stringify({ film: null });
-    if (res && typeof res.writeHead === 'function' && !res.headersSent) {
-      res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(body);
-      return;
-    }
-    return new Response(body, { status: 502, headers: { 'Content-Type': 'application/json; charset=utf-8' } });
+    const body = JSON.stringify({ error: 'Der Abruf ist gerade nicht möglich.' });
+    return send(res, 502, body, 'no-store');
   }
 }

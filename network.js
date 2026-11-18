@@ -1,7 +1,7 @@
 (function attachNetwork(root) {
-  const WORLD_W = 4000;
-  const WORLD_H = 2500;
-  const POS_KEY = 'moviebylucia-positions-v1';
+  const WORLD_W = 2500;
+  const WORLD_H = 4000;
+  const POS_KEY = 'moviebylucia-positions-v2';
 
   function readStored() {
     try {
@@ -104,13 +104,13 @@
       graphNodes = new Map((graph.nodes || []).map((node) => [node.id, node]));
       points = new Map();
       films.forEach((film) => {
-        const node = graphNodes.get(film.id);
-        if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) {
-          remember(film.id, node);
+        const saved = stored[film.id];
+        if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+          remember(film.id, saved);
           return;
         }
-        const saved = stored[film.id];
-        if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) remember(film.id, saved);
+        const node = graphNodes.get(film.id);
+        if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) remember(film.id, node);
       });
       placeMissing();
     }
@@ -290,22 +290,32 @@
       return stage.getBoundingClientRect();
     }
 
+    function chromeTop() {
+      const header = document.querySelector('header');
+      if (!header) return 0;
+      const rect = viewSize();
+      return Math.max(0, header.getBoundingClientRect().bottom - rect.top);
+    }
+
     function limitsOfScale() {
       const rect = viewSize();
-      const fit = Math.min(rect.width / WORLD_W, rect.height / WORLD_H) * 0.92;
-      minScale = Math.max(fit, 0.05);
-      const poster = 120;
+      const availH = Math.max(120, rect.height - chromeTop());
+      const fit = Math.min(rect.width / WORLD_W, availH / WORLD_H) * 0.96;
+      minScale = fit;
+      const poster = 40;
       maxScale = Math.max(minScale, (Math.min(rect.width, rect.height) * 0.78) / poster);
     }
 
     function clampPan() {
       const rect = viewSize();
+      const top = chromeTop();
       const width = WORLD_W * scale;
       const height = WORLD_H * scale;
+      const availH = Math.max(120, rect.height - top);
       if (width <= rect.width) tx = (rect.width - width) / 2;
       else tx = Math.min(0, Math.max(rect.width - width, tx));
-      if (height <= rect.height) ty = (rect.height - height) / 2;
-      else ty = Math.min(0, Math.max(rect.height - height, ty));
+      if (height <= availH) ty = top + (availH - height) / 2;
+      else ty = Math.min(top, Math.max(rect.height - height, ty));
     }
 
     function fit() {
@@ -368,7 +378,6 @@
 
     function drawEdges() {
       lines.replaceChildren();
-      const widthFor = (score, hot) => ((hot ? 2.2 : 1.15) + Math.max(0, score || 0) * 2.3) / scale;
       (focus.edges || []).forEach((edge) => {
         const from = worldPoint(edge.source);
         const to = worldPoint(edge.target);
@@ -380,7 +389,8 @@
         line.setAttribute('x2', to.x.toFixed(1));
         line.setAttribute('y2', to.y.toFixed(1));
         line.setAttribute('stroke', hot ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.7)');
-        line.setAttribute('stroke-width', widthFor(edge.score, hot).toFixed(2));
+        line.setAttribute('stroke-width', '1');
+        line.setAttribute('vector-effect', 'non-scaling-stroke');
         line.setAttribute('stroke-linecap', 'round');
         if (edge.style === 'director') {
           line.setAttribute('stroke-dasharray', `${(7 / scale).toFixed(2)} ${(6 / scale).toFixed(2)}`);
@@ -492,7 +502,10 @@
           ? ''
           : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
         const image = button.querySelector('img');
-        if (image.getAttribute('src')) {
+        if (focus.lit && focus.lit.has(id) && !image.getAttribute('src')) {
+          const src = options.posterSrc(film);
+          if (src) image.src = src;
+        } else if (image.getAttribute('src')) {
           const src = options.posterSrc(film);
           if (src && image.src !== src && !src.startsWith('data:')) image.src = src;
         }
@@ -513,26 +526,62 @@
       settle();
     }
 
+    function seat(film) {
+      if (points.has(film.id)) return;
+      const saved = stored[film.id];
+      if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+        remember(film.id, saved);
+        return;
+      }
+      const node = graphNodes.get(film.id);
+      if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) {
+        remember(film.id, node);
+        return;
+      }
+      const layout = root.Layout;
+      if (!layout) return;
+      const list = mergedList();
+      const known = new Map(points);
+      known.delete(film.id);
+      const placed = layout.placeOne(merged(film), list, known);
+      remember(film.id, placed);
+      stored[film.id] = { x: placed.x, y: placed.y };
+      writeStored(stored);
+    }
+
     function addFilm(film) {
       if (!films.includes(film)) films = films.concat(film);
-      if (!points.has(film.id)) {
-        const layout = root.Layout;
-        const list = mergedList();
-        const known = new Map(points);
-        if (layout) {
-          const placed = layout.placeOne(merged(film), list, known);
-          remember(film.id, placed);
-          stored[film.id] = { x: placed.x, y: placed.y };
-          writeStored(stored);
-        }
+      seat(film);
+      if (!buttons.has(film.id)) {
+        const button = buttonFor(film);
+        buttons.set(film.id, button);
+        world.append(button);
       }
-      const button = buttonFor(film);
-      buttons.set(film.id, button);
-      world.append(button);
       buildLabels();
       paint();
       ensureImages();
       settle();
+    }
+
+    function moveFilm(film) {
+      const layout = root.Layout;
+      if (!layout) return null;
+      if (!films.includes(film)) films = films.concat(film);
+      const known = new Map(points);
+      known.delete(film.id);
+      const placed = layout.placeOne(merged(film), mergedList(), known);
+      remember(film.id, placed);
+      stored[film.id] = { x: placed.x, y: placed.y };
+      writeStored(stored);
+      const button = buttons.get(film.id);
+      if (button) {
+        const at = worldOf(placed);
+        button.style.left = `${at.x}px`;
+        button.style.top = `${at.y}px`;
+      }
+      buildLabels();
+      paint();
+      return placed;
     }
 
     function refresh() {
@@ -558,7 +607,6 @@
     stage.addEventListener('pointerdown', (event) => {
       if (event.button != null && event.button !== 0) return;
       cancelMotion();
-      if (event.isTrusted) stage.setPointerCapture(event.pointerId);
       pointers.set(event.pointerId, {
         ox: event.clientX,
         oy: event.clientY,
@@ -588,6 +636,7 @@
         pointer.moved = true;
         suppressClick = true;
         userMoved = true;
+        if (event.isTrusted && !stage.hasPointerCapture(event.pointerId)) stage.setPointerCapture(event.pointerId);
       }
       if (pointers.size >= 2 && pinch) {
         const pair = [...pointers.values()];
@@ -660,6 +709,7 @@
       resize,
       reveal,
       addFilm,
+      moveFilm,
       dropFilm(id) {
         films = films.filter((film) => film.id !== id);
         const button = buttons.get(id);

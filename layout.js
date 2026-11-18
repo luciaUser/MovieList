@@ -248,55 +248,65 @@
     return points;
   }
 
+  function medianOf(values) {
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2) return sorted[mid];
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  function anchorCore(points) {
+    const mx = medianOf(points.map((point) => point.x));
+    const my = medianOf(points.map((point) => point.y));
+    const near = points.filter((point) => Math.hypot(point.x - mx, point.y - my) <= 0.18);
+    return near.length ? near : points;
+  }
+
   function setApart(films, points, tune) {
     const apart = tune.apart;
-    if (!apart || !apart.genre) return;
+    if (!apart || !apart.genre || !apart.above) return;
     const members = [];
-    const others = [];
+    const anchor = [];
     films.forEach((film, index) => {
       if (mainGenre(film) === apart.genre) members.push(points[index]);
-      else others.push(points[index]);
+      else if (mainGenre(film) === apart.above) anchor.push(points[index]);
     });
-    if (!members.length || !others.length) return;
-    const band = apart.band == null ? 0.2 : apart.band;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    others.forEach((point) => {
-      minY = Math.min(minY, point.y);
-      maxY = Math.max(maxY, point.y);
-    });
-    const span = (maxY - minY) || 1;
-    const floor = 1 - tune.margin;
-    others.forEach((point) => {
-      point.y = band + (((point.y - minY) / span) * (floor - band));
-    });
+    if (!members.length || !anchor.length) return;
+    const gap = apart.gap == null ? 0.04 : apart.gap;
+    const core = anchorCore(anchor);
+    const ax = core.reduce((sum, point) => sum + point.x, 0) / core.length;
+    const top = core.reduce((min, point) => Math.min(min, point.y), Infinity);
     const cx = members.reduce((sum, point) => sum + point.x, 0) / members.length;
-    const cy = members.reduce((sum, point) => sum + point.y, 0) / members.length;
-    const y = Math.max(tune.margin * 0.7, band * 0.28);
-    let bestX = cx;
-    let best = -1;
-    const steps = 48;
-    for (let step = 0; step <= steps; step += 1) {
-      const x = (tune.margin * tune.aspect) + ((step / steps) * tune.aspect * (1 - (2 * tune.margin)));
-      let near = Infinity;
-      others.forEach((point) => {
-        near = Math.min(near, Math.hypot(point.x - x, point.y - y));
-      });
-      if (near > best) {
-        best = near;
-        bestX = x;
-      }
-    }
+    const bottom = members.reduce((max, point) => Math.max(max, point.y), -Infinity);
     members.forEach((point) => {
-      point.x += bestX - cx;
-      point.y += y - cy;
+      point.x += ax - cx;
+      point.y += (top - gap) - bottom;
     });
-    const pull = apart.pull == null ? 0.14 : apart.pull;
+    const ceiling = tune.margin * 0.5;
+    const minY = members.reduce((min, point) => Math.min(min, point.y), Infinity);
+    if (minY < ceiling) {
+      const lift = ceiling - minY;
+      members.forEach((point) => { point.y += lift; });
+    }
+    const others = points.filter((point) => !members.includes(point));
+    const clearance = Math.max(tune.poster * 4, 0.016);
+    for (let step = 0; step < 8; step += 1) {
+      const crowded = members.some((point) => others.some((other) => (
+        Math.hypot(point.x - other.x, point.y - other.y) < clearance
+      )));
+      if (!crowded) break;
+      if (members.some((point) => point.y - 0.008 < ceiling)) break;
+      members.forEach((point) => { point.y -= 0.008; });
+    }
+    const targetX = members.reduce((sum, point) => sum + point.x, 0) / members.length;
+    const targetY = members.reduce((sum, point) => sum + point.y, 0) / members.length;
+    const pull = apart.pull == null ? 0.06 : apart.pull;
+    if (!pull) return;
     films.forEach((film, index) => {
       if (mainGenre(film) === apart.genre || !listsGenre(film, apart.genre)) return;
       const point = points[index];
-      point.x += (bestX - point.x) * pull;
-      point.y += (y - point.y) * pull;
+      point.x += (targetX - point.x) * pull;
+      point.y += (targetY - point.y) * pull;
     });
   }
 

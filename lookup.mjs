@@ -1,127 +1,133 @@
-const CLUSTERS = {
-  action: 'Action',
-  adventure: 'Abenteuer',
-  abenteuer: 'Abenteuer',
-  animation: 'Animation',
-  anime: 'Anime',
-  biography: 'Biografie',
-  biografie: 'Biografie',
-  comedy: 'Komödie',
-  komödie: 'Komödie',
-  crime: 'Krimi',
-  krimi: 'Krimi',
-  documentary: 'Dokumentation',
-  dokumentation: 'Dokumentation',
-  drama: 'Drama',
-  fantasy: 'Fantasy',
-  history: 'Historie',
-  historie: 'Historie',
-  horror: 'Horror',
-  mystery: 'Mystery',
-  romance: 'Romantik',
-  romantik: 'Romantik',
-  'sci-fi': 'Sci-Fi',
-  'science fiction': 'Sci-Fi',
-  'science-fiction': 'Sci-Fi',
-  thriller: 'Thriller',
-  war: 'Kriegsfilm',
-  kriegsfilm: 'Kriegsfilm',
-};
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { search, findByImdb, details } from './tmdb.mjs';
+import { enrichFilm } from './enrich.mjs';
 
-function clustersFor(genres) {
-  const names = [];
-  for (const genre of genres) {
-    const name = CLUSTERS[String(genre || '').trim().toLowerCase()];
-    if (name && !names.includes(name)) names.push(name);
-  }
-  return names.length ? names : ['Andere'];
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+let vocab;
+
+function vocabulary() {
+  if (!vocab) vocab = JSON.parse(readFileSync(path.join(ROOT, 'data', 'vocabulary.json'), 'utf8'));
+  return vocab;
 }
 
-async function getJson(url) {
-  const response = await fetch(url, {
-    headers: { accept: 'application/json' },
-    signal: AbortSignal.timeout(8000),
-  });
-  if (!response.ok) return null;
-  return response.json();
+function fail(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
 }
 
-async function searchImdb(query) {
-  const data = await getJson(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(query)}.json`);
-  const hits = (data?.d || []).filter((item) => item?.id && /^tt\d+$/.test(item.id) && item.l);
-  const hit = hits.find((item) => item.qid === 'movie' || item.qid === 'tvSeries' || item.qid === 'tvMiniSeries')
-    || hits.find((item) => item.q === 'feature')
-    || hits[0];
-  if (!hit) return null;
-  return {
-    id: hit.id,
-    title: hit.l,
-    year: hit.y ? String(hit.y) : '',
-    series: /series/i.test(hit.q || ''),
-    poster: hit.i?.imageUrl || null,
-  };
+function configured() {
+  return Boolean(process.env.TMDB_ACCESS_TOKEN);
 }
 
-async function searchCinemeta(query) {
-  const data = await getJson(`https://v3-cinemeta.strem.io/catalog/movie/top/search=${encodeURIComponent(query)}.json`);
-  const hit = (data?.metas || []).find((item) => item?.name && (item.imdb_id || item.id));
-  if (!hit) return null;
-  const id = String(hit.imdb_id || hit.id);
-  if (!/^tt\d+$/.test(id)) return null;
-  return {
-    id,
-    title: hit.name,
-    year: hit.year ? String(hit.year) : '',
-    series: hit.type === 'series',
-    poster: hit.poster || null,
-  };
-}
-
-async function readMeta(id, type) {
-  const data = await getJson(`https://v3-cinemeta.strem.io/meta/${type}/${id}.json`);
-  return data?.meta || null;
-}
-
-function ratingOf(value) {
-  const number = Number(String(value || '').replace(',', '.'));
-  if (!Number.isFinite(number) || number <= 0 || number > 10) return null;
-  return Math.round(number * 10) / 10;
-}
-
-export async function lookupFilm(raw) {
+function parseQuery(raw) {
   const query = String(raw || '').trim();
   if (!query) return null;
-  const linked = query.match(/tt\d{5,}/i);
-  const found = linked ? null : (await searchImdb(query).catch(() => null)) || (await searchCinemeta(query).catch(() => null));
-  if (!linked && !found) return null;
-  const id = (linked ? linked[0] : found.id).toLowerCase();
-  const series = Boolean(found?.series);
-  const meta = await readMeta(id, series ? 'series' : 'movie').catch(() => null)
-    || await readMeta(id, series ? 'movie' : 'series').catch(() => null);
-  const title = meta?.name || found?.title;
-  if (!title) return null;
-  const genres = clustersFor(Array.isArray(meta?.genres) ? meta.genres : []);
-  const cluster = genres[0];
-  const year = String(meta?.year || found?.year || '');
-  const yearNum = Number(year.slice(0, 4));
-  const imdb = ratingOf(meta?.imdbRating);
-  const directors = Array.isArray(meta?.director) ? meta.director.filter(Boolean) : [];
-  const isSeries = series || meta?.type === 'series';
+  const tmdb = query.match(/themoviedb\.org\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?(movie|tv)\/(\d+)/i);
+  if (tmdb) {
+    return {
+      kind: 'tmdb',
+      type: tmdb[1].toLowerCase() === 'tv' ? 'tv' : 'movie',
+      id: Number(tmdb[2]),
+    };
+  }
+  const imdb = query.match(/tt\d{5,}/i);
+  if (imdb) return { kind: 'imdb', id: imdb[0].toLowerCase() };
+  return { kind: 'text', text: query };
+}
+
+function hitFromPayload(payload, type) {
+  if (!payload?.id) return null;
+  const date = payload.release_date || payload.first_air_date || '';
   return {
-    id,
-    title,
-    original: null,
-    meta: isSeries ? ['Serie'] : [],
-    kind: isSeries ? 'serie' : 'film',
+    id: payload.id,
+    mediaType: type === 'tv' ? 'tv' : 'movie',
+    title: payload.title || payload.name || '',
+    originalTitle: payload.original_title || payload.original_name || '',
+    year: String(date).slice(0, 4),
+    posterPath: payload.poster_path || null,
+  };
+}
+
+function filmRecord(hit, facets) {
+  const year = String(hit.year || '');
+  const yearNum = Number(year.slice(0, 4));
+  const rating = typeof facets.tmdbRating === 'number' ? facets.tmdbRating : null;
+  const genres = Array.isArray(facets.genres) ? facets.genres.slice() : [];
+  const format = facets.format;
+  const series = format === 'serie' || format === 'miniserie' || hit.mediaType === 'tv';
+  const meta = [];
+  if (format === 'miniserie') meta.push('Miniserie');
+  else if (series) meta.push('Serie');
+  if (format === 'animation') meta.push('Animation');
+  if (format === 'anime') meta.push('Anime');
+  const original = hit.originalTitle && hit.originalTitle !== hit.title ? hit.originalTitle : null;
+  return {
+    id: `tmdb-${hit.mediaType === 'tv' ? 'tv' : 'movie'}-${hit.id}`,
+    title: hit.title,
+    original,
+    meta,
+    kind: series ? 'serie' : 'film',
     year: year.slice(0, 9),
     yearNum: Number.isFinite(yearNum) ? yearNum : null,
     genres,
-    cluster,
+    cluster: genres[0] || 'Andere',
     tags: [],
-    imdb,
-    imdbLabel: imdb == null ? 'k. A.' : imdb.toFixed(1).replace('.', ','),
-    director: directors.length ? directors.join(' & ') : null,
-    franchise: null,
-    poster: found?.poster || meta?.poster || null,
+    imdb: rating,
+    imdbLabel: rating == null ? 'k. A.' : rating.toFixed(1).replace('.', ','),
+    director: facets.director || null,
+    franchise: facets.franchise || null,
+    poster: facets.poster || (hit.posterPath ? `https://image.tmdb.org/t/p/w500${hit.posterPath}` : null),
   };
+}
+
+export async function lookupFilm(raw) {
+  const parsed = parseQuery(raw);
+  if (!parsed) throw fail(400, 'Titel oder Link eintragen.');
+  if (!configured()) throw fail(503, 'TMDB ist nicht eingerichtet');
+  let hit = null;
+  try {
+    if (parsed.kind === 'imdb') hit = await findByImdb(parsed.id);
+    else if (parsed.kind === 'tmdb') hit = hitFromPayload(await details(parsed.type, parsed.id), parsed.type);
+    else hit = await search(parsed.text);
+  } catch {
+    throw fail(502, 'Der Abruf ist gerade nicht möglich.');
+  }
+  if (!hit?.id || !hit.title) throw fail(404, 'Dazu finde ich keinen Film.');
+  let enriched;
+  try {
+    enriched = await enrichFilm({
+      tmdbId: hit.id,
+      tmdbType: hit.mediaType === 'tv' ? 'tv' : 'movie',
+      title: hit.title,
+      year: hit.year,
+      imdbId: parsed.kind === 'imdb' ? parsed.id : null,
+    }, vocabulary());
+  } catch {
+    throw fail(502, 'Der Abruf ist gerade nicht möglich.');
+  }
+  const facets = enriched?.facets || {};
+  if (!facets.tmdbId) throw fail(404, 'Dazu finde ich keinen Film.');
+  return { film: filmRecord(hit, facets), facets };
+}
+
+export async function filmResponse(raw) {
+  try {
+    const result = await lookupFilm(raw);
+    return {
+      status: 200,
+      body: JSON.stringify(result),
+      cache: 's-maxage=86400',
+    };
+  } catch (error) {
+    const status = Number(error?.status) || 502;
+    const message = error?.message || 'Der Abruf ist gerade nicht möglich.';
+    return {
+      status,
+      body: JSON.stringify({ error: message }),
+      cache: 'no-store',
+    };
+  }
 }

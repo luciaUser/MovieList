@@ -12,14 +12,17 @@
       <button type="button" id="add-film" aria-expanded="false" aria-controls="add-form">
         <span class="sr">Film ablegen</span>
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6"></path>
+          <path class="plus-v" d="M12 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+          <path d="M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
         </svg>
       </button>
-      <form id="add-form" hidden>
-        <label class="sr" for="add-query">Titel oder IMDb-Link</label>
-        <input id="add-query" type="text" placeholder="Titel oder IMDb-Link" autocomplete="off" enterkeyhint="done">
+      <form id="add-form">
+        <div class="line-slot">
+          <label class="sr" for="add-query">Titel, IMDb- oder TMDB-Link</label>
+          <input id="add-query" type="text" placeholder="Titel oder Link" autocomplete="off" enterkeyhint="done" disabled>
+        </div>
         <p id="add-status" role="status"></p>
-        <button type="submit">Ablegen</button>
+        <button type="submit" class="sr">Ablegen</button>
       </form>
     </div>
     <div class="modes" role="tablist" aria-label="Ansicht">
@@ -29,8 +32,17 @@
       <button type="button" id="net-rating" aria-pressed="false">Wertung</button>
     </div>
     <form id="search-form" role="search">
-      <label class="sr" for="search">Film suchen</label>
-      <input id="search" type="search" placeholder="Film suchen" autocomplete="off" enterkeyhint="search">
+      <div class="line-slot">
+        <label class="sr" for="search">Film suchen</label>
+        <input id="search" type="text" autocomplete="off" enterkeyhint="search" disabled>
+      </div>
+      <button type="button" id="search-open" aria-expanded="false" aria-controls="search">
+        <span class="sr">Film suchen</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="5.25" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
+          <path d="M14.6 14.6L20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+        </svg>
+      </button>
       <ul id="results" hidden></ul>
     </form>
   </header>

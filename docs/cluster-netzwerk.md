@@ -124,10 +124,10 @@ Ein Modul für Node-Script und Browser (`globalThis.Layout`), damit Freunde ihre
 
 ## A7. Ansicht und Interaktion
 
-- Tabs oben: **Netzwerk** (ersetzt den bisherigen Genre-Tab), **Regie** und **Rating**. Regie und Rating bleiben exakt wie heute (Coverwand, Gruppierung, Sortierung, Farbschicht).
+- Tabs oben: **Netzwerk** (ersetzt den bisherigen Genre-Tab), **Regie** und **Rating**. Regie und Rating bleiben die Coverwand (Gruppierung, Sortierung, Farbschicht) ohne Verbindungslinien.
 - Die bestehende Bedienung bleibt überall gleich, auch im Netzwerk: Klick öffnet, Klick auf den gewählten Film schliesst, Doppelklick/Doppeltipp markiert als gesehen, Favorit mit Rahmen, Regler 0–10 in 0,1-Schritten (0 = keine Wertung), Toggles Gesehen, Favorit, Als Nächstes.
-- Netzwerk: Pan und Zoom (Maus, Trackpad, Pinch), drei Stufen: weit (Genre-Namen, Filme als Punkte), mittel (kleine Poster, Subgenre-Labels), nah (volle Poster). Stil: schwarzer Grund, jedes Hauptgenre hat eine gedämpfte Farbe (nur Punkte und Labels, keine Inselflächen), Labels weiss. Der Rating-Schalter ersetzt die Genre-Farben durch die Rating-Skala.
-- Klick auf Film im Netzwerk: Panel, Film und Nachbarn hell, Rest abgedunkelt. Linien: durchgezogen = inhaltlich, gestrichelt = Regie, gepunktet = Darsteller/Franchise. Kamera schwenkt so, dass alles neben dem Panel sichtbar ist.
+- Netzwerk: hochkant, am Anfang die ganze Karte im Bild. Pan und Zoom (Maus, Trackpad, Pinch). Weit: Genre-Namen, Filme als Punkte. Näher: kleine Poster und Subgenre-Labels, die Postergrösse bleibt. Stil: schwarzer Grund, jedes Hauptgenre hat eine gedämpfte Farbe (nur Punkte und Labels, keine Inselflächen), Labels weiss. Der Rating-Schalter ersetzt die Genre-Farben durch die Rating-Skala.
+- Klick auf Film im Netzwerk: Panel, Film und Nachbarn hell, Rest abgedunkelt. Die Karte bleibt Punkte, die verbundenen Filme zeigen Cover in doppelter Postergrösse. Ohne Linien ist die Karte wieder Punkte. Linien sind immer eine Haarlinie von 1 Pixel: durchgezogen = inhaltlich, gestrichelt = Regie, gepunktet = Darsteller/Franchise. Kamera schwenkt so, dass alles neben dem Panel sichtbar ist.
 - Regie, Darsteller und Merkmal-Chips im Panel sind klickbar und heben im Netzwerk alle passenden Filme hervor (zusätzlich zum Regie-Tab).
 - Suche findet Titel, Originaltitel, Regie, Darsteller.
 

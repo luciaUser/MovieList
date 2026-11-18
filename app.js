@@ -1,6 +1,7 @@
 (() => {
   const ADDED_KEY = 'moviebylucia-added-v1';
   const REMOVED_KEY = 'moviebylucia-removed-v1';
+  const FACET_KEY = 'moviebylucia-facets-v1';
   let removed = new Set(loadRemoved());
   let FILMS = (window.FILMS || []).filter((film) => !removed.has(film.id));
   const STORE = 'moviebylucia-v1';
@@ -39,6 +40,12 @@
     if (film.poster) posters.set(film.id, film.poster);
   });
 
+  let facetOverrides = loadFacetOverrides();
+  let vocabulary = null;
+  let editDraft = null;
+  overlayFacets(globalThis.FILM_FACETS || {});
+  FILMS.forEach(patchFilmFromFacets);
+
   let mode = 'network';
   let ratingView = false;
   let network = null;
@@ -50,7 +57,6 @@
   let spotlight = null;
   let lastTapAt = 0;
   let lastTapId = null;
-  let wires = null;
 
   function loadRemoved() {
     try {
@@ -67,6 +73,41 @@
     } catch {
       /* private mode can refuse storage; the session still works */
     }
+  }
+
+  function loadFacetOverrides() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(FACET_KEY) || '{}');
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveFacetOverrides() {
+    try {
+      localStorage.setItem(FACET_KEY, JSON.stringify(facetOverrides));
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+  }
+
+  function overlayFacets(base) {
+    const next = { ...(base || {}) };
+    Object.entries(facetOverrides).forEach(([id, facets]) => {
+      if (facets && typeof facets === 'object') next[id] = facets;
+    });
+    globalThis.FILM_FACETS = next;
+  }
+
+  function patchFilmFromFacets(film) {
+    const facets = facetOverrides[film.id];
+    if (!facets) return;
+    if (Array.isArray(facets.genres) && facets.genres.length) {
+      film.genres = facets.genres.slice();
+      film.cluster = facets.genres[0];
+    }
+    if (facets.director) film.director = facets.director;
   }
 
   function loadAdded() {
@@ -175,6 +216,16 @@
     const stored = globalThis.FILM_FACETS || {};
     const merge = globalThis.Facets && globalThis.Facets.mergeFilm;
     return merge ? merge(film, stored[film.id]) : film;
+  }
+
+  function ensureVocab() {
+    if (vocabulary) return Promise.resolve(vocabulary);
+    const load = globalThis.Facets && globalThis.Facets.loadVocabulary;
+    if (!load) return Promise.reject(new Error('vocabulary'));
+    return load().then((data) => {
+      vocabulary = data;
+      return data;
+    });
   }
 
   function similarityFilms() {
@@ -336,10 +387,6 @@
         wall.append(button);
       });
     });
-    wires = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    wires.setAttribute('class', 'wires');
-    wires.setAttribute('aria-hidden', 'true');
-    wall.append(wires);
     selectedId = selected;
     paint();
   }
@@ -468,7 +515,6 @@
     }
     if (focus) {
       wall.querySelector(`[data-id="${film.id}"]`)?.scrollIntoView({ block: 'center', inline: 'nearest' });
-      requestAnimationFrame(drawLink);
     }
   }
 
@@ -478,7 +524,6 @@
     panel.querySelectorAll('.link').forEach((button) => {
       button.classList.toggle('is-active', button.dataset.id === id);
     });
-    drawLink();
     if (mode === 'network') applyNetworkFocus();
   }
 
@@ -516,30 +561,6 @@
       bar.querySelector('.genre-count').textContent = films.length === 1 ? '1 Film' : `${films.length} Filme`;
     });
     if (network) network.paint();
-    requestAnimationFrame(() => requestAnimationFrame(drawLink));
-  }
-
-  function drawLink() {
-    if (!wires) return;
-    wires.replaceChildren();
-    const active = links.find((link) => link.id === activeLinkId) || links[0];
-    if (!selectedId || !active) return;
-    const from = wall.querySelector(`[data-id="${selectedId}"]`);
-    const to = wall.querySelector(`[data-id="${active.id}"]`);
-    if (!from || !to) return;
-    const base = wall.getBoundingClientRect();
-    const a = from.getBoundingClientRect();
-    const b = to.getBoundingClientRect();
-    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    line.setAttribute('x1', String(a.left - base.left + a.width / 2));
-    line.setAttribute('y1', String(a.top - base.top + a.height / 2));
-    line.setAttribute('x2', String(b.left - base.left + b.width / 2));
-    line.setAttribute('y2', String(b.top - base.top + b.height / 2));
-    line.setAttribute('stroke', '#fff');
-    line.setAttribute('stroke-width', '1.4');
-    if (active.tier === 'mid') line.setAttribute('stroke-dasharray', '7 8');
-    if (active.tier === 'weak') line.setAttribute('stroke-dasharray', '2 9');
-    wires.append(line);
   }
 
   function el(tag, className, text) {
@@ -572,7 +593,14 @@
     remove.setAttribute('aria-label', 'Film entfernen');
     remove.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.4h6v2.2H9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.8 6.4h16.4v2.1H3.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5.6 8.5h12.8l-.9 12.1H6.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.4v6.2M12 11.4v6.2M15 11.4v6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
     remove.addEventListener('click', () => removeFilm(film.id));
-    panel.append(remove);
+    const closeIcon = el('button', 'panel-close');
+    closeIcon.type = 'button';
+    closeIcon.setAttribute('aria-label', 'Schließen');
+    closeIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    closeIcon.addEventListener('click', clearSelection);
+    const tools = el('div', 'panel-tools');
+    tools.append(closeIcon);
+    panel.append(tools);
 
     const full = fullOf(film);
     const head = el('div', 'panel-head');
@@ -606,11 +634,14 @@
     const imdb = el('p', 'imdb-line');
     imdb.append(el('span', 'star', '★'), el('span', null, film.imdbLabel));
     head.append(imdb);
+    const genreRow = el('div', 'genre-row');
     if (film.genres.length) {
       const pills = el('ul', 'pills');
       film.genres.forEach((genre) => pills.append(el('li', null, genre)));
-      head.append(pills);
+      genreRow.append(pills);
     }
+    genreRow.append(remove);
+    head.append(genreRow);
     panel.append(head);
 
     const field = el('div', 'block');
@@ -673,7 +704,7 @@
       }),
     );
     panel.append(toggles);
-    appendTraits(full);
+    appendTraits(film, full);
 
     [
       'Gleiche Handschrift',
@@ -706,11 +737,15 @@
       panel.append(group);
     });
 
-    const close = el('button', 'close', 'Schließen');
-    close.type = 'button';
-    close.addEventListener('click', clearSelection);
-    panel.append(close);
   }
+
+  const TRAIT_FIELDS = [
+    ['genres', 'Genre', 'genre', 3],
+    ['subgenres', 'Subgenre', 'subgenre', 2],
+    ['themes', 'Thema', 'theme', 4],
+    ['tone', 'Ton', 'tone', 2],
+    ['narrative', 'Erzählweise', 'narrative', 2],
+  ];
 
   function traitChip(label, value, kind) {
     const button = el('button', 'chip');
@@ -724,13 +759,224 @@
     return button;
   }
 
-  function appendTraits(full) {
-    const chips = [];
-    (full.genres || []).forEach((value) => chips.push(traitChip('Genre', value, 'genre')));
-    (full.subgenres || []).forEach((value) => chips.push(traitChip('Subgenre', value, 'subgenre')));
-    (full.themes || []).forEach((value) => chips.push(traitChip('Thema', value, 'theme')));
-    (full.tone || []).forEach((value) => chips.push(traitChip('Ton', value, 'tone')));
-    (full.narrative || []).forEach((value) => chips.push(traitChip('Erzählweise', value, 'narrative')));
+  function missingChip(label) {
+    const node = el('span', 'chip is-missing');
+    node.append(el('small', null, label), el('span', null, 'fehlt'));
+    return node;
+  }
+
+  function draftFrom(full) {
+    return {
+      genres: (full.genres || []).slice(0, 3),
+      subgenres: (full.subgenres || []).slice(0, 2),
+      themes: (full.themes || []).slice(0, 4),
+      tone: (full.tone || []).slice(0, 2),
+      narrative: (full.narrative || []).slice(0, 2),
+      intensity: typeof full.intensity === 'number' ? full.intensity : null,
+      epoch: full.epoch || '',
+      place: full.place || '',
+    };
+  }
+
+  function traitOptions(field) {
+    const vocab = vocabulary || {};
+    if (field === 'subgenres') {
+      const groups = vocab.subgenres || {};
+      const list = [];
+      (editDraft.genres || []).forEach((parent) => {
+        (groups[parent] || []).forEach((name) => {
+          if (!list.includes(name)) list.push(name);
+        });
+      });
+      (editDraft.subgenres || []).forEach((name) => {
+        if (!list.includes(name)) list.push(name);
+      });
+      return list;
+    }
+    return (vocab[field] || []).slice();
+  }
+
+  function pruneSubgenres() {
+    const allowed = new Set(traitOptions('subgenres'));
+    editDraft.subgenres = editDraft.subgenres.filter((name) => allowed.has(name)).slice(0, 2);
+  }
+
+  function toggleTrait(field, value, limit) {
+    const list = editDraft[field];
+    const index = list.indexOf(value);
+    if (index >= 0) list.splice(index, 1);
+    else if (list.length < limit) list.push(value);
+    if (field === 'genres') pruneSubgenres();
+  }
+
+  function beginEdit(film) {
+    ensureVocab().then(() => {
+      editDraft = { id: film.id, ...draftFrom(fullOf(film)) };
+      renderPanel(film);
+    }).catch(() => {
+      /* das Vokabular bleibt weg, der Blick auf die Merkmale auch */
+    });
+  }
+
+  function saveDraft(film) {
+    const current = (globalThis.FILM_FACETS || {})[film.id] || {};
+    const validate = globalThis.Facets && globalThis.Facets.validateFacets;
+    if (!validate || !vocabulary) return;
+    pruneSubgenres();
+    const raw = {
+      ...current,
+      genres: editDraft.genres,
+      subgenres: editDraft.subgenres,
+      themes: editDraft.themes,
+      tone: editDraft.tone,
+      narrative: editDraft.narrative,
+      intensity: editDraft.intensity,
+      epoch: editDraft.epoch || null,
+      place: editDraft.place || null,
+      source: 'manuell',
+      reviewed: true,
+    };
+    const cleaned = validate(raw, vocabulary).facets;
+    cleaned.source = 'manuell';
+    cleaned.reviewed = true;
+    facetOverrides[film.id] = cleaned;
+    saveFacetOverrides();
+    if (!globalThis.FILM_FACETS) globalThis.FILM_FACETS = {};
+    globalThis.FILM_FACETS[film.id] = cleaned;
+    patchFilmFromFacets(film);
+    const index = added.findIndex((item) => item.id === film.id);
+    if (index >= 0) {
+      added[index] = {
+        ...added[index],
+        genres: film.genres,
+        cluster: film.cluster,
+        director: film.director,
+      };
+      try {
+        localStorage.setItem(ADDED_KEY, JSON.stringify(added));
+      } catch {
+        /* private mode can refuse storage; the session still works */
+      }
+    }
+    editDraft = null;
+    links = linksFor(film);
+    activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
+    if (network) network.moveFilm(film);
+    renderPanel(film);
+    applyNetworkFocus();
+    paint();
+    if (mode === 'network' && network) {
+      requestAnimationFrame(() => network.frame([film.id]));
+    } else {
+      buildWall();
+    }
+  }
+
+  function facetEditor(field, label, limit) {
+    const block = el('div', 'facet-block');
+    block.append(el('p', 'facet-label', label));
+    const find = document.createElement('input');
+    find.type = 'search';
+    find.className = 'facet-find';
+    find.placeholder = 'Suchen';
+    find.setAttribute('aria-label', `${label} suchen`);
+    find.autocomplete = 'off';
+    const list = el('div', 'chips');
+    const draw = () => {
+      const query = find.value.trim().toLocaleLowerCase('de');
+      list.replaceChildren();
+      traitOptions(field).forEach((name) => {
+        const selected = editDraft[field].includes(name);
+        if (query && !selected && !name.toLocaleLowerCase('de').includes(query)) return;
+        const button = el('button', selected ? 'chip is-on' : 'chip', name);
+        button.type = 'button';
+        button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        button.disabled = !selected && editDraft[field].length >= limit;
+        button.addEventListener('click', () => {
+          toggleTrait(field, name, limit);
+          if (field === 'genres') {
+            const current = byId.get(editDraft.id);
+            if (current) renderPanel(current);
+            return;
+          }
+          draw();
+        });
+        list.append(button);
+      });
+    };
+    find.addEventListener('input', draw);
+    block.append(find, list);
+    draw();
+    return block;
+  }
+
+  function choiceEditor(label, field, options) {
+    const block = el('label', 'facet-block');
+    block.append(el('span', 'facet-label', label));
+    const select = document.createElement('select');
+    select.append(new Option('fehlt', ''));
+    options.forEach((name) => select.append(new Option(name, name)));
+    select.value = editDraft[field] || '';
+    select.addEventListener('change', () => {
+      editDraft[field] = select.value;
+    });
+    block.append(select);
+    return block;
+  }
+
+  function intensityEditor() {
+    const block = el('div', 'facet-block');
+    block.append(el('p', 'facet-label', 'Intensität'));
+    const row = el('div', 'chips');
+    for (let mark = 1; mark <= 5; mark += 1) {
+      const button = el('button', editDraft.intensity === mark ? 'chip is-on' : 'chip', String(mark));
+      button.type = 'button';
+      button.setAttribute('aria-label', `Intensität ${mark} von 5`);
+      button.setAttribute('aria-pressed', editDraft.intensity === mark ? 'true' : 'false');
+      button.addEventListener('click', () => {
+        editDraft.intensity = editDraft.intensity === mark ? null : mark;
+        const current = byId.get(editDraft.id);
+        if (current) renderPanel(current);
+      });
+      row.append(button);
+    }
+    block.append(row);
+    return block;
+  }
+
+  function traitEditor(film) {
+    const form = el('div', 'trait-edit');
+    TRAIT_FIELDS.forEach(([field, label, , limit]) => {
+      form.append(facetEditor(field, label, limit));
+    });
+    form.append(intensityEditor());
+    form.append(choiceEditor('Epoche', 'epoch', (vocabulary && vocabulary.epoch) || []));
+    form.append(choiceEditor('Ort', 'place', (vocabulary && vocabulary.place) || []));
+    const actions = el('div', 'trait-actions');
+    const save = el('button', 'text-button', 'Speichern');
+    save.type = 'button';
+    save.addEventListener('click', () => saveDraft(film));
+    const cancel = el('button', 'text-button', 'Abbrechen');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => {
+      editDraft = null;
+      renderPanel(film);
+    });
+    actions.append(save, cancel);
+    form.append(actions);
+    return form;
+  }
+
+  function traitView(full) {
+    const list = el('div', 'chips');
+    TRAIT_FIELDS.forEach(([field, label, kind]) => {
+      const values = full[field] || [];
+      if (!values.length) {
+        list.append(missingChip(label));
+        return;
+      }
+      values.forEach((value) => list.append(traitChip(label, value, kind)));
+    });
     if (typeof full.intensity === 'number' && full.intensity > 0) {
       const button = el('button', 'chip');
       button.type = 'button';
@@ -744,16 +990,35 @@
         style: 'content',
         ids: filmsWith('intensity', full.intensity),
       }));
-      chips.push(button);
+      list.append(button);
+    } else {
+      list.append(missingChip('Intensität'));
     }
-    if (full.epoch) chips.push(traitChip('Epoche', full.epoch, 'epoch'));
-    if (full.place) chips.push(traitChip('Ort', full.place, 'place'));
-    if (!chips.length) return;
+    if (full.epoch) list.append(traitChip('Epoche', full.epoch, 'epoch'));
+    else list.append(missingChip('Epoche'));
+    if (full.place) list.append(traitChip('Ort', full.place, 'place'));
+    else list.append(missingChip('Ort'));
+    return list;
+  }
+
+  function appendTraits(film, full) {
+    const editing = editDraft && editDraft.id === film.id;
     const section = el('section', 'group');
-    section.append(el('h2', null, 'Merkmale'));
-    const list = el('div', 'chips');
-    chips.forEach((chip) => list.append(chip));
-    section.append(list);
+    const heading = el('div', 'trait-head');
+    heading.append(el('h2', null, 'Merkmale'));
+    const edit = el('button', 'text-button', 'Bearbeiten');
+    edit.type = 'button';
+    edit.addEventListener('click', () => beginEdit(film));
+    const needsReview = full.source === 'tmdb' && full.reviewed === false;
+    if (!editing && !needsReview) heading.append(edit);
+    section.append(heading);
+    if (!editing && needsReview) {
+      const note = el('p', 'review-note');
+      note.append(document.createTextNode('Merkmale aus TMDB übernommen – bitte prüfen'));
+      note.append(edit);
+      section.append(note);
+    }
+    section.append(editing ? traitEditor(film) : traitView(full));
     panel.append(section);
   }
 
@@ -931,10 +1196,7 @@
           changed = true;
         }
       });
-      if (changed) {
-        requestAnimationFrame(drawLink);
-        if (network) network.paint();
-      }
+      if (changed && network) network.paint();
       if (data.done || data.configured === false) return;
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
@@ -979,64 +1241,173 @@
     if (best) setActiveLink(best.dataset.id);
   }, { passive: true });
   const addButton = document.getElementById('add-film');
+  const addFilm = document.querySelector('.add-film');
   const addForm = document.getElementById('add-form');
   const addQuery = document.getElementById('add-query');
   const addStatus = document.getElementById('add-status');
+  const searchForm = document.getElementById('search-form');
+  const searchOpen = document.getElementById('search-open');
 
   function closeAdd() {
-    addForm.hidden = true;
+    addFilm.classList.remove('is-open');
     addButton.setAttribute('aria-expanded', 'false');
+    addQuery.disabled = true;
     addStatus.textContent = '';
   }
 
-  function placeFilm(film) {
-    if (removed.delete(film.id)) saveRemoved();
-    if (byId.has(film.id)) {
-      closeAdd();
-      openFilm(byId.get(film.id), true);
-      return;
-    }
-    added.push(film);
-    localStorage.setItem(ADDED_KEY, JSON.stringify(added));
-    FILMS.push(film);
-    byId.set(film.id, film);
-    if (film.poster) posters.set(film.id, film.poster);
+  function openAdd() {
+    closeSearch();
+    addQuery.disabled = false;
+    addFilm.classList.add('is-open');
+    addButton.setAttribute('aria-expanded', 'true');
+    addQuery.focus();
+  }
+
+  function closeSearch() {
+    searchForm.classList.remove('is-open');
+    searchOpen.setAttribute('aria-expanded', 'false');
+    results.hidden = true;
+    search.value = '';
+    search.disabled = true;
+  }
+
+  function openSearch() {
     closeAdd();
-    if (mode === 'network' && network) {
+    search.disabled = false;
+    searchForm.classList.add('is-open');
+    searchOpen.setAttribute('aria-expanded', 'true');
+    search.focus();
+  }
+
+  function normTitle(value) {
+    return String(value || '').trim().toLocaleLowerCase('de').replace(/\s+/g, ' ');
+  }
+
+  function yearOf(film) {
+    if (typeof film.yearNum === 'number' && Number.isFinite(film.yearNum)) return film.yearNum;
+    const year = Number(String(film.year || '').slice(0, 4));
+    return Number.isFinite(year) ? year : null;
+  }
+
+  function identityOf(film) {
+    const facets = (globalThis.FILM_FACETS || {})[film.id] || {};
+    const imdb = String(facets.imdbId || '').toLowerCase();
+    return {
+      imdb: imdb || (/^tt\d+$/i.test(film.id) ? film.id.toLowerCase() : ''),
+      tmdb: facets.tmdbId == null || facets.tmdbId === '' ? null : Number(facets.tmdbId),
+      titles: [film.title, film.original].map(normTitle).filter(Boolean),
+      year: yearOf(film),
+    };
+  }
+
+  function findExisting(film, facets) {
+    const incoming = {
+      imdb: String(facets.imdbId || '').toLowerCase(),
+      tmdb: facets.tmdbId == null || facets.tmdbId === '' ? null : Number(facets.tmdbId),
+      titles: [film.title, film.original].map(normTitle).filter(Boolean),
+      year: yearOf(film),
+    };
+    const pool = new Map();
+    (window.FILMS || []).forEach((item) => pool.set(item.id, item));
+    added.forEach((item) => pool.set(item.id, item));
+    for (const item of pool.values()) {
+      const known = identityOf(item);
+      if (incoming.tmdb && known.tmdb && incoming.tmdb === known.tmdb) return item;
+      if (incoming.imdb && known.imdb && incoming.imdb === known.imdb) return item;
+      const idsDisagree = (incoming.tmdb && known.tmdb && incoming.tmdb !== known.tmdb)
+        || (incoming.imdb && known.imdb && incoming.imdb !== known.imdb);
+      if (idsDisagree) continue;
+      const sameName = incoming.titles.some((title) => known.titles.includes(title));
+      if (sameName && incoming.year && known.year && incoming.year === known.year) return item;
+    }
+    return null;
+  }
+
+  function adopt(film) {
+    if (removed.delete(film.id)) saveRemoved();
+    if (byId.has(film.id)) return byId.get(film.id);
+    const stored = added.find((item) => item.id === film.id) || film;
+    FILMS.push(stored);
+    byId.set(stored.id, stored);
+    if (stored.poster) posters.set(stored.id, stored.poster);
+    return stored;
+  }
+
+  async function revealFilm(film) {
+    if (mode !== 'network') await setMode('network');
+    if (network) {
       network.setFilms(FILMS);
       network.addFilm(film);
-      openFilm(film, true);
+    }
+    openFilm(film, 'near');
+  }
+
+  function rememberFacets(id, facets) {
+    facetOverrides[id] = facets;
+    saveFacetOverrides();
+    if (!globalThis.FILM_FACETS) globalThis.FILM_FACETS = {};
+    globalThis.FILM_FACETS[id] = facets;
+  }
+
+  function placeFilm(film, facets) {
+    const existing = findExisting(film, facets);
+    if (existing) {
+      addStatus.textContent = 'Den Film gibt es schon.';
+      revealFilm(adopt(existing));
       return;
     }
-    buildWall();
-    openFilm(film, true);
+    rememberFacets(film.id, facets);
+    if (film.poster) posters.set(film.id, film.poster);
+    added.push(film);
+    try {
+      localStorage.setItem(ADDED_KEY, JSON.stringify(added));
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+    FILMS.push(film);
+    byId.set(film.id, film);
+    const genre = (facets.genres || [])[0];
+    const sub = (facets.subgenres || [])[0];
+    if (genre && sub) addStatus.textContent = `Eingeordnet als ${genre} · ${sub}`;
+    else if (genre) addStatus.textContent = `Eingeordnet als ${genre}`;
+    else addStatus.textContent = 'Eingeordnet.';
+    addQuery.value = '';
+    revealFilm(film);
   }
 
   addButton.addEventListener('click', () => {
-    const open = addForm.hidden;
-    addForm.hidden = !open;
-    addButton.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (open) addQuery.focus();
+    if (addFilm.classList.contains('is-open')) closeAdd();
+    else openAdd();
   });
+
+  searchOpen.addEventListener('click', () => {
+    if (searchForm.classList.contains('is-open')) closeSearch();
+    else openSearch();
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (document.querySelector('header').contains(event.target)) return;
+    if (addFilm.classList.contains('is-open')) closeAdd();
+    if (searchForm.classList.contains('is-open')) closeSearch();
+  }, true);
 
   addForm.addEventListener('submit', async (event) => {
     event.preventDefault();
     const query = addQuery.value.trim();
     if (!query) {
-      addStatus.textContent = 'Titel oder IMDb-Link eintragen.';
+      addStatus.textContent = 'Titel oder Link eintragen.';
       return;
     }
-    addStatus.textContent = 'Ich hole Cover und IMDb-Wertung.';
+    addStatus.textContent = 'Ich hole Daten von TMDB …';
     addForm.querySelector('button[type=submit]').disabled = true;
     try {
       const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
-      const data = response.ok ? await response.json() : null;
-      if (!data?.film) {
-        addStatus.textContent = 'Dazu finde ich keinen Film.';
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.film || !data?.facets) {
+        addStatus.textContent = (data && data.error) || 'Dazu finde ich keinen Film.';
         return;
       }
-      addQuery.value = '';
-      placeFilm(data.film);
+      placeFilm(data.film, data.facets);
     } catch {
       addStatus.textContent = 'Der Abruf ist gerade nicht möglich.';
     } finally {
@@ -1046,8 +1417,17 @@
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
-      results.hidden = true;
-      if (!addForm.hidden) {
+      if (searchForm.classList.contains('is-open')) {
+        closeSearch();
+        return;
+      }
+      if (editDraft) {
+        const film = byId.get(editDraft.id);
+        editDraft = null;
+        if (film && selectedId === film.id) renderPanel(film);
+        return;
+      }
+      if (addFilm.classList.contains('is-open')) {
         closeAdd();
         return;
       }
@@ -1059,7 +1439,6 @@
     }
   });
   window.addEventListener('resize', () => {
-    drawLink();
     if (mode === 'network' && network) network.resize();
   });
 
@@ -1069,7 +1448,8 @@
       if (!response.ok) return;
       const data = await response.json();
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-      globalThis.FILM_FACETS = data;
+      overlayFacets(data);
+      FILMS.forEach(patchFilmFromFacets);
       if (network) network.refresh();
       if (!selectedId) return;
       const film = byId.get(selectedId);
@@ -1086,4 +1466,7 @@
   setMode(savedMode());
   loadPosters();
   loadStoredFacets();
+  ensureVocab().catch(() => {
+    /* Bearbeiten holt das Vokabular erneut */
+  });
 })();

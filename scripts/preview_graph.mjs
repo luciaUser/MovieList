@@ -45,9 +45,9 @@ function settle(x, y, text, size, kept, shifts) {
 export function writePreview(graph, films, outPath) {
   const layout = globalThis.SimilarityConfig.layout;
   const colors = layout.genreColors || {};
-  const aspect = layout.aspect || 1.6;
-  const width = 1600;
-  const height = 1000;
+  const aspect = layout.aspect || 0.625;
+  const width = aspect >= 1 ? 1600 : 900;
+  const height = Math.round(width / aspect);
   const byId = new Map((films || []).map((film) => [film.id, film]));
   const sx = (x) => (x / aspect) * width;
   const sy = (y) => y * height;

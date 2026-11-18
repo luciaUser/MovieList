@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { lookupFilm } from './lookup.mjs';
+import { filmResponse } from './lookup.mjs';
 import { search } from './tmdb.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -94,24 +94,24 @@ const TYPES = {
   '.webp': 'image/webp',
 };
 
-function send(res, status, body, type) {
+function send(res, status, body, type, cache = 'no-store') {
   res.writeHead(status, {
     'Content-Type': type,
-    'Cache-Control': 'no-store',
+    'Cache-Control': cache,
   });
   res.end(body);
 }
 
-function reply(res, status, body, type) {
+function reply(res, status, body, type, cache = 'no-store') {
   if (res && typeof res.writeHead === 'function') {
-    if (!res.headersSent) send(res, status, body, type);
+    if (!res.headersSent) send(res, status, body, type, cache);
     return undefined;
   }
   return new Response(body, {
     status,
     headers: {
       'Content-Type': type,
-      'Cache-Control': 'no-store',
+      'Cache-Control': cache,
     },
   });
 }
@@ -121,8 +121,8 @@ async function handle(req, res) {
     const raw = typeof req === 'string' ? req : req?.url || '/';
     const url = new URL(raw, 'http://127.0.0.1');
     if (url.pathname === '/api/film') {
-      const film = await lookupFilm(url.searchParams.get('q') || '');
-      return reply(res, film ? 200 : 404, JSON.stringify({ film }), 'application/json; charset=utf-8');
+      const result = await filmResponse(url.searchParams.get('q') || '');
+      return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);
     }
     if (url.pathname === '/api/posters') {
       if (!refreshing && TOKEN) refreshing = refresh().finally(() => { refreshing = null; });
