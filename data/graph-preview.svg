@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+<rect width="1600" height="1000" fill="#0a0b0e"/>
+<text x="666.6" y="635.7" fill="#d07a3a" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Action</text>
+<text x="818.6" y="554.1" fill="#c48498" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Drama</text>
+<text x="901.0" y="841.5" fill="#4f9d98" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Sci-Fi</text>
+<text x="1323.6" y="566.9" fill="#8f4d68" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Horror</text>
+<text x="701.4" y="602.7" fill="#c46a52" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Thriller</text>
+<text x="586.6" y="405.6" fill="#6d88ad" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Krimi</text>
+<text x="374.6" y="274.6" fill="#d2b48c" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Biografie</text>
+<text x="1009.9" y="394.4" fill="#d2c15e" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Komödie</text>
+<text x="147.7" y="442.2" fill="#7f9a78" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Dokumentation</text>
+<text x="1135.4" y="498.5" fill="#a784c4" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Fantasy</text>
+<text x="730.6" y="696.8" fill="#c4973e" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Abenteuer</text>
+<text x="1042.3" y="435.6" fill="#8d78b0" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Mystery</text>
+<text x="472.2" y="639.2" fill="#7c8450" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Kriegsfilm</text>
+<text x="769.2" y="392.7" fill="#8f7560" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Historie</text>
+<text x="1328.0" y="56.0" fill="#d4a3b5" fill-opacity="0.55" font-family="sans-serif" font-size="28" font-weight="700" text-anchor="middle" dominant-baseline="middle">Romantik</text>
+<circle cx="716.3" cy="261.0" r="3" fill="#c48498"/>
+<circle cx="390.3" cy="900.8" r="3" fill="#c48498"/>
+<circle cx="522.4" cy="526.0" r="3" fill="#d07a3a"/>
+<circle cx="944.5" cy="626.3" r="3" fill="#a784c4"/>
+<circle cx="991.3" cy="626.7" r="3" fill="#a784c4"/>
+<circle cx="576.0" cy="827.4" r="3" fill="#4f9d98"/>
+<circle cx="840.6" cy="401.4" r="3" fill="#c48498"/>
+<circle cx="800.0" cy="905.4" r="3" fill="#4f9d98"/>
+<circle cx="331.3" cy="345.0" r="3" fill="#d2b48c"/>
+<circle cx="814.5" cy="430.8" r="3" fill="#c48498"/>
+<circle cx="941.8" cy="520.9" r="3" fill="#c46a52"/>
+<circle cx="705.8" cy="940.0" r="3" fill="#c48498"/>
+<circle cx="1025.8" cy="518.0" r="3" fill="#c48498"/>
+<circle cx="304.7" cy="224.3" r="3" fill="#d2b48c"/>
+<circle cx="941.6" cy="915.8" r="3" fill="#4f9d98"/>
+<circle cx="529.4" cy="659.7" r="3" fill="#c4973e"/>
+<circle cx="791.8" cy="545.9" r="3" fill="#d07a3a"/>
+<circle cx="1076.3" cy="700.6" r="3" fill="#c48498"/>
+<circle cx="949.0" cy="918.3" r="3" fill="#4f9d98"/>
+<circle cx="489.3" cy="525.5" r="3" fill="#d07a3a"/>
+<circle cx="807.9" cy="933.5" r="3" fill="#4f9d98"/>
+<circle cx="332.0" cy="375.3" r="3" fill="#6d88ad"/>
+<circle cx="543.8" cy="463.7" r="3" fill="#d07a3a"/>
+<circle cx="953.9" cy="498.8" r="3" fill="#d07a3a"/>
+<circle cx="800.7" cy="634.2" r="3" fill="#d07a3a"/>
+<circle cx="294.7" cy="309.2" r="3" fill="#d2b48c"/>
+<circle cx="869.8" cy="447.2" r="3" fill="#8d78b0"/>
+<circle cx="1419.8" cy="323.4" r="3" fill="#8f7560"/>
+<circle cx="390.9" cy="762.3" r="3" fill="#4f9d98"/>
+<circle cx="362.4" cy="289.0" r="3" fill="#d2b48c"/>
+<circle cx="805.9" cy="745.2" r="3" fill="#d07a3a"/>
+<circle cx="422.2" cy="234.4" r="3" fill="#d2b48c"/>
+<circle cx="844.3" cy="667.5" r="3" fill="#d07a3a"/>
+<circle cx="325.9" cy="237.1" r="3" fill="#d2b48c"/>
+<circle cx="663.0" cy="845.6" r="3" fill="#c48498"/>
+<circle cx="717.9" cy="722.9" r="3" fill="#c4973e"/>
+<circle cx="1406.8" cy="582.4" r="3" fill="#8f4d68"/>
+<circle cx="1042.1" cy="377.4" r="3" fill="#d2c15e"/>
+<circle cx="593.6" cy="703.6" r="3" fill="#c46a52"/>
+<circle cx="606.0" cy="514.4" r="3" fill="#d07a3a"/>
+<circle cx="591.1" cy="340.5" r="3" fill="#6d88ad"/>
+<circle cx="475.3" cy="765.3" r="3" fill="#d07a3a"/>
+<circle cx="769.0" cy="675.9" r="3" fill="#c4973e"/>
+<circle cx="242.3" cy="317.5" r="3" fill="#7f9a78"/>
+<circle cx="766.5" cy="595.1" r="3" fill="#d07a3a"/>
+<circle cx="932.7" cy="687.1" r="3" fill="#d07a3a"/>
+<circle cx="379.4" cy="578.0" r="3" fill="#d07a3a"/>
+<circle cx="541.2" cy="298.9" r="3" fill="#6d88ad"/>
+<circle cx="336.6" cy="331.6" r="3" fill="#d2b48c"/>
+<circle cx="758.1" cy="936.9" r="3" fill="#c48498"/>
+<circle cx="906.1" cy="624.7" r="3" fill="#c4973e"/>
+<circle cx="509.0" cy="289.2" r="3" fill="#d2b48c"/>
+<circle cx="826.3" cy="529.0" r="3" fill="#d07a3a"/>
+<circle cx="1463.5" cy="381.4" r="3" fill="#c48498"/>
+<circle cx="1165.4" cy="403.4" r="3" fill="#d2c15e"/>
+<circle cx="426.7" cy="186.3" r="3" fill="#d2c15e"/>
+<circle cx="719.1" cy="376.5" r="3" fill="#c48498"/>
+<circle cx="613.5" cy="354.0" r="3" fill="#6d88ad"/>
+<circle cx="1232.2" cy="733.6" r="3" fill="#8f4d68"/>
+<circle cx="1435.9" cy="619.8" r="3" fill="#8f4d68"/>
+<circle cx="338.3" cy="450.0" r="3" fill="#c48498"/>
+<circle cx="1047.9" cy="352.1" r="3" fill="#d2c15e"/>
+<circle cx="698.3" cy="513.6" r="3" fill="#d07a3a"/>
+<circle cx="601.3" cy="402.5" r="3" fill="#6d88ad"/>
+<circle cx="811.0" cy="725.4" r="3" fill="#d07a3a"/>
+<circle cx="470.8" cy="678.3" r="3" fill="#d07a3a"/>
+<circle cx="625.0" cy="684.4" r="3" fill="#d07a3a"/>
+<circle cx="1485.3" cy="620.6" r="3" fill="#8f4d68"/>
+<circle cx="1504.0" cy="565.4" r="3" fill="#8f4d68"/>
+<circle cx="1055.7" cy="474.5" r="3" fill="#d2c15e"/>
+<circle cx="644.7" cy="807.8" r="3" fill="#d07a3a"/>
+<circle cx="745.3" cy="465.7" r="3" fill="#c46a52"/>
+<circle cx="833.9" cy="370.6" r="3" fill="#c48498"/>
+<circle cx="985.5" cy="387.9" r="3" fill="#c48498"/>
+<circle cx="717.7" cy="630.8" r="3" fill="#c46a52"/>
+<circle cx="866.6" cy="840.7" r="3" fill="#4f9d98"/>
+<circle cx="738.5" cy="810.4" r="3" fill="#4f9d98"/>
+<circle cx="1085.3" cy="799.5" r="3" fill="#4f9d98"/>
+<circle cx="363.2" cy="654.8" r="3" fill="#8f7560"/>
+<circle cx="1400.1" cy="632.6" r="3" fill="#8d78b0"/>
+<circle cx="116.1" cy="439.9" r="3" fill="#7f9a78"/>
+<circle cx="331.7" cy="453.9" r="3" fill="#c48498"/>
+<circle cx="616.9" cy="731.8" r="3" fill="#d07a3a"/>
+<circle cx="1061.2" cy="883.8" r="3" fill="#d07a3a"/>
+<circle cx="431.3" cy="654.9" r="3" fill="#7c8450"/>
+<circle cx="527.5" cy="571.9" r="3" fill="#c46a52"/>
+<circle cx="933.7" cy="780.8" r="3" fill="#4f9d98"/>
+<circle cx="1425.2" cy="331.2" r="3" fill="#c48498"/>
+<circle cx="1440.9" cy="355.6" r="3" fill="#c48498"/>
+<circle cx="615.9" cy="605.5" r="3" fill="#c46a52"/>
+<circle cx="966.6" cy="867.4" r="3" fill="#4f9d98"/>
+<circle cx="451.3" cy="762.5" r="3" fill="#d07a3a"/>
+<circle cx="967.9" cy="832.2" r="3" fill="#4f9d98"/>
+<circle cx="783.0" cy="436.6" r="3" fill="#c48498"/>
+<circle cx="747.8" cy="690.3" r="3" fill="#c46a52"/>
+<circle cx="1272.8" cy="409.4" r="3" fill="#8f4d68"/>
+<circle cx="1328.0" cy="56.0" r="3" fill="#d4a3b5"/>
+<circle cx="1146.9" cy="325.0" r="3" fill="#a784c4"/>
+<circle cx="970.7" cy="811.2" r="3" fill="#4f9d98"/>
+<circle cx="527.0" cy="602.3" r="3" fill="#7c8450"/>
+<circle cx="1329.7" cy="582.6" r="3" fill="#8f4d68"/>
+<circle cx="750.9" cy="827.5" r="3" fill="#4f9d98"/>
+<circle cx="890.9" cy="320.2" r="3" fill="#c48498"/>
+<circle cx="1214.7" cy="656.5" r="3" fill="#8f4d68"/>
+<circle cx="451.2" cy="896.7" r="3" fill="#4f9d98"/>
+<circle cx="1041.3" cy="912.5" r="3" fill="#4f9d98"/>
+<circle cx="610.0" cy="784.4" r="3" fill="#c46a52"/>
+<circle cx="1168.7" cy="595.0" r="3" fill="#8f4d68"/>
+<circle cx="736.5" cy="469.3" r="3" fill="#c46a52"/>
+<circle cx="525.6" cy="416.7" r="3" fill="#6d88ad"/>
+<circle cx="491.5" cy="619.5" r="3" fill="#d07a3a"/>
+<circle cx="411.7" cy="898.6" r="3" fill="#c48498"/>
+<circle cx="597.7" cy="538.7" r="3" fill="#c46a52"/>
+<circle cx="1148.2" cy="425.0" r="3" fill="#d2c15e"/>
+<circle cx="688.3" cy="335.3" r="3" fill="#6d88ad"/>
+<circle cx="1096.8" cy="515.6" r="3" fill="#8f4d68"/>
+<circle cx="102.1" cy="445.7" r="3" fill="#7f9a78"/>
+<circle cx="486.0" cy="426.8" r="3" fill="#6d88ad"/>
+<circle cx="755.9" cy="581.0" r="3" fill="#c46a52"/>
+<circle cx="578.4" cy="638.5" r="3" fill="#d07a3a"/>
+<circle cx="432.7" cy="795.1" r="3" fill="#c48498"/>
+<circle cx="1303.9" cy="493.7" r="3" fill="#8f4d68"/>
+<circle cx="1347.3" cy="616.8" r="3" fill="#8f4d68"/>
+<circle cx="324.6" cy="632.0" r="3" fill="#6d88ad"/>
+<circle cx="524.6" cy="200.0" r="3" fill="#8f7560"/>
+<circle cx="1089.0" cy="483.9" r="3" fill="#d2c15e"/>
+<circle cx="614.6" cy="294.8" r="3" fill="#6d88ad"/>
+<circle cx="642.4" cy="422.3" r="3" fill="#6d88ad"/>
+<circle cx="1219.3" cy="662.0" r="3" fill="#8f4d68"/>
+<circle cx="1341.6" cy="513.6" r="3" fill="#8f4d68"/>
+<circle cx="95.4" cy="449.3" r="3" fill="#7f9a78"/>
+<circle cx="458.3" cy="660.3" r="3" fill="#7c8450"/>
+<circle cx="1446.8" cy="550.1" r="3" fill="#8f4d68"/>
+<circle cx="893.7" cy="830.0" r="3" fill="#4f9d98"/>
+<circle cx="182.7" cy="558.5" r="3" fill="#7f9a78"/>
+<circle cx="1104.4" cy="452.5" r="3" fill="#d2c15e"/>
+<circle cx="1312.1" cy="509.0" r="3" fill="#8f4d68"/>
+<circle cx="856.9" cy="305.1" r="3" fill="#8d78b0"/>
+<circle cx="438.1" cy="568.3" r="3" fill="#d07a3a"/>
+<circle cx="722.7" cy="762.0" r="3" fill="#d07a3a"/>
+<circle cx="484.2" cy="211.4" r="3" fill="#d2b48c"/>
+<circle cx="1143.2" cy="592.8" r="3" fill="#6d88ad"/>
+<circle cx="1226.9" cy="743.1" r="3" fill="#4f9d98"/>
+<circle cx="1362.6" cy="547.1" r="3" fill="#8f4d68"/>
+<circle cx="1459.0" cy="416.0" r="3" fill="#a784c4"/>
+<circle cx="710.4" cy="538.5" r="3" fill="#c46a52"/>
+<circle cx="678.8" cy="585.1" r="3" fill="#d07a3a"/>
+<circle cx="711.6" cy="658.2" r="3" fill="#d07a3a"/>
+<circle cx="1238.5" cy="430.9" r="3" fill="#8f4d68"/>
+<circle cx="838.8" cy="596.6" r="3" fill="#c46a52"/>
+<circle cx="961.9" cy="697.8" r="3" fill="#c48498"/>
+<circle cx="650.0" cy="649.2" r="3" fill="#c46a52"/>
+<circle cx="1429.9" cy="566.0" r="3" fill="#8f4d68"/>
+<circle cx="1097.1" cy="875.7" r="3" fill="#4f9d98"/>
+<circle cx="601.4" cy="576.6" r="3" fill="#d07a3a"/>
+<circle cx="732.1" cy="693.6" r="3" fill="#c46a52"/>
+<circle cx="522.4" cy="381.2" r="3" fill="#6d88ad"/>
+<circle cx="657.4" cy="598.7" r="3" fill="#d07a3a"/>
+<circle cx="1121.3" cy="867.8" r="3" fill="#4f9d98"/>
+<circle cx="1343.4" cy="712.5" r="3" fill="#4f9d98"/>
+<text x="946.5" y="824.3" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Alien-Kontakt</text>
+<text x="484.6" y="644.8" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Superhelden</text>
+<text x="575.7" y="358.6" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Ermittlung</text>
+<text x="756.3" y="623.6" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Martial Arts</text>
+<text x="812.7" y="422.9" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Psychothriller</text>
+<text x="732.1" y="571.1" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Rachethriller</text>
+<text x="1083.1" y="470.3" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Schwarze Komödie</text>
+<text x="1176.9" y="611.3" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Survival-Thriller</text>
+<text x="104.5" y="445.0" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">True Crime</text>
+<text x="1462.2" y="578.4" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Übernatürlicher Horror</text>
+<text x="983.8" y="850.5" fill="rgba(255,255,255,0.6)" font-family="sans-serif" font-size="12" text-anchor="middle" dominant-baseline="middle">Weltraum</text>
+<text x="724.3" y="253.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Die Verurteilten</text>
+<text x="398.3" y="892.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Chernobyl</text>
+<text x="530.4" y="518.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Dark Knight</text>
+<text x="952.5" y="618.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Der Herr der Ringe</text>
+<text x="584.0" y="819.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Inception</text>
+<text x="848.6" y="393.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Fight Club</text>
+<text x="808.0" y="897.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Interstellar</text>
+<text x="339.3" y="337.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Goodfellas</text>
+<text x="949.8" y="512.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Parasite</text>
+<text x="713.8" y="932.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Prestige</text>
+<text x="1033.8" y="510.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Django Unchained</text>
+<text x="312.7" y="216.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Ziemlich beste Freunde</text>
+<text x="949.6" y="907.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Dune: Part Two</text>
+<text x="799.8" y="537.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Oldboy</text>
+<text x="1084.3" y="692.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Apocalypse Now</text>
+<text x="815.9" y="925.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">2001: A Space Odyssey</text>
+<text x="340.0" y="367.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Scarface</text>
+<text x="551.8" y="455.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Heat</text>
+<text x="961.9" y="490.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Chainsaw Man – The Movie: Reze Arc</text>
+<text x="302.7" y="301.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Wolf of Wall Street</text>
+<text x="877.8" y="451.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Shutter Island</text>
+<text x="1427.8" y="315.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Hamnet</text>
+<text x="398.9" y="754.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Lanterns</text>
+<text x="370.4" y="281.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Catch Me If You Can</text>
+<text x="813.9" y="737.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Mad Max: Fury Road</text>
+<text x="430.2" y="226.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Spotlight</text>
+<text x="852.3" y="659.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Pirates of the Caribbean</text>
+<text x="671.0" y="837.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Donnie Darko</text>
+<text x="725.9" y="714.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Der Marsianer</text>
+<text x="1050.1" y="369.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Studio</text>
+<text x="601.6" y="695.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Paradise</text>
+<text x="614.0" y="494.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Batman / Batman Begins</text>
+<text x="599.1" y="332.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Knives Out</text>
+<text x="483.3" y="757.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Iron Man</text>
+<text x="777.0" y="679.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Life of Pi</text>
+<text x="774.5" y="599.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Jujutsu Kaisen: Execution</text>
+<text x="940.7" y="679.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Ne Zha 2</text>
+<text x="387.4" y="570.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Gentlemen</text>
+<text x="549.2" y="290.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Hateful Eight</text>
+<text x="517.0" y="269.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Tombstone</text>
+<text x="834.3" y="509.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">I Saw the Devil</text>
+<text x="1471.5" y="373.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Let the Right One In</text>
+<text x="1173.4" y="395.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Birdman</text>
+<text x="434.7" y="178.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Besser geht’s nicht</text>
+<text x="727.1" y="368.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Anatomy of a Fall</text>
+<text x="1240.2" y="725.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">28 Years Later: The Bone Temple</text>
+<text x="1443.9" y="611.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">IT: Welcome to Derry</text>
+<text x="346.3" y="442.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Crash</text>
+<text x="1055.9" y="344.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Once Upon a Time in... Hollywood</text>
+<text x="706.3" y="517.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Sherlock Holmes</text>
+<text x="609.3" y="394.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Hell or High Water</text>
+<text x="478.8" y="670.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Fury</text>
+<text x="1512.0" y="557.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Others</text>
+<text x="652.7" y="799.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Predestination</text>
+<text x="753.3" y="457.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Beasts</text>
+<text x="841.9" y="362.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Devil's Advocate</text>
+<text x="993.5" y="391.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Marty Supreme</text>
+<text x="874.6" y="844.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Ohne Limit</text>
+<text x="746.5" y="802.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Looper</text>
+<text x="1093.3" y="791.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Frankenstein</text>
+<text x="371.2" y="646.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Nuremberg</text>
+<text x="1408.1" y="636.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Weapons</text>
+<text x="124.1" y="419.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Sean Combs: The Reckoning</text>
+<text x="624.9" y="723.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Tenet</text>
+<text x="1069.2" y="875.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Alita: Battle Angel</text>
+<text x="535.5" y="563.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Wasteman</text>
+<text x="941.7" y="772.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Predator: Killer of Killers</text>
+<text x="1433.2" y="335.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Great Gatsby</text>
+<text x="623.9" y="597.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Secret Agent</text>
+<text x="1280.8" y="413.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Teenage Sex and Death at Camp Miasma</text>
+<text x="1336.0" y="48.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Drama</text>
+<text x="1154.9" y="317.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Master and Margarita</text>
+<text x="978.7" y="803.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Predator: Badlands</text>
+<text x="535.0" y="594.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Warfare</text>
+<text x="898.9" y="312.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Survivors</text>
+<text x="1222.7" y="648.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Green Room</text>
+<text x="469.2" y="888.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Cloverfield</text>
+<text x="1049.3" y="904.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Oblivion</text>
+<text x="618.0" y="776.4" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Enemy</text>
+<text x="1176.7" y="587.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Black Phone</text>
+<text x="533.6" y="420.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Crime 101</text>
+<text x="499.5" y="623.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Mayday</text>
+<text x="605.7" y="542.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Knox Goes Away</text>
+<text x="696.3" y="327.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">I See You</text>
+<text x="1114.8" y="507.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Send Help</text>
+<text x="596.4" y="630.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Sisu: Road to Revenge</text>
+<text x="440.7" y="787.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Glass</text>
+<text x="1311.9" y="485.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Buddy</text>
+<text x="1355.3" y="608.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Hokum</text>
+<text x="332.6" y="624.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Peaky Blinders: The Immortal Man</text>
+<text x="532.6" y="204.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Spartacus: House of Ashur</text>
+<text x="650.4" y="414.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Stranger</text>
+<text x="1227.3" y="666.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Primate</text>
+<text x="1349.6" y="505.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Ghost in the Cell</text>
+<text x="1454.8" y="530.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Final Destination: Bloodlines</text>
+<text x="190.7" y="550.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Lost in the Jungle</text>
+<text x="1112.4" y="444.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">How to Make a Killing</text>
+<text x="864.9" y="285.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Revelations</text>
+<text x="446.1" y="548.3" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Triple Frontier</text>
+<text x="730.7" y="766.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Running Man</text>
+<text x="1234.9" y="747.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The End of Oak Street</text>
+<text x="1370.6" y="551.1" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Evil Dead Burn</text>
+<text x="1467.0" y="408.0" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Dracula: A Love Tale</text>
+<text x="718.4" y="542.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">A Widow’s Game</text>
+<text x="719.6" y="650.2" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Dead of Winter</text>
+<text x="1246.5" y="434.9" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Ugly Stepsister</text>
+<text x="846.8" y="576.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Verity</text>
+<text x="969.9" y="701.8" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">The Death of Robin Hood</text>
+<text x="1105.1" y="855.7" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">M3GAN 2.0</text>
+<text x="619.4" y="568.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Citizen Vigilante</text>
+<text x="740.1" y="697.6" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Fall 2: Deadpoint</text>
+<text x="1351.4" y="704.5" fill="rgba(255,255,255,0.7)" font-family="sans-serif" font-size="9">Iron Lung</text>
+</svg>

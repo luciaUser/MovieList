@@ -109,21 +109,24 @@ Startliste: `films.js` (Basisdaten) + `data/facets.json` (Facetten) + `data/grap
 
 Bei `links` nach den Boni auf 1 kappen. Gründe als lesbare Texte: `Subgenre: Heist`, `Thema: Rache`, `Regie: Christopher Nolan`, `Mit: Leonardo DiCaprio`, `Erzählweise: nicht-linear`, `ähnliche Intensität`, `gleiche Epoche`.
 
-## A6. Layout (`layout.js`, eigene Simulation ohne Bibliothek)
+## A6. Layout (`layout.js`, Einbettungskarte ohne Bibliothek)
 
-Ein Modul für Node-Script und Browser (`globalThis.Layout`), damit Freunde ihre Karte im Browser neu ordnen können.
+Ein Modul für Node-Script und Browser (`globalThis.Layout`), damit Freunde ihre Karte im Browser neu ordnen können. Kein Ring, keine festen Genre-Anker: Die Filme werden mit t-SNE frei im Raum verteilt, Inseln entstehen aus der Ähnlichkeit.
 
-- Genre-Anker auf einem Ring, Drama im Zentrum. Reihenfolge: Biografie, Dokumentation, Krimi, Thriller, Mystery, Horror, Sci-Fi, Fantasy, Abenteuer, Action, Kriegsfilm, Western, Historie, Romantik, Komödie. Reihenfolge und Radius in `similarity.config.js`.
-- Kräfte: Anker-Kraft zum gewichteten Mittel der Genre-Anker (Hauptgenre 0.6, weitere zusammen 0.4); Federn zu den k = 5 nächsten Nachbarn (Modus `layout`, Ruhelänge `base * (1 - sim)`, Stärke `sim`); Kollision über ein Raster (Posterradius); schwache Abstossung. Abkühlung über 600 Ticks. Zufall nur über einen Seed-PRNG (mulberry32), damit das Ergebnis immer gleich ist.
-- `layoutAll(films, opts)` → `{ nodes, anchors, clusters, edges }`; `placeOne(film, films, positions)` setzt einen Film neben seine 5 ähnlichsten (70 % Nachbar-Mittel, 30 % Anker), danach 150 Ticks, in denen nur dieser Film sich bewegt.
-- `clusters`: Filme mit gleichem erstem Subgenre auf derselben Insel (mind. 2), Position = Schwerpunkt.
-- `scripts/build_graph.mjs` schreibt `data/graph.json` für die Startliste (inkl. `configHash`).
+- Distanz zwischen zwei Filmen: `d = 1 - sim_layout + genreGap * (Hauptgenre verschieden) + subGap * (gleiches Hauptgenre, aber erstes Subgenre verschieden)`. Startwerte `genreGap = 0.35`, `subGap = 0.12`.
+- Eigene t-SNE-Umsetzung auf der Distanzmatrix (Perplexity ca. 10, 1000 Iterationen, Early Exaggeration in den ersten 250), Seed-PRNG mulberry32, damit das Ergebnis immer gleich ist.
+- Danach: auf ein Seitenverhältnis von 16:10 skalieren, Ränder mit 6 % Luft, kurze Kollisionsentspannung (Posterradius), damit nichts überlappt, aber die organischen Formen bleiben.
+- `layoutAll(films, opts)` → `{ nodes, islands, clusters, edges }`, in Portionen lauffähig (onProgress). `placeOne(film, films, positions)`: gewichtetes Mittel der 5 ähnlichsten Positionen plus kleine Kollisionsentspannung, nur dieser Film bewegt sich.
+- `islands`: pro Hauptgenre Schwerpunkt (ohne Ausreisser) und Film-IDs. Keine Inselflächen, keine Hüllen.
+- Die Parameter in `similarity.config.js` (genreGap, subGap, perplexity usw.) hat Luciano bewusst auf eine enge, durchmischte Anordnung eingestellt. Nicht ändern.
+- `clusters`: pro Hauptgenre und erstem Subgenre ab 3 Filmen, Schwerpunkt, keine Duplikate.
+- Alle Parameter in `similarity.config.js` unter `layout`.
 
 ## A7. Ansicht und Interaktion
 
 - Tabs oben: **Netzwerk** (ersetzt den bisherigen Genre-Tab), **Regie** und **Rating**. Regie und Rating bleiben exakt wie heute (Coverwand, Gruppierung, Sortierung, Farbschicht).
 - Die bestehende Bedienung bleibt überall gleich, auch im Netzwerk: Klick öffnet, Klick auf den gewählten Film schliesst, Doppelklick/Doppeltipp markiert als gesehen, Favorit mit Rahmen, Regler 0–10 in 0,1-Schritten (0 = keine Wertung), Toggles Gesehen, Favorit, Als Nächstes.
-- Netzwerk: Pan und Zoom (Maus, Trackpad, Pinch), drei Stufen: weit (Genre-Namen, Filme als Punkte), mittel (kleine Poster, Subgenre-Labels), nah (volle Poster). Stil: schwarz, weisse Haarlinien, keine Genre-Farben.
+- Netzwerk: Pan und Zoom (Maus, Trackpad, Pinch), drei Stufen: weit (Genre-Namen, Filme als Punkte), mittel (kleine Poster, Subgenre-Labels), nah (volle Poster). Stil: schwarzer Grund, jedes Hauptgenre hat eine gedämpfte Farbe (nur Punkte und Labels, keine Inselflächen), Labels weiss. Der Rating-Schalter ersetzt die Genre-Farben durch die Rating-Skala.
 - Klick auf Film im Netzwerk: Panel, Film und Nachbarn hell, Rest abgedunkelt. Linien: durchgezogen = inhaltlich, gestrichelt = Regie, gepunktet = Darsteller/Franchise. Kamera schwenkt so, dass alles neben dem Panel sichtbar ist.
 - Regie, Darsteller und Merkmal-Chips im Panel sind klickbar und heben im Netzwerk alle passenden Filme hervor (zusätzlich zum Regie-Tab).
 - Suche findet Titel, Originaltitel, Regie, Darsteller.

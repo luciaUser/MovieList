@@ -23,9 +23,10 @@
       </form>
     </div>
     <div class="modes" role="tablist" aria-label="Ansicht">
-      <button type="button" id="mode-genre" role="tab" aria-selected="true">Genre</button>
+      <button type="button" id="mode-network" role="tab" aria-selected="true">Netzwerk</button>
       <button type="button" id="mode-director" role="tab" aria-selected="false">Regie</button>
-      <button type="button" id="mode-rating" aria-pressed="false">Rating</button>
+      <button type="button" id="mode-rating" role="tab" aria-selected="false">Rating</button>
+      <button type="button" id="net-rating" aria-pressed="false">Wertung</button>
     </div>
     <form id="search-form" role="search">
       <label class="sr" for="search">Film suchen</label>
@@ -34,7 +35,10 @@
     </form>
   </header>
 
-  <main id="wall" aria-label="Filmcover. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></main>
+  <main id="wall" hidden aria-label="Filmcover. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></main>
+  <div id="network" aria-label="Netzwerk. Ziehen verschiebt die Karte, Scrollen zoomt. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen.">
+    <div class="net-world"></div>
+  </div>
 
   <aside id="panel" hidden aria-live="polite"></aside>
 
@@ -42,6 +46,8 @@
   <script src="facets.js"></script>
   <script src="similarity.config.js"></script>
   <script src="similarity.js"></script>
+  <script src="layout.js"></script>
+  <script src="network.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

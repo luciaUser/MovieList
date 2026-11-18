@@ -22,9 +22,12 @@
   const panel = document.getElementById('panel');
   const search = document.getElementById('search');
   const results = document.getElementById('results');
-  const modeGenre = document.getElementById('mode-genre');
+  const networkEl = document.getElementById('network');
+  const modeNetwork = document.getElementById('mode-network');
   const modeDirector = document.getElementById('mode-director');
   const modeRating = document.getElementById('mode-rating');
+  const netRating = document.getElementById('net-rating');
+  const MODE_KEY = 'moviebylucia-view-v1';
 
   const state = loadState();
   const byId = new Map(FILMS.map((film) => [film.id, film]));
@@ -36,8 +39,11 @@
     if (film.poster) posters.set(film.id, film.poster);
   });
 
-  let mode = 'genre';
+  let mode = 'network';
   let ratingView = false;
+  let network = null;
+  let networkReady = false;
+  let netRatingOn = false;
   let selectedId = null;
   let links = [];
   let activeLinkId = null;
@@ -110,7 +116,11 @@
     byId.delete(id);
     posters.delete(id);
     clearSelection();
-    buildWall();
+    if (network) {
+      network.setFilms(FILMS);
+      network.dropFilm(id);
+    }
+    if (mode !== 'network') buildWall();
   }
 
   function writeEntry(id, patch) {
@@ -327,6 +337,11 @@
     lastTapId = film.id;
     if (again) {
       writeEntry(film.id, { watched: true });
+      if (mode === 'network') {
+        if (selectedId !== film.id) openFilm(film, false);
+        else paint();
+        return;
+      }
       if (!ratingView) buildWall();
       if (selectedId !== film.id) openFilm(film, false);
       else paint();
@@ -345,6 +360,11 @@
     activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
     renderPanel(film);
     paint();
+    if (focus && mode === 'network' && network) {
+      network.reveal(film.id);
+      requestAnimationFrame(() => network.resize());
+      return;
+    }
     if (focus) {
       wall.querySelector(`[data-id="${film.id}"]`)?.scrollIntoView({ block: 'center', inline: 'nearest' });
       requestAnimationFrame(drawLink);
@@ -367,6 +387,7 @@
     panel.hidden = true;
     panel.replaceChildren();
     paint();
+    if (mode === 'network' && network) requestAnimationFrame(() => network.resize());
   }
 
   function paint() {
@@ -391,6 +412,7 @@
       bar.querySelector('.genre-score').textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
       bar.querySelector('.genre-count').textContent = films.length === 1 ? '1 Film' : `${films.length} Filme`;
     });
+    if (network) network.paint();
     requestAnimationFrame(() => requestAnimationFrame(drawLink));
   }
 
@@ -507,7 +529,7 @@
     toggles.append(
       toggle('Gesehen', row.watched, (on) => {
         writeEntry(film.id, { watched: on });
-        if (!ratingView) buildWall();
+        if (mode !== 'network' && !ratingView) buildWall();
         renderPanel(film);
         paint();
       }),
@@ -561,13 +583,76 @@
     panel.append(close);
   }
 
+  function savedMode() {
+    try {
+      const raw = localStorage.getItem(MODE_KEY);
+      if (raw === 'director' || raw === 'rating' || raw === 'network') return raw;
+    } catch {
+      /* private mode can refuse storage */
+    }
+    return 'network';
+  }
+
+  function rememberMode(next) {
+    try {
+      localStorage.setItem(MODE_KEY, next);
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+  }
+
+  function ensureNetwork() {
+    if (network) return network;
+    network = globalThis.Network.create({
+      stage: networkEl,
+      films: FILMS,
+      posterSrc,
+      ratingColor,
+      entry,
+      selectedId: () => selectedId,
+      onChoose: choose,
+    });
+    return network;
+  }
+
+  async function showNetwork() {
+    wall.hidden = true;
+    networkEl.hidden = false;
+    document.body.classList.add('is-network');
+    const view = ensureNetwork();
+    view.setFilms(FILMS);
+    if (!networkReady) {
+      try {
+        const response = await fetch('data/graph.json');
+        const graph = response.ok ? await response.json() : { nodes: [] };
+        view.loadGraph(graph);
+      } catch {
+        view.loadGraph({ nodes: [] });
+      }
+      view.build();
+      networkReady = true;
+      return;
+    }
+    view.paint();
+    view.resize();
+  }
+
+  function showWall() {
+    networkEl.hidden = true;
+    wall.hidden = false;
+    document.body.classList.remove('is-network');
+    buildWall();
+  }
+
   function setMode(next) {
     mode = next;
-    ratingView = false;
-    modeRating.setAttribute('aria-pressed', 'false');
-    modeGenre.setAttribute('aria-selected', next === 'genre' ? 'true' : 'false');
+    ratingView = next === 'rating';
+    rememberMode(next);
+    modeNetwork.setAttribute('aria-selected', next === 'network' ? 'true' : 'false');
     modeDirector.setAttribute('aria-selected', next === 'director' ? 'true' : 'false');
-    buildWall();
+    modeRating.setAttribute('aria-selected', next === 'rating' ? 'true' : 'false');
+    if (next === 'network') showNetwork();
+    else showWall();
   }
 
   function showResults(query) {
@@ -632,20 +717,22 @@
           changed = true;
         }
       });
-      if (changed) requestAnimationFrame(drawLink);
+      if (changed) {
+        requestAnimationFrame(drawLink);
+        if (network) network.paint();
+      }
       if (data.done || data.configured === false) return;
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
   }
 
-  modeGenre.addEventListener('click', () => setMode('genre'));
+  modeNetwork.addEventListener('click', () => setMode('network'));
   modeDirector.addEventListener('click', () => setMode('director'));
-  modeRating.addEventListener('click', () => {
-    ratingView = !ratingView;
-    modeRating.setAttribute('aria-pressed', ratingView ? 'true' : 'false');
-    modeGenre.setAttribute('aria-selected', !ratingView && mode === 'genre' ? 'true' : 'false');
-    modeDirector.setAttribute('aria-selected', !ratingView && mode === 'director' ? 'true' : 'false');
-    buildWall();
+  modeRating.addEventListener('click', () => setMode('rating'));
+  netRating.addEventListener('click', () => {
+    netRatingOn = !netRatingOn;
+    netRating.setAttribute('aria-pressed', netRatingOn ? 'true' : 'false');
+    if (network) network.setRating(netRatingOn);
   });
 
   document.getElementById('search-form').addEventListener('submit', (event) => {
@@ -697,6 +784,12 @@
     byId.set(film.id, film);
     if (film.poster) posters.set(film.id, film.poster);
     closeAdd();
+    if (mode === 'network' && network) {
+      network.setFilms(FILMS);
+      network.addFilm(film);
+      openFilm(film, true);
+      return;
+    }
     buildWall();
     openFilm(film, true);
   }
@@ -743,7 +836,10 @@
       clearSelection();
     }
   });
-  window.addEventListener('resize', () => drawLink());
+  window.addEventListener('resize', () => {
+    drawLink();
+    if (mode === 'network' && network) network.resize();
+  });
 
   async function loadStoredFacets() {
     try {
@@ -752,6 +848,7 @@
       const data = await response.json();
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       globalThis.FILM_FACETS = data;
+      if (network) network.refresh();
       if (!selectedId) return;
       const film = byId.get(selectedId);
       if (!film) return;
@@ -764,7 +861,7 @@
     }
   }
 
-  buildWall();
+  setMode(savedMode());
   loadPosters();
   loadStoredFacets();
 })();
