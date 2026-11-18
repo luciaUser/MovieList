@@ -47,6 +47,7 @@
   let selectedId = null;
   let links = [];
   let activeLinkId = null;
+  let spotlight = null;
   let lastTapAt = 0;
   let lastTapId = null;
   let wires = null;
@@ -161,6 +162,19 @@
       }
     }
     return stops[stops.length - 1][1];
+  }
+
+  function lineStyle(reasons) {
+    const kind = (reasons && reasons[0] && reasons[0].kind) || '';
+    if (kind === 'director') return 'director';
+    if (kind === 'cast' || kind === 'franchise') return 'cast';
+    return 'content';
+  }
+
+  function fullOf(film) {
+    const stored = globalThis.FILM_FACETS || {};
+    const merge = globalThis.Facets && globalThis.Facets.mergeFilm;
+    return merge ? merge(film, stored[film.id]) : film;
   }
 
   function similarityFilms() {
@@ -354,15 +368,102 @@
     openFilm(film, false);
   }
 
+  function filmsWith(kind, value) {
+    return similarityFilms().filter((film) => {
+      if (kind === 'genre') return (film.genres || []).includes(value);
+      if (kind === 'subgenre') return (film.subgenres || []).includes(value);
+      if (kind === 'theme') return (film.themes || []).includes(value);
+      if (kind === 'tone') return (film.tone || []).includes(value);
+      if (kind === 'narrative') return (film.narrative || []).includes(value);
+      if (kind === 'intensity') return film.intensity === value;
+      if (kind === 'epoch') return film.epoch === value;
+      if (kind === 'place') return film.place === value;
+      if (kind === 'director') return film.director === value;
+      if (kind === 'cast') return (film.cast || []).includes(value);
+      return false;
+    }).map((film) => film.id);
+  }
+
+  function renderBar() {
+    const bar = document.getElementById('net-bar');
+    if (!bar) return;
+    if (!spotlight) {
+      bar.hidden = true;
+      bar.replaceChildren();
+      return;
+    }
+    const count = spotlight.ids.length;
+    bar.replaceChildren();
+    bar.append(el('span', null, `${spotlight.title} · ${count === 1 ? '1 Film' : `${count} Filme`}`));
+    const close = el('button', null, '×');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Hervorhebung beenden');
+    close.addEventListener('click', clearHighlight);
+    bar.append(close);
+    bar.hidden = false;
+  }
+
+  function applyNetworkFocus() {
+    if (!network) return;
+    if (spotlight) {
+      network.setFocus({
+        lit: spotlight.ids,
+        star: true,
+        style: spotlight.style,
+      });
+      return;
+    }
+    if (mode === 'network' && selectedId) {
+      network.setFocus({
+        lit: [selectedId].concat(links.slice(0, 8).map((link) => link.id)),
+        edges: links.slice(0, 8).map((link) => ({
+          source: selectedId,
+          target: link.id,
+          score: link.score,
+          style: lineStyle(link.reasons),
+        })),
+        hot: activeLinkId,
+      });
+      return;
+    }
+    network.setFocus(null);
+  }
+
+  function clearHighlight() {
+    spotlight = null;
+    renderBar();
+    applyNetworkFocus();
+  }
+
+  async function highlight(spec) {
+    const ids = (spec.ids || []).filter((id) => byId.has(id));
+    if (!ids.length) return;
+    spotlight = { title: spec.title, ids, style: spec.style || 'content' };
+    renderBar();
+    if (mode !== 'network') await setMode('network');
+    applyNetworkFocus();
+    if (network) network.frame(ids);
+  }
+
   function openFilm(film, focus) {
+    if (spotlight) {
+      spotlight = null;
+      renderBar();
+    }
     selectedId = film.id;
     links = linksFor(film);
     activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
     renderPanel(film);
+    applyNetworkFocus();
     paint();
-    if (focus && mode === 'network' && network) {
-      network.reveal(film.id);
-      requestAnimationFrame(() => network.resize());
+    if (mode === 'network' && network) {
+      const ids = focus === 'near'
+        ? [film.id]
+        : [film.id].concat(links.slice(0, 8).map((link) => link.id));
+      const minScale = focus === 'near' ? network.nearScale() : 0;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => network.frame(ids, { minScale }));
+      });
       return;
     }
     if (focus) {
@@ -378,6 +479,7 @@
       button.classList.toggle('is-active', button.dataset.id === id);
     });
     drawLink();
+    if (mode === 'network') applyNetworkFocus();
   }
 
   function clearSelection() {
@@ -386,6 +488,7 @@
     activeLinkId = null;
     panel.hidden = true;
     panel.replaceChildren();
+    applyNetworkFocus();
     paint();
     if (mode === 'network' && network) requestAnimationFrame(() => network.resize());
   }
@@ -471,10 +574,35 @@
     remove.addEventListener('click', () => removeFilm(film.id));
     panel.append(remove);
 
+    const full = fullOf(film);
     const head = el('div', 'panel-head');
     head.append(el('h1', null, film.title));
     if (film.year) head.append(el('p', 'sub', film.year));
-    if (film.director) head.append(el('p', 'credit', `Regie ${film.director}`));
+    if (full.director) {
+      const director = el('button', 'credit credit-link', `Regie ${full.director}`);
+      director.type = 'button';
+      director.addEventListener('click', () => highlight({
+        title: `Regie: ${full.director}`,
+        style: 'director',
+        ids: filmsWith('director', full.director),
+      }));
+      head.append(director);
+    }
+    const names = (full.cast || []).slice(0, 3);
+    if (names.length) {
+      const row = el('div', 'cast-row');
+      names.forEach((name) => {
+        const person = el('button', 'cast-link', name);
+        person.type = 'button';
+        person.addEventListener('click', () => highlight({
+          title: `Mit: ${name}`,
+          style: 'cast',
+          ids: filmsWith('cast', name),
+        }));
+        row.append(person);
+      });
+      head.append(row);
+    }
     const imdb = el('p', 'imdb-line');
     imdb.append(el('span', 'star', '★'), el('span', null, film.imdbLabel));
     head.append(imdb);
@@ -545,6 +673,7 @@
       }),
     );
     panel.append(toggles);
+    appendTraits(full);
 
     [
       'Gleiche Handschrift',
@@ -581,6 +710,51 @@
     close.type = 'button';
     close.addEventListener('click', clearSelection);
     panel.append(close);
+  }
+
+  function traitChip(label, value, kind) {
+    const button = el('button', 'chip');
+    button.type = 'button';
+    button.append(el('small', null, label), el('span', null, value));
+    button.addEventListener('click', () => highlight({
+      title: `${label}: ${value}`,
+      style: 'content',
+      ids: filmsWith(kind, value),
+    }));
+    return button;
+  }
+
+  function appendTraits(full) {
+    const chips = [];
+    (full.genres || []).forEach((value) => chips.push(traitChip('Genre', value, 'genre')));
+    (full.subgenres || []).forEach((value) => chips.push(traitChip('Subgenre', value, 'subgenre')));
+    (full.themes || []).forEach((value) => chips.push(traitChip('Thema', value, 'theme')));
+    (full.tone || []).forEach((value) => chips.push(traitChip('Ton', value, 'tone')));
+    (full.narrative || []).forEach((value) => chips.push(traitChip('Erzählweise', value, 'narrative')));
+    if (typeof full.intensity === 'number' && full.intensity > 0) {
+      const button = el('button', 'chip');
+      button.type = 'button';
+      button.setAttribute('aria-label', `Intensität ${full.intensity} von 5`);
+      const dots = el('span', 'dots');
+      dots.setAttribute('aria-hidden', 'true');
+      for (let mark = 1; mark <= 5; mark += 1) dots.append(el('span', mark <= full.intensity ? 'on' : ''));
+      button.append(el('small', null, 'Intensität'), dots);
+      button.addEventListener('click', () => highlight({
+        title: `Intensität: ${full.intensity}`,
+        style: 'content',
+        ids: filmsWith('intensity', full.intensity),
+      }));
+      chips.push(button);
+    }
+    if (full.epoch) chips.push(traitChip('Epoche', full.epoch, 'epoch'));
+    if (full.place) chips.push(traitChip('Ort', full.place, 'place'));
+    if (!chips.length) return;
+    const section = el('section', 'group');
+    section.append(el('h2', null, 'Merkmale'));
+    const list = el('div', 'chips');
+    chips.forEach((chip) => list.append(chip));
+    section.append(list);
+    panel.append(section);
   }
 
   function savedMode() {
@@ -631,10 +805,12 @@
       }
       view.build();
       networkReady = true;
+      applyNetworkFocus();
       return;
     }
     view.paint();
     view.resize();
+    applyNetworkFocus();
   }
 
   function showWall() {
@@ -645,14 +821,19 @@
   }
 
   function setMode(next) {
+    if (next !== 'network') {
+      spotlight = null;
+      renderBar();
+    }
     mode = next;
     ratingView = next === 'rating';
     rememberMode(next);
     modeNetwork.setAttribute('aria-selected', next === 'network' ? 'true' : 'false');
     modeDirector.setAttribute('aria-selected', next === 'director' ? 'true' : 'false');
     modeRating.setAttribute('aria-selected', next === 'rating' ? 'true' : 'false');
-    if (next === 'network') showNetwork();
-    else showWall();
+    if (next === 'network') return showNetwork();
+    showWall();
+    return Promise.resolve();
   }
 
   function showResults(query) {
@@ -662,13 +843,40 @@
       results.hidden = true;
       return;
     }
-    const hits = FILMS.filter((film) => (
-      `${film.title} ${film.original || ''} ${film.director || ''}`.toLowerCase().includes(q)
+    const roster = similarityFilms();
+    const people = [];
+    const seen = new Set();
+    roster.forEach((film) => {
+      if (film.director && film.director.toLowerCase().includes(q) && !seen.has(`director:${film.director}`)) {
+        seen.add(`director:${film.director}`);
+        people.push({ kind: 'director', name: film.director });
+      }
+      (film.cast || []).forEach((name) => {
+        if (!name || !name.toLowerCase().includes(q) || seen.has(`cast:${name}`)) return;
+        seen.add(`cast:${name}`);
+        people.push({ kind: 'cast', name });
+      });
+    });
+    people.sort((a, b) => a.name.localeCompare(b.name, 'de')).slice(0, 4).forEach((person) => {
+      const item = document.createElement('li');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.append(document.createTextNode(person.name), el('small', null, person.kind === 'director' ? 'Regie' : 'Darsteller'));
+      button.addEventListener('click', () => {
+        search.value = person.name;
+        results.hidden = true;
+        highlight({
+          title: person.kind === 'director' ? `Regie: ${person.name}` : `Mit: ${person.name}`,
+          style: person.kind === 'director' ? 'director' : 'cast',
+          ids: filmsWith(person.kind, person.name),
+        });
+      });
+      item.append(button);
+      results.append(item);
+    });
+    const hits = roster.filter((film) => (
+      `${film.title || ''} ${film.original || ''} ${film.director || ''} ${(film.cast || []).join(' ')}`.toLowerCase().includes(q)
     )).slice(0, 8);
-    if (!hits.length) {
-      results.hidden = true;
-      return;
-    }
     hits.forEach((film) => {
       const item = document.createElement('li');
       const button = document.createElement('button');
@@ -677,12 +885,18 @@
       button.addEventListener('click', () => {
         search.value = film.title;
         results.hidden = true;
-        openFilm(film, true);
+        openFromSearch(byId.get(film.id) || film);
       });
       item.append(button);
       results.append(item);
     });
-    results.hidden = false;
+    results.hidden = results.childElementCount === 0;
+  }
+
+  async function openFromSearch(film) {
+    if (!film) return;
+    if (mode !== 'network') await setMode('network');
+    openFilm(film, 'near');
   }
 
   async function readPosters() {
@@ -725,6 +939,10 @@
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
   }
+
+  document.getElementById('net-bar').addEventListener('pointerdown', (event) => {
+    event.stopPropagation();
+  });
 
   modeNetwork.addEventListener('click', () => setMode('network'));
   modeDirector.addEventListener('click', () => setMode('director'));
@@ -831,6 +1049,10 @@
       results.hidden = true;
       if (!addForm.hidden) {
         closeAdd();
+        return;
+      }
+      if (spotlight) {
+        clearHighlight();
         return;
       }
       clearSelection();

@@ -462,13 +462,109 @@ body.is-network {
 
 .is-net-rating .net-film:not(.is-rated) { filter: grayscale(1); }
 
-body.has-selection .net-film { opacity: 0.55; }
+.net-world.is-focus .net-film { opacity: 0.15; }
 
-body.has-selection .net-film.is-selected {
-  opacity: 1;
+.net-world.is-focus .net-film.is-lit { opacity: 1; z-index: 4; }
+
+.net-world.is-focus .net-film.is-selected {
   filter: none;
   z-index: 5;
 }
+
+.net-world.is-focus .net-genre,
+.net-world.is-focus .net-sub { fill-opacity: 0.3; }
+
+.net-lines {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+#net-bar {
+  position: absolute;
+  z-index: 6;
+  top: 96px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 32px);
+  padding: 8px 10px 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
+  font-size: 14px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+#net-bar[hidden] { display: none !important; }
+
+#net-bar button {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.credit-link,
+.cast-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.credit-link { display: block; }
+
+.cast-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 8px;
+}
+
+.cast-link { color: rgba(255, 255, 255, 0.72); font-size: 13px; }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+}
+
+.chip small {
+  color: var(--dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dots { display: inline-flex; gap: 3px; }
+
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.dots span.on { background: #fff; }
 
 .net-film.is-favorite { outline: 2px solid rgba(255, 255, 255, 0.9); outline-offset: 1px; }
 
@@ -493,6 +589,8 @@ body.is-network #net-rating { display: inline; }
   .modes { gap: 16px; }
 
   .modes button { font-size: 16px; }
+
+  #net-bar { top: 78px; }
 }
 
 #panel {

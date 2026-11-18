@@ -42,6 +42,15 @@
     const pointers = new Map();
     let pinch = null;
     let suppressClick = false;
+    let focus = { lit: null, edges: [], hot: null };
+    let motion = 0;
+
+    const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    lines.setAttribute('class', 'net-lines');
+    lines.setAttribute('viewBox', `0 0 ${WORLD_W} ${WORLD_H}`);
+    lines.setAttribute('width', String(WORLD_W));
+    lines.setAttribute('height', String(WORLD_H));
+    world.append(lines);
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'net-labels');
@@ -325,8 +334,146 @@
       window.clearTimeout(settleTimer);
       settleTimer = window.setTimeout(() => {
         applyClass();
+        drawEdges();
         requestAnimationFrame(() => collideLabels());
       }, 140);
+    }
+
+    function worldPoint(id) {
+      const point = points.get(id);
+      return point ? worldOf(point) : null;
+    }
+
+    function starEdges(ids, style) {
+      const rows = (ids || []).map((id) => ({ id, at: worldPoint(id) })).filter((row) => row.at);
+      if (rows.length < 2) return [];
+      const cx = rows.reduce((sum, row) => sum + row.at.x, 0) / rows.length;
+      const cy = rows.reduce((sum, row) => sum + row.at.y, 0) / rows.length;
+      let hub = rows[0];
+      let best = Infinity;
+      rows.forEach((row) => {
+        const dist = Math.hypot(row.at.x - cx, row.at.y - cy);
+        if (dist < best) {
+          best = dist;
+          hub = row;
+        }
+      });
+      return rows.filter((row) => row.id !== hub.id).map((row) => ({
+        source: hub.id,
+        target: row.id,
+        score: 0.55,
+        style: style || 'content',
+      }));
+    }
+
+    function drawEdges() {
+      lines.replaceChildren();
+      const widthFor = (score, hot) => ((hot ? 2.2 : 1.15) + Math.max(0, score || 0) * 2.3) / scale;
+      (focus.edges || []).forEach((edge) => {
+        const from = worldPoint(edge.source);
+        const to = worldPoint(edge.target);
+        if (!from || !to) return;
+        const hot = focus.hot === edge.target || focus.hot === edge.source;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', from.x.toFixed(1));
+        line.setAttribute('y1', from.y.toFixed(1));
+        line.setAttribute('x2', to.x.toFixed(1));
+        line.setAttribute('y2', to.y.toFixed(1));
+        line.setAttribute('stroke', hot ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.7)');
+        line.setAttribute('stroke-width', widthFor(edge.score, hot).toFixed(2));
+        line.setAttribute('stroke-linecap', 'round');
+        if (edge.style === 'director') {
+          line.setAttribute('stroke-dasharray', `${(7 / scale).toFixed(2)} ${(6 / scale).toFixed(2)}`);
+        } else if (edge.style === 'cast') {
+          line.setAttribute('stroke-dasharray', `${(1.4 / scale).toFixed(2)} ${(6 / scale).toFixed(2)}`);
+        }
+        lines.append(line);
+      });
+    }
+
+    function setFocus(spec) {
+      if (!spec || !spec.lit || !spec.lit.length) {
+        focus = { lit: null, edges: [], hot: null };
+      } else {
+        focus = {
+          lit: new Set(spec.lit),
+          edges: spec.star ? starEdges(spec.lit, spec.style) : (spec.edges || []),
+          hot: spec.hot || null,
+        };
+      }
+      world.classList.toggle('is-focus', Boolean(focus.lit && focus.lit.size));
+      drawEdges();
+      paint();
+    }
+
+    function cancelMotion() {
+      motion += 1;
+    }
+
+    function frame(ids, opts) {
+      const rows = (ids || []).map(worldPoint).filter(Boolean);
+      if (!rows.length) return;
+      cancelMotion();
+      limitsOfScale();
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      rows.forEach((row) => {
+        minX = Math.min(minX, row.x);
+        minY = Math.min(minY, row.y);
+        maxX = Math.max(maxX, row.x);
+        maxY = Math.max(maxY, row.y);
+      });
+      minX -= 80;
+      maxX += 80;
+      minY -= 110;
+      maxY += 110;
+      const rect = viewSize();
+      const headerPad = 84;
+      const availW = Math.max(120, rect.width - 48);
+      const availH = Math.max(120, rect.height - headerPad - 36);
+      let next = Math.min(availW / Math.max(40, maxX - minX), availH / Math.max(40, maxY - minY));
+      if (opts && opts.minScale) next = Math.max(next, opts.minScale);
+      next = Math.min(maxScale, Math.max(minScale, next));
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const start = { tx, ty, scale };
+      tx = rect.width / 2 - cx * next;
+      ty = headerPad + (rect.height - headerPad) / 2 - cy * next;
+      scale = next;
+      clampPan();
+      const target = { tx, ty, scale };
+      tx = start.tx;
+      ty = start.ty;
+      scale = start.scale;
+      userMoved = true;
+      const token = motion;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const begun = performance.now();
+      const step = (now) => {
+        if (token !== motion) return;
+        const t = reduce ? 1 : Math.min(1, (now - begun) / 400);
+        const ease = 1 - (1 - t) ** 3;
+        tx = start.tx + (target.tx - start.tx) * ease;
+        ty = start.ty + (target.ty - start.ty) * ease;
+        scale = start.scale + (target.scale - start.scale) * ease;
+        clampPan();
+        applyTransform();
+        if (t < 1) {
+          requestAnimationFrame(step);
+          return;
+        }
+        tx = target.tx;
+        ty = target.ty;
+        scale = target.scale;
+        clampPan();
+        applyClass();
+        applyTransform();
+        drawEdges();
+        requestAnimationFrame(() => collideLabels());
+      };
+      requestAnimationFrame(step);
     }
 
     function paint() {
@@ -335,6 +482,7 @@
         if (!film) return;
         const row = options.entry(id);
         button.classList.toggle('is-selected', id === options.selectedId());
+        button.classList.toggle('is-lit', Boolean(focus.lit && focus.lit.has(id)));
         button.classList.toggle('is-favorite', Boolean(row.favorite));
         button.classList.toggle('is-rated', row.rating != null);
         button.style.setProperty('--mark', markColor(film));
@@ -409,6 +557,7 @@
 
     stage.addEventListener('pointerdown', (event) => {
       if (event.button != null && event.button !== 0) return;
+      cancelMotion();
       if (event.isTrusted) stage.setPointerCapture(event.pointerId);
       pointers.set(event.pointerId, {
         ox: event.clientX,
@@ -484,6 +633,7 @@
 
     stage.addEventListener('wheel', (event) => {
       event.preventDefault();
+      cancelMotion();
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
       userMoved = true;
       zoomAt(event.clientX, event.clientY, scale * Math.exp(-delta * 0.0016));
@@ -501,6 +651,11 @@
         requestAnimationFrame(() => collideLabels());
       },
       paint,
+      setFocus,
+      frame,
+      nearScale() {
+        return limits.nearFrom;
+      },
       refresh,
       resize,
       reveal,
