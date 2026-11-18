@@ -45,6 +45,7 @@
   let network = null;
   let networkReady = false;
   let graphPoints = null;
+  const idMap = new Map();
   let relayoutTimer = 0;
   let relayoutIdle = 0;
   let relayoutIdleTimer = false;
@@ -1071,7 +1072,7 @@
     if (!networkReady) {
       try {
         const response = await fetch('data/graph.json');
-        const graph = response.ok ? await response.json() : { nodes: [] };
+        const graph = mappedGraph(response.ok ? await response.json() : { nodes: [] });
         rememberGraph(graph);
         view.loadGraph(graph);
       } catch {
@@ -1373,7 +1374,21 @@
     globalThis.FILM_FACETS[id] = facets;
   }
 
+  function withCanonicalId(film, facets) {
+    const keyOf = globalThis.Store && globalThis.Store.filmKey;
+    if (!keyOf || !film) return film;
+    const next = keyOf({
+      ...film,
+      tmdbId: film.tmdbId != null ? film.tmdbId : facets && facets.tmdbId,
+      tmdbType: film.tmdbType || (facets && facets.tmdbType),
+    });
+    if (!next || next === film.id) return film;
+    idMap.set(film.id, next);
+    return { ...film, id: next };
+  }
+
   function placeFilm(film, facets) {
+    film = withCanonicalId(film, facets);
     const existing = findExisting(film, facets);
     if (existing) {
       addStatus.textContent = 'Den Film gibt es schon.';
@@ -1478,7 +1493,7 @@
       if (!response.ok) return;
       const data = await response.json();
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
-      overlayFacets(data);
+      overlayFacets(canonicalFacets(data));
       FILMS.forEach(patchFilmFromFacets);
       if (network) network.refresh();
       if (!selectedId) return;
@@ -1657,6 +1672,7 @@
   }
 
   function placeImported(film, facets) {
+    film = withCanonicalId(film, facets);
     if (findExisting(film, facets) || byId.has(film.id)) return false;
     if (facets) rememberFacets(film.id, facets);
     if (film.poster) posters.set(film.id, film.poster);
@@ -1715,10 +1731,50 @@
     return { misses, skipped, addedCount };
   }
 
+  function canonicalFacets(data) {
+    const next = {};
+    const keyOf = globalThis.Store && globalThis.Store.filmKey;
+    Object.entries(data || {}).forEach(([id, row]) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return;
+      const key = keyOf ? keyOf({ id, tmdbId: row.tmdbId, tmdbType: row.tmdbType }) : id;
+      if (key && key !== id) idMap.set(id, key);
+      next[key || id] = row;
+    });
+    return next;
+  }
+
+  function rekeyFilm(film) {
+    if (!film || !film.id) return;
+    const keyOf = globalThis.Store && globalThis.Store.filmKey;
+    const next = idMap.get(film.id) || (keyOf ? keyOf(film) : film.id);
+    if (next && next !== film.id) {
+      idMap.set(film.id, next);
+      film.id = next;
+    }
+  }
+
+  function mappedGraph(graph) {
+    const nodes = (graph && graph.nodes || []).map((node) => ({
+      ...node,
+      id: idMap.get(node.id) || node.id,
+    }));
+    return { ...(graph || {}), nodes };
+  }
+
+  function rekeyGraphPoints() {
+    if (!graphPoints) return;
+    const next = {};
+    Object.entries(graphPoints).forEach(([id, point]) => {
+      next[idMap.get(id) || id] = point;
+    });
+    graphPoints = next;
+  }
+
   function rememberGraph(graph) {
     if (!graphPoints) graphPoints = {};
     (graph && graph.nodes || []).forEach((node) => {
-      if (Number.isFinite(node.x) && Number.isFinite(node.y)) graphPoints[node.id] = { x: node.x, y: node.y };
+      const id = idMap.get(node.id) || node.id;
+      if (Number.isFinite(node.x) && Number.isFinite(node.y)) graphPoints[id] = { x: node.x, y: node.y };
     });
   }
 
@@ -1999,8 +2055,23 @@
     } catch {
       /* ohne Zusatzfilme bleibt die Startliste bei films.js */
     }
+    let facetTable = {};
+    try {
+      const facetsResponse = await fetch('data/facets.json');
+      if (facetsResponse.ok) {
+        const data = await facetsResponse.json();
+        if (data && typeof data === 'object' && !Array.isArray(data)) facetTable = canonicalFacets(data);
+      }
+    } catch {
+      /* ohne Facetten bleiben die alten IDs */
+    }
+    (window.FILMS || []).forEach(rekeyFilm);
+    starterAdded.forEach(rekeyFilm);
     await ensureGraphPoints();
+    rekeyGraphPoints();
+    overlayFacets(facetTable);
     const existing = globalThis.Store.load();
+    if (existing && globalThis.Store.migrateIds) globalThis.Store.migrateIds(idMap);
     if (existing) {
       adoptArchive(existing);
       startApp();

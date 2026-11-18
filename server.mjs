@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { filmResponse } from './lookup.mjs';
+import recovery from './api/recovery.js';
 import { search } from './tmdb.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -120,6 +121,7 @@ async function handle(req, res) {
   try {
     const raw = typeof req === 'string' ? req : req?.url || '/';
     const url = new URL(raw, 'http://127.0.0.1');
+    if (url.pathname === '/api/recovery') return recovery(req, res);
     if (url.pathname === '/api/film') {
       const result = await filmResponse(url.searchParams.get('q') || '');
       return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);

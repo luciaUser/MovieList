@@ -1,5 +1,7 @@
 (function attachStore(root) {
   const KEY = 'moviebylucia-archive-v2';
+  const BACKUP = 'moviebylucia-archive-v2-backup';
+  const MIGRATED = 'moviebylucia-ids-v15';
   const LEGACY = [
     'moviebylucia-v1',
     'moviebylucia-added-v1',
@@ -140,6 +142,59 @@
     return persist();
   }
 
+  function filmKey(film) {
+    if (!film) return '';
+    const parsed = typeof film.id === 'string'
+      ? film.id.match(/^tmdb[:\-](movie|tv)[:\-](\d+)$/i)
+      : null;
+    const raw = film.tmdbId != null ? film.tmdbId : (parsed ? parsed[2] : null);
+    const numeric = typeof raw === 'number' ? raw : (typeof raw === 'string' && /^\d+$/.test(raw) ? Number(raw) : NaN);
+    if (!Number.isFinite(numeric)) return film.id ? String(film.id) : '';
+    const hinted = film.tmdbType || (parsed && parsed[1]);
+    const kind = hinted === 'tv' ? 'tv' : 'movie';
+    return `tmdb:${kind}:${numeric}`;
+  }
+
+  function remapBag(bag, map) {
+    const next = {};
+    Object.entries(asObject(bag)).forEach(([id, value]) => {
+      const key = map.get(id) || id;
+      if (next[key] == null) next[key] = value;
+    });
+    return next;
+  }
+
+  function migrateIds(sourceMap) {
+    if (!archive) return null;
+    let done = false;
+    try { done = localStorage.getItem(MIGRATED) === '1'; } catch { done = false; }
+    if (done) return archive;
+    const map = sourceMap instanceof Map ? new Map(sourceMap) : new Map();
+    archive.added.forEach((film) => {
+      const next = filmKey(film);
+      if (film && film.id && next && next !== film.id) map.set(film.id, next);
+    });
+    if (!map.size) return archive;
+    try {
+      if (localStorage.getItem(BACKUP) == null) {
+        const raw = localStorage.getItem(KEY);
+        if (raw != null) localStorage.setItem(BACKUP, raw);
+      }
+    } catch {
+      /* ohne Sicherung wird trotzdem umgeschlüsselt */
+    }
+    archive.hidden = [...new Set(archive.hidden.map((id) => map.get(id) || id))];
+    archive.added.forEach((film) => {
+      film.id = map.get(film.id) || film.id;
+    });
+    archive.facetOverrides = remapBag(archive.facetOverrides, map);
+    archive.positions = remapBag(archive.positions, map);
+    archive.entries = remapBag(archive.entries, map);
+    if (!persist()) return archive;
+    try { localStorage.setItem(MIGRATED, '1'); } catch { /* die Daten sind schon neu */ }
+    return archive;
+  }
+
   function reset() {
     if (!archive) return null;
     archive.hidden.splice(0);
@@ -158,6 +213,8 @@
     save,
     savePositions,
     reset,
+    filmKey,
+    migrateIds,
     current() { return archive; },
     setError(fn) { onError = fn; },
   };

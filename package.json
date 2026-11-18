@@ -2,6 +2,9 @@
   "name": "moviebylucia",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "nodemailer": "^7.0.13"
+  },
   "scripts": {
     "dev": "node --env-file=.env server.mjs",
     "enrich": "node --env-file=.env scripts/enrich_films.mjs",
