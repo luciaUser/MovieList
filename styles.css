@@ -602,14 +602,11 @@ body.has-selection .poster.is-selected {
 .link.is-active .link-title { color: #fff; }
 
 .link-meta {
-  display: none;
+  display: block;
   margin-top: 3px;
   color: var(--dim);
   font-size: 12px;
 }
-
-.link:hover .link-meta,
-.link:focus-visible .link-meta { display: block; }
 
 .link:hover .link-title,
 .link:focus-visible .link-title { color: #fff; }

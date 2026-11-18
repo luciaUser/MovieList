@@ -4,14 +4,19 @@
   let removed = new Set(loadRemoved());
   let FILMS = (window.FILMS || []).filter((film) => !removed.has(film.id));
   const STORE = 'moviebylucia-v1';
-  const GENERIC = new Set([
-    'Serie', 'Miniserie', 'Kult', 'Klassiker', 'PlotTwist', 'Buchverfilmung',
-    'WahreBegebenheit', 'Spannung', 'Brutal', 'Düster', 'Übernatürlich',
-    'Emotional', 'Visuell', 'Epos', 'Fortsetzung', 'Finale', 'OriginStory',
-    'Atmosphärisch', 'Intensiv', 'Satire', 'SchwarzerHumor', 'Kammerspiel',
-    'Ensemble', 'Meta', 'Kultverdächtig', 'Abgedreht', 'Tempo', 'Langsam',
-    'Splatter', 'Gore', 'Trash',
-  ]);
+  const LINK_GROUPS = {
+    director: 'Gleiche Handschrift',
+    cast: 'Gleiche Handschrift',
+    franchise: 'Gleiche Handschrift',
+    subgenre: 'Ähnliche Geschichte',
+    theme: 'Ähnliche Geschichte',
+    narrative: 'Ähnliche Geschichte',
+    tone: 'Ähnliche Stimmung',
+    intensity: 'Ähnliche Stimmung',
+    epoch: 'Gleiche Welt',
+    place: 'Gleiche Welt',
+    year: 'Gleiche Welt',
+  };
 
   const wall = document.getElementById('wall');
   const panel = document.getElementById('panel');
@@ -148,62 +153,32 @@
     return stops[stops.length - 1][1];
   }
 
-  function shared(a, b) {
-    return a.filter((tag) => b.includes(tag));
+  function similarityFilms() {
+    const stored = globalThis.FILM_FACETS || {};
+    const merge = globalThis.Facets && globalThis.Facets.mergeFilm;
+    return FILMS.map((film) => (merge ? merge(film, stored[film.id]) : film));
   }
 
   function linksFor(film) {
-    const ranked = [];
-    FILMS.forEach((other) => {
-      if (other.id === film.id) return;
-      let score = 0;
-      const reasons = [];
-      if (film.director && film.director === other.director) {
-        score += 100;
-        reasons.push('Regisseur');
-      }
-      if (film.franchise && film.franchise === other.franchise) {
-        score += 90;
-        reasons.push('Kontext');
-      }
-      const both = shared(film.tags, other.tags);
-      const distinctive = both.filter((tag) => !GENERIC.has(tag));
-      const generic = both.filter((tag) => GENERIC.has(tag));
-      score += distinctive.length * 24 + generic.length * 6;
-      if (distinctive.length && !reasons.includes('Kontext')) reasons.push('Kontext');
-      const genres = shared(film.genres, other.genres);
-      if (genres.length || (film.cluster && film.cluster === other.cluster)) {
-        score += 24 + Math.max(0, genres.length - 1) * 6;
-        reasons.push('Genre');
-      }
-      let years = null;
-      if (film.yearNum != null && other.yearNum != null) {
-        years = Math.abs(film.yearNum - other.yearNum);
-        if (years <= 4 && (genres.length || distinctive.length)) {
-          score += years <= 1 ? 12 : 7;
-          reasons.push('Zeit');
-        }
-      }
-      if (!reasons.length || score < 22) return;
+    const Similarity = globalThis.Similarity;
+    if (!Similarity) return [];
+    const films = similarityFilms();
+    Similarity.prepare(films);
+    const source = films.find((item) => item.id === film.id) || film;
+    return Similarity.neighbors(source, films, 'links', 16).map((item) => {
+      const reason = (item.reasons || []).find((entry) => LINK_GROUPS[entry.kind]) || null;
       let tier = 'weak';
-      if (score >= 80) tier = 'strong';
-      else if (score >= 36) tier = 'mid';
-      ranked.push({
-        id: other.id,
-        score,
+      if (item.score >= 0.7) tier = 'strong';
+      else if (item.score >= 0.4) tier = 'mid';
+      return {
+        id: item.film.id,
+        score: item.score,
         tier,
-        reasons,
-        genres,
-        tags: distinctive.length ? distinctive : generic.slice(0, 2),
-        years,
-      });
+        reasons: item.reasons,
+        group: reason ? LINK_GROUPS[reason.kind] : '',
+        reason: reason ? reason.label : '',
+      };
     });
-    ranked.sort((a, b) => b.score - a.score || (a.years ?? 99) - (b.years ?? 99));
-    const kept = [];
-    ranked.forEach((item) => {
-      if (item.score >= 80 || kept.length < 14) kept.push(item);
-    });
-    return kept.slice(0, 16);
   }
 
   function ratingBucket(score) {
@@ -367,7 +342,7 @@
   function openFilm(film, focus) {
     selectedId = film.id;
     links = linksFor(film);
-    activeLinkId = links[0] ? links[0].id : null;
+    activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
     renderPanel(film);
     paint();
     if (focus) {
@@ -452,18 +427,6 @@
   function formatScore(value) {
     if (value == null || Number.isNaN(value)) return '–';
     return value.toFixed(1).replace('.', ',');
-  }
-
-  function linkMeta(film, other, link, group) {
-    if (group === 'Regisseur') return film.director || 'gleiche Regie';
-    if (group === 'Kontext') {
-      if (film.franchise && film.franchise === other.franchise) return film.franchise;
-      return link.tags.slice(0, 3).join(' · ') || 'gemeinsames Thema';
-    }
-    if (group === 'Genre') return (link.genres.length ? link.genres : other.genres).slice(0, 2).join(' · ');
-    if (link.years === 0) return other.year || 'gleiches Jahr';
-    if (link.years === 1) return '1 Jahr Abstand';
-    return `${link.years} Jahre Abstand`;
   }
 
   function toggle(text, pressed, onChange) {
@@ -562,12 +525,12 @@
     panel.append(toggles);
 
     [
-      ['Regisseur', (link) => link.reasons.includes('Regisseur')],
-      ['Kontext', (link) => link.reasons.includes('Kontext')],
-      ['Genre', (link) => link.reasons.includes('Genre')],
-      ['Zeit', (link) => link.reasons.includes('Zeit')],
-    ].forEach(([name, test]) => {
-      const items = links.filter(test).slice(0, 6);
+      'Gleiche Handschrift',
+      'Ähnliche Geschichte',
+      'Ähnliche Stimmung',
+      'Gleiche Welt',
+    ].forEach((name) => {
+      const items = links.filter((link) => link.group === name).slice(0, 6);
       if (!items.length) return;
       const group = el('section', 'group');
       group.append(el('h2', null, name));
@@ -580,7 +543,7 @@
         if (other.id === activeLinkId) button.classList.add('is-active');
         button.append(
           el('span', 'link-title', other.title),
-          el('span', 'link-meta', linkMeta(film, other, link, name)),
+          el('span', 'link-meta', link.reason),
         );
         button.addEventListener('pointerenter', (event) => {
           if (event.pointerType === 'touch') return;
@@ -782,6 +745,26 @@
   });
   window.addEventListener('resize', () => drawLink());
 
+  async function loadStoredFacets() {
+    try {
+      const response = await fetch('data/facets.json');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+      globalThis.FILM_FACETS = data;
+      if (!selectedId) return;
+      const film = byId.get(selectedId);
+      if (!film) return;
+      links = linksFor(film);
+      activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
+      renderPanel(film);
+      paint();
+    } catch {
+      /* ohne Facetten bleibt die Wand wie bisher */
+    }
+  }
+
   buildWall();
   loadPosters();
+  loadStoredFacets();
 })();

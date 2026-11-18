@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { lookupFilm } from './lookup.mjs';
+import { search } from './tmdb.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,29 +49,8 @@ async function lookup(film) {
   const queries = [...new Set([film.original, film.title].filter(Boolean))];
   const year = film.yearNum == null ? '' : String(film.yearNum);
   for (const query of queries) {
-    const url = `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(query)}&language=de-DE`;
-    let res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${TOKEN}`,
-        accept: 'application/json',
-      },
-    });
-    if (res.status === 429) {
-      await sleep(1200);
-      res = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${TOKEN}`,
-          accept: 'application/json',
-        },
-      });
-    }
-    if (!res.ok) continue;
-    const data = await res.json();
-    const results = Array.isArray(data.results) ? data.results : [];
-    const match = results.find((item) => (
-      year && String(item.release_date || item.first_air_date || '').startsWith(year) && item.poster_path
-    )) || results.find((item) => item.poster_path);
-    if (match?.poster_path) return `https://image.tmdb.org/t/p/w500${match.poster_path}`;
+    const hit = await search(query, year);
+    if (hit?.posterPath) return `https://image.tmdb.org/t/p/w500${hit.posterPath}`;
   }
   return null;
 }

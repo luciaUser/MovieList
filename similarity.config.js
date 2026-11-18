@@ -1,0 +1,55 @@
+(function attachSimilarityConfig(root) {
+  root.SimilarityConfig = {
+    weights: {
+      layout: {
+        subgenres: 0.26,
+        genres: 0.18,
+        themes: 0.18,
+        tone: 0.11,
+        narrative: 0.07,
+        intensity: 0.07,
+        epochPlace: 0.06,
+        year: 0.04,
+        origin: 0.03,
+      },
+      links: {
+        subgenres: 0.22,
+        genres: 0.12,
+        themes: 0.16,
+        tone: 0.08,
+        narrative: 0.06,
+        intensity: 0.04,
+        epochPlace: 0.04,
+        year: 0.03,
+        origin: 0.02,
+      },
+    },
+    bonuses: {
+      director: 0.30,
+      franchise: 0.40,
+      cast: 0.12,
+      castMax: 2,
+    },
+    anchors: {
+      center: 'Drama',
+      order: [
+        'Biografie',
+        'Dokumentation',
+        'Krimi',
+        'Thriller',
+        'Mystery',
+        'Horror',
+        'Sci-Fi',
+        'Fantasy',
+        'Abenteuer',
+        'Action',
+        'Kriegsfilm',
+        'Western',
+        'Historie',
+        'Romantik',
+        'Komödie',
+      ],
+      radius: 1,
+    },
+  };
+})(globalThis);

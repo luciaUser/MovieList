@@ -1,0 +1,5207 @@
+{
+  "heist": {
+    "subgenres": [
+      "Heist"
+    ],
+    "strong": true
+  },
+  "bank robbery": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "bank heist": {
+    "subgenres": [
+      "Heist"
+    ],
+    "strong": true
+  },
+  "jewel thief": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "juwelendieb": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "diebstahl": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "caper": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "heist crew": {
+    "subgenres": [
+      "Heist"
+    ],
+    "strong": true
+  },
+  "one last job": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "gangster": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "mafia": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ],
+    "strong": true
+  },
+  "organized crime": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "mob": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "yakuza": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "triad": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "cartel": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "drug dealer": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ],
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "drug trafficking": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ],
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "drogenhandel": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ],
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "drogenkartell": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ],
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "whodunit": {
+    "subgenres": [
+      "Whodunit"
+    ],
+    "strong": true
+  },
+  "whodunnit": {
+    "subgenres": [
+      "Whodunit"
+    ]
+  },
+  "murder mystery": {
+    "subgenres": [
+      "Whodunit"
+    ]
+  },
+  "cozy mystery": {
+    "subgenres": [
+      "Cosy Crime"
+    ]
+  },
+  "cozy crime": {
+    "subgenres": [
+      "Cosy Crime"
+    ]
+  },
+  "cosy crime": {
+    "subgenres": [
+      "Cosy Crime"
+    ]
+  },
+  "cosycrime": {
+    "subgenres": [
+      "Cosy Crime"
+    ]
+  },
+  "neo-noir": {
+    "subgenres": [
+      "Neo-Noir"
+    ]
+  },
+  "neo noir": {
+    "subgenres": [
+      "Neo-Noir"
+    ]
+  },
+  "neonoir": {
+    "subgenres": [
+      "Neo-Noir"
+    ]
+  },
+  "noir": {
+    "subgenres": [
+      "Neo-Noir"
+    ]
+  },
+  "femme fatale": {
+    "subgenres": [
+      "Neo-Noir"
+    ]
+  },
+  "detective": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "detektiv": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "police investigation": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "police procedural": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "ermittlung": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "private investigator": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "cop": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "courtroom": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ],
+    "strong": true
+  },
+  "courtroom drama": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ],
+    "strong": true
+  },
+  "trial": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ]
+  },
+  "lawyer": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ]
+  },
+  "gerichtsdrama": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ]
+  },
+  "anwälte": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ]
+  },
+  "true crime": {
+    "subgenres": [
+      "True Crime"
+    ]
+  },
+  "truecrime": {
+    "subgenres": [
+      "True Crime"
+    ]
+  },
+  "psychological thriller": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "psychothriller": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "psychodrama": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "psychoterror": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "psychospiel": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "spy": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "espionage": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "spionage": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "secret agent": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "agenten": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "undercover": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "double agent": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "political thriller": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "conspiracy thriller": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "politthriller": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "conspiracy": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "verschwörung": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "survival": {
+    "subgenres": [
+      "Survival-Thriller"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "survival horror": {
+    "subgenres": [
+      "Survival-Thriller"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "home invasion": {
+    "subgenres": [
+      "Belagerung & Home Invasion"
+    ]
+  },
+  "homeinvasion": {
+    "subgenres": [
+      "Belagerung & Home Invasion"
+    ]
+  },
+  "siege": {
+    "subgenres": [
+      "Belagerung & Home Invasion"
+    ]
+  },
+  "belagerung": {
+    "subgenres": [
+      "Belagerung & Home Invasion"
+    ]
+  },
+  "hostage": {
+    "subgenres": [
+      "Belagerung & Home Invasion",
+      "Entführung"
+    ]
+  },
+  "kidnapping": {
+    "subgenres": [
+      "Entführung"
+    ]
+  },
+  "entführung": {
+    "subgenres": [
+      "Entführung"
+    ]
+  },
+  "abduction": {
+    "subgenres": [
+      "Entführung"
+    ]
+  },
+  "revenge": {
+    "subgenres": [
+      "Rachethriller"
+    ],
+    "themes": [
+      "Rache"
+    ],
+    "strong": true
+  },
+  "revenge thriller": {
+    "subgenres": [
+      "Rachethriller"
+    ],
+    "themes": [
+      "Rache"
+    ],
+    "strong": true
+  },
+  "rache": {
+    "subgenres": [
+      "Rachethriller"
+    ],
+    "themes": [
+      "Rache"
+    ],
+    "strong": true
+  },
+  "mindfuck": {
+    "subgenres": [
+      "Mindfuck"
+    ],
+    "strong": true
+  },
+  "mind game": {
+    "subgenres": [
+      "Mindfuck"
+    ],
+    "strong": true
+  },
+  "supernatural mystery": {
+    "subgenres": [
+      "Übernatürliches Mysterium"
+    ]
+  },
+  "übernatürlich": {
+    "subgenres": [
+      "Übernatürliches Mysterium"
+    ]
+  },
+  "supernatural": {
+    "subgenres": [
+      "Übernatürliches Mysterium"
+    ]
+  },
+  "paranormal": {
+    "subgenres": [
+      "Übernatürliches Mysterium"
+    ]
+  },
+  "ghost": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "ghost story": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "geister": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "geisterhaus": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ],
+    "place": [
+      "isolierter Ort"
+    ]
+  },
+  "haunted house": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ],
+    "place": [
+      "isolierter Ort"
+    ]
+  },
+  "haunting": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "curse": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "fluch": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "flüche": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "occult": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "okkultismus": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "demon": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "dämonen": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "devil": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "teufel": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "witch": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "witchcraft": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "possession": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "exorcism": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ]
+  },
+  "satanism": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ],
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "slasher": {
+    "subgenres": [
+      "Slasher"
+    ],
+    "strong": true
+  },
+  "serial killer": {
+    "subgenres": [
+      "Slasher"
+    ]
+  },
+  "serienkiller": {
+    "subgenres": [
+      "Slasher"
+    ]
+  },
+  "body horror": {
+    "subgenres": [
+      "Body Horror"
+    ]
+  },
+  "bodyhorror": {
+    "subgenres": [
+      "Body Horror"
+    ]
+  },
+  "creature": {
+    "subgenres": [
+      "Kreaturenhorror"
+    ]
+  },
+  "monster": {
+    "subgenres": [
+      "Kreaturenhorror"
+    ]
+  },
+  "monster movie": {
+    "subgenres": [
+      "Kreaturenhorror"
+    ]
+  },
+  "tierhorror": {
+    "subgenres": [
+      "Kreaturenhorror"
+    ]
+  },
+  "werewolf": {
+    "subgenres": [
+      "Kreaturenhorror"
+    ]
+  },
+  "zombie": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ],
+    "strong": true
+  },
+  "zombies": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ],
+    "strong": true
+  },
+  "infection": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ]
+  },
+  "virus": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ]
+  },
+  "pandemic": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ]
+  },
+  "outbreak": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ]
+  },
+  "vampire": {
+    "subgenres": [
+      "Vampire & Gothic"
+    ],
+    "strong": true
+  },
+  "vampires": {
+    "subgenres": [
+      "Vampire & Gothic"
+    ],
+    "strong": true
+  },
+  "gothic horror": {
+    "subgenres": [
+      "Vampire & Gothic"
+    ]
+  },
+  "gothic": {
+    "subgenres": [
+      "Vampire & Gothic"
+    ]
+  },
+  "folk horror": {
+    "subgenres": [
+      "Folk Horror"
+    ]
+  },
+  "folklore": {
+    "subgenres": [
+      "Folk Horror"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "found footage": {
+    "subgenres": [
+      "Found Footage"
+    ],
+    "narrative": [
+      "Found Footage & Mockumentary"
+    ],
+    "strong": true
+  },
+  "foundfootage": {
+    "subgenres": [
+      "Found Footage"
+    ],
+    "narrative": [
+      "Found Footage & Mockumentary"
+    ]
+  },
+  "horror comedy": {
+    "subgenres": [
+      "Horrorkomödie"
+    ]
+  },
+  "horrorkomödie": {
+    "subgenres": [
+      "Horrorkomödie"
+    ]
+  },
+  "time travel": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ],
+    "strong": true
+  },
+  "zeitreise": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "zeitinversion": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "time loop": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "time paradox": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "parallel universe": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "alternate history": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "alternativegeschichte": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "outer space": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "weltraum": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "space travel": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "astronaut": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "spaceship": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "mars": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "space opera": {
+    "subgenres": [
+      "Space Opera"
+    ],
+    "place": [
+      "Weltraum"
+    ],
+    "strong": true
+  },
+  "spaceopera": {
+    "subgenres": [
+      "Space Opera"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "dystopia": {
+    "subgenres": [
+      "Dystopie"
+    ],
+    "strong": true
+  },
+  "dystopie": {
+    "subgenres": [
+      "Dystopie"
+    ]
+  },
+  "post-apocalyptic": {
+    "subgenres": [
+      "Postapokalypse"
+    ],
+    "strong": true
+  },
+  "post apocalyptic": {
+    "subgenres": [
+      "Postapokalypse"
+    ]
+  },
+  "postapokalypse": {
+    "subgenres": [
+      "Postapokalypse"
+    ]
+  },
+  "apocalypse": {
+    "subgenres": [
+      "Postapokalypse"
+    ]
+  },
+  "apokalypse": {
+    "subgenres": [
+      "Postapokalypse"
+    ]
+  },
+  "endzeit": {
+    "subgenres": [
+      "Postapokalypse"
+    ]
+  },
+  "cyberpunk": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "artificial intelligence": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "robot": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "cyborg": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "android": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Was ist ein Mensch"
+    ]
+  },
+  "clone": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Was ist ein Mensch"
+    ]
+  },
+  "klone": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Was ist ein Mensch"
+    ]
+  },
+  "hacker": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "virtual reality": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "alien": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "aliens": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "extraterrestrial": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "first contact": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "alien invasion": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "ufo": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "ufos": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "superhero": {
+    "subgenres": [
+      "Superhelden"
+    ],
+    "strong": true
+  },
+  "superheroes": {
+    "subgenres": [
+      "Superhelden"
+    ],
+    "strong": true
+  },
+  "superhelden": {
+    "subgenres": [
+      "Superhelden"
+    ]
+  },
+  "comic book": {
+    "subgenres": [
+      "Superhelden"
+    ]
+  },
+  "high fantasy": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "highfantasy": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "dragon": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "drachen": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "magic": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "magie": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "dark fantasy": {
+    "subgenres": [
+      "Dark Fantasy"
+    ]
+  },
+  "darkfantasy": {
+    "subgenres": [
+      "Dark Fantasy"
+    ]
+  },
+  "mythology": {
+    "subgenres": [
+      "Mythologie & Märchen"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "mythologie": {
+    "subgenres": [
+      "Mythologie & Märchen"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "fairy tale": {
+    "subgenres": [
+      "Mythologie & Märchen"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "märchen": {
+    "subgenres": [
+      "Mythologie & Märchen"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "legende": {
+    "subgenres": [
+      "Mythologie & Märchen"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "martial arts": {
+    "subgenres": [
+      "Martial Arts"
+    ],
+    "strong": true
+  },
+  "martialarts": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "kung fu": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "kampfkunst": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "kampfsport": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "samurai": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "ninja": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "military": {
+    "subgenres": [
+      "Militär-Action"
+    ]
+  },
+  "military action": {
+    "subgenres": [
+      "Militär-Action"
+    ]
+  },
+  "militär": {
+    "subgenres": [
+      "Militär-Action"
+    ]
+  },
+  "söldner": {
+    "subgenres": [
+      "Militär-Action"
+    ]
+  },
+  "mercenary": {
+    "subgenres": [
+      "Militär-Action"
+    ]
+  },
+  "special forces": {
+    "subgenres": [
+      "Militär-Action"
+    ]
+  },
+  "one man army": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ]
+  },
+  "einzelkämpfer": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ]
+  },
+  "einzelkämpferin": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ]
+  },
+  "vigilante": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ],
+    "themes": [
+      "Selbstjustiz"
+    ]
+  },
+  "selbstjustiz": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ],
+    "themes": [
+      "Selbstjustiz"
+    ]
+  },
+  "buddy": {
+    "subgenres": [
+      "Buddy-Action"
+    ]
+  },
+  "buddy cop": {
+    "subgenres": [
+      "Buddy-Action"
+    ]
+  },
+  "buddymovie": {
+    "subgenres": [
+      "Buddy-Action"
+    ]
+  },
+  "treasure hunt": {
+    "subgenres": [
+      "Abenteuer-Action"
+    ]
+  },
+  "schatzsuche": {
+    "subgenres": [
+      "Abenteuer-Action"
+    ]
+  },
+  "pirate": {
+    "subgenres": [
+      "Abenteuer-Action"
+    ],
+    "place": [
+      "Meer"
+    ]
+  },
+  "piraten": {
+    "subgenres": [
+      "Abenteuer-Action"
+    ],
+    "place": [
+      "Meer"
+    ]
+  },
+  "character study": {
+    "subgenres": [
+      "Charakterstudie"
+    ]
+  },
+  "charakterstudie": {
+    "subgenres": [
+      "Charakterstudie"
+    ]
+  },
+  "family drama": {
+    "subgenres": [
+      "Familiendrama"
+    ],
+    "themes": [
+      "Familie"
+    ]
+  },
+  "familiendrama": {
+    "subgenres": [
+      "Familiendrama"
+    ],
+    "themes": [
+      "Familie"
+    ]
+  },
+  "social drama": {
+    "subgenres": [
+      "Sozialdrama"
+    ],
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "sozialdrama": {
+    "subgenres": [
+      "Sozialdrama"
+    ],
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "coming of age": {
+    "subgenres": [
+      "Coming of Age"
+    ],
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "comingofage": {
+    "subgenres": [
+      "Coming of Age"
+    ],
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "coming-of-age": {
+    "subgenres": [
+      "Coming of Age"
+    ],
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "sports": {
+    "subgenres": [
+      "Sportfilm"
+    ]
+  },
+  "sports movie": {
+    "subgenres": [
+      "Sportfilm"
+    ]
+  },
+  "sportfilm": {
+    "subgenres": [
+      "Sportfilm"
+    ]
+  },
+  "boxing": {
+    "subgenres": [
+      "Sportfilm"
+    ]
+  },
+  "prison": {
+    "subgenres": [
+      "Gefängnisfilm"
+    ]
+  },
+  "gefängnis": {
+    "subgenres": [
+      "Gefängnisfilm"
+    ]
+  },
+  "prison escape": {
+    "subgenres": [
+      "Gefängnisfilm"
+    ]
+  },
+  "disaster": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "disaster movie": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "katastrophe": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "katastrophenfilm": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "earthquake": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "volcano": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "shipwreck": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ],
+    "place": [
+      "Meer"
+    ]
+  },
+  "plane crash": {
+    "subgenres": [
+      "Katastrophenfilm"
+    ],
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "based on novel": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "book adaptation": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "buchverfilmung": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "period drama": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "costume drama": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "kostümdrama": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "literatur": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "satire": {
+    "subgenres": [
+      "Satire"
+    ],
+    "tone": [
+      "satirisch"
+    ]
+  },
+  "parody": {
+    "subgenres": [
+      "Satire"
+    ],
+    "tone": [
+      "satirisch"
+    ]
+  },
+  "black comedy": {
+    "subgenres": [
+      "Schwarze Komödie"
+    ],
+    "tone": [
+      "schwarzhumorig"
+    ]
+  },
+  "dark comedy": {
+    "subgenres": [
+      "Schwarze Komödie"
+    ],
+    "tone": [
+      "schwarzhumorig"
+    ]
+  },
+  "schwarzer humor": {
+    "subgenres": [
+      "Schwarze Komödie"
+    ],
+    "tone": [
+      "schwarzhumorig"
+    ]
+  },
+  "schwarze komödie": {
+    "subgenres": [
+      "Schwarze Komödie"
+    ],
+    "tone": [
+      "schwarzhumorig"
+    ]
+  },
+  "feel-good": {
+    "subgenres": [
+      "Feel-Good"
+    ],
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "feel good": {
+    "subgenres": [
+      "Feel-Good"
+    ],
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "feelgood": {
+    "subgenres": [
+      "Feel-Good"
+    ],
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "romantic comedy": {
+    "subgenres": [
+      "Feel-Good"
+    ],
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "world war ii": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "strong": true
+  },
+  "wwii": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "strong": true
+  },
+  "ww2": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "strong": true
+  },
+  "zweiter weltkrieg": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "nazi": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "holocaust": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "d-day": {
+    "subgenres": [
+      "Zweiter Weltkrieg"
+    ],
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "place": [
+      "Schlachtfeld"
+    ]
+  },
+  "anti-war": {
+    "subgenres": [
+      "Antikriegsfilm"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "antiwar": {
+    "subgenres": [
+      "Antikriegsfilm"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "antikrieg": {
+    "subgenres": [
+      "Antikriegsfilm"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "vietnam war": {
+    "subgenres": [
+      "Moderner Krieg"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "vietnamkrieg": {
+    "subgenres": [
+      "Moderner Krieg"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "iraq war": {
+    "subgenres": [
+      "Moderner Krieg"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "irak": {
+    "subgenres": [
+      "Moderner Krieg"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "terrorism": {
+    "subgenres": [
+      "Moderner Krieg"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "terrorismus": {
+    "subgenres": [
+      "Moderner Krieg"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "western": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "klassischer western": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "revolverhelden": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "gunslinger": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "sheriff": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "outlaw": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "gesetzlose": {
+    "subgenres": [
+      "Klassischer Western"
+    ]
+  },
+  "neo-western": {
+    "subgenres": [
+      "Neo-Western"
+    ]
+  },
+  "neo western": {
+    "subgenres": [
+      "Neo-Western"
+    ]
+  },
+  "neowestern": {
+    "subgenres": [
+      "Neo-Western"
+    ]
+  },
+  "biopic": {
+    "subgenres": [
+      "Biopic"
+    ]
+  },
+  "biography": {
+    "subgenres": [
+      "Biopic"
+    ]
+  },
+  "rise and fall": {
+    "subgenres": [
+      "Aufstieg und Fall"
+    ],
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "aufstieg und fall": {
+    "subgenres": [
+      "Aufstieg und Fall"
+    ],
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "aufstiegundfall": {
+    "subgenres": [
+      "Aufstieg und Fall"
+    ],
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "tragic romance": {
+    "subgenres": [
+      "Tragische Romanze"
+    ],
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "tragische romanze": {
+    "subgenres": [
+      "Tragische Romanze"
+    ],
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "tragödie": {
+    "subgenres": [
+      "Tragische Romanze"
+    ],
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "gothic romance": {
+    "subgenres": [
+      "Gothic Romance"
+    ]
+  },
+  "historical epic": {
+    "subgenres": [
+      "Historienepos"
+    ],
+    "tone": [
+      "episch"
+    ]
+  },
+  "historienepos": {
+    "subgenres": [
+      "Historienepos"
+    ],
+    "tone": [
+      "episch"
+    ]
+  },
+  "true crime documentary": {
+    "subgenres": [
+      "True-Crime-Doku"
+    ]
+  },
+  "portrait documentary": {
+    "subgenres": [
+      "Porträt"
+    ]
+  },
+  "porträt": {
+    "subgenres": [
+      "Porträt"
+    ]
+  },
+  "survival documentary": {
+    "subgenres": [
+      "Survival-Doku"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "guilt": {
+    "themes": [
+      "Schuld"
+    ]
+  },
+  "schuld": {
+    "themes": [
+      "Schuld"
+    ]
+  },
+  "identity": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "identität": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "doppelgänger": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "memory": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "memories": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "amnesia": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "dream": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "träume": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "corruption": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "korruption": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "power": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "macht": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "greed": {
+    "themes": [
+      "Gier & Exzess"
+    ]
+  },
+  "gier": {
+    "themes": [
+      "Gier & Exzess"
+    ]
+  },
+  "excess": {
+    "themes": [
+      "Gier & Exzess"
+    ]
+  },
+  "exzess": {
+    "themes": [
+      "Gier & Exzess"
+    ]
+  },
+  "friendship": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "freundschaft": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "family": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "familie": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "parenthood": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "father son": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "vatersohn": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "sibling": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "brüder": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "marriage": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "ehe": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "wedding": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "hochzeit": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "love": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "liebe": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "obsession": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "leidenschaft": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "grief": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "trauer": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "loss": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "loneliness": {
+    "themes": [
+      "Einsamkeit & Isolation"
+    ]
+  },
+  "isolation": {
+    "themes": [
+      "Einsamkeit & Isolation"
+    ]
+  },
+  "einsamkeit": {
+    "themes": [
+      "Einsamkeit & Isolation"
+    ]
+  },
+  "morality": {
+    "themes": [
+      "Moral & Gewissen"
+    ]
+  },
+  "moral dilemma": {
+    "themes": [
+      "Moral & Gewissen"
+    ]
+  },
+  "redemption": {
+    "themes": [
+      "Moral & Gewissen"
+    ]
+  },
+  "class": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "poverty": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "gesellschaftskritik": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "racism": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "rassismus": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "slavery": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "sklaverei": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "immigration": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "einwanderung": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "bullying": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "cybermobbing": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "religion": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "faith": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "fanatismus": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "cult": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "madness": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "insanity": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "wahnsinn": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "psychiatrie": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "neurosen": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "mental illness": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "depression": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "technology": {
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "technologie": {
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "ki": {
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "time": {
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "zeit": {
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "ptsd": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "trauma": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "veteran": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "war": {
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "place": [
+      "Schlachtfeld"
+    ]
+  },
+  "soldier": {
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "place": [
+      "Schlachtfeld"
+    ]
+  },
+  "battle": {
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "place": [
+      "Schlachtfeld"
+    ]
+  },
+  "ostfront": {
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "place": [
+      "Schlachtfeld"
+    ],
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "surveillance": {
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "überwachung": {
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "cover-up": {
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "con artist": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "hochstapler": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "fraud": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "scam": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "betrug": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "impostor": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "journalism": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "journalismus": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "hollywood": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "celebrity": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "showbiz": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "medien": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "musikindustrie": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "capitalism": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "corporation": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "konzerne": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "finanzwelt": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "wall street": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "ambition": {
+    "themes": [
+      "Ehrgeiz"
+    ]
+  },
+  "ehrgeiz": {
+    "themes": [
+      "Ehrgeiz"
+    ]
+  },
+  "rivalry": {
+    "themes": [
+      "Rivalität"
+    ]
+  },
+  "rivalität": {
+    "themes": [
+      "Rivalität"
+    ]
+  },
+  "betrayal": {
+    "themes": [
+      "Loyalität & Verrat"
+    ]
+  },
+  "loyalty": {
+    "themes": [
+      "Loyalität & Verrat"
+    ]
+  },
+  "treue": {
+    "themes": [
+      "Loyalität & Verrat"
+    ]
+  },
+  "aging": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "alter": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "dementia": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "demenz": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "senioren": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "addiction": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "sucht": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "drug": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "alcoholism": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "myth": {
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "legend": {
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "revolution": {
+    "themes": [
+      "Rebellion & Widerstand"
+    ]
+  },
+  "rebellion": {
+    "themes": [
+      "Rebellion & Widerstand"
+    ]
+  },
+  "resistance": {
+    "themes": [
+      "Rebellion & Widerstand"
+    ]
+  },
+  "widerstand": {
+    "themes": [
+      "Rebellion & Widerstand"
+    ]
+  },
+  "secret": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "secrets": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "geheimnisse": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "truth": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "revelation": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "enthüllung": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "skandal": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "whistleblower": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "hero": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "heroism": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "heldentum": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "antihero": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "antihelden": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "what it means to be human": {
+    "themes": [
+      "Was ist ein Mensch"
+    ]
+  },
+  "was ist ein mensch": {
+    "themes": [
+      "Was ist ein Mensch"
+    ]
+  },
+  "aufstieg": {
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "jugend": {
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "schule": {
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "high school": {
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "mord": {
+    "themes": [
+      "Schuld"
+    ]
+  },
+  "murder": {
+    "themes": [
+      "Schuld"
+    ]
+  },
+  "rätsel": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "intrigen": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "manipulation": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "cyberpunk ki": {
+    "themes": [
+      "Technologie & KI"
+    ]
+  },
+  "düster": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "bleak": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "dark": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "beklemmend": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "claustrophobic": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "melancholy": {
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "melancholisch": {
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "emotional": {
+    "tone": [
+      "emotional"
+    ]
+  },
+  "heartbreaking": {
+    "tone": [
+      "emotional"
+    ]
+  },
+  "herzzerreißend": {
+    "tone": [
+      "emotional"
+    ]
+  },
+  "suspense": {
+    "tone": [
+      "spannungsgeladen"
+    ]
+  },
+  "suspenseful": {
+    "tone": [
+      "spannungsgeladen"
+    ]
+  },
+  "spannung": {
+    "tone": [
+      "spannungsgeladen"
+    ]
+  },
+  "tense": {
+    "tone": [
+      "spannungsgeladen"
+    ]
+  },
+  "lighthearted": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "leicht": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "satirical": {
+    "tone": [
+      "satirisch"
+    ]
+  },
+  "satirisch": {
+    "tone": [
+      "satirisch"
+    ]
+  },
+  "epic": {
+    "tone": [
+      "episch"
+    ]
+  },
+  "episch": {
+    "tone": [
+      "episch"
+    ]
+  },
+  "epos": {
+    "tone": [
+      "episch"
+    ]
+  },
+  "surreal": {
+    "tone": [
+      "surreal"
+    ]
+  },
+  "dreamlike": {
+    "tone": [
+      "surreal"
+    ]
+  },
+  "cool": {
+    "tone": [
+      "cool"
+    ]
+  },
+  "stylish": {
+    "tone": [
+      "cool"
+    ]
+  },
+  "heartwarming": {
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "warmherzig": {
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "quirky": {
+    "tone": [
+      "abgedreht"
+    ]
+  },
+  "abgedreht": {
+    "tone": [
+      "abgedreht"
+    ]
+  },
+  "absurd": {
+    "tone": [
+      "abgedreht"
+    ]
+  },
+  "schwarzhumorig": {
+    "tone": [
+      "schwarzhumorig"
+    ]
+  },
+  "nonlinear timeline": {
+    "narrative": [
+      "nicht-linear"
+    ]
+  },
+  "nonlinear": {
+    "narrative": [
+      "nicht-linear"
+    ]
+  },
+  "non-linear": {
+    "narrative": [
+      "nicht-linear"
+    ]
+  },
+  "nonlinear narrative": {
+    "narrative": [
+      "nicht-linear"
+    ]
+  },
+  "nicht-linear": {
+    "narrative": [
+      "nicht-linear"
+    ]
+  },
+  "twist ending": {
+    "narrative": [
+      "Plot-Twist"
+    ]
+  },
+  "plot twist": {
+    "narrative": [
+      "Plot-Twist"
+    ]
+  },
+  "plottwist": {
+    "narrative": [
+      "Plot-Twist"
+    ]
+  },
+  "surprise ending": {
+    "narrative": [
+      "Plot-Twist"
+    ]
+  },
+  "unreliable narrator": {
+    "narrative": [
+      "unzuverlässiger Erzähler"
+    ]
+  },
+  "unzuverlässiger erzähler": {
+    "narrative": [
+      "unzuverlässiger Erzähler"
+    ]
+  },
+  "chamber piece": {
+    "narrative": [
+      "Kammerspiel"
+    ]
+  },
+  "chamber drama": {
+    "narrative": [
+      "Kammerspiel"
+    ]
+  },
+  "kammerspiel": {
+    "narrative": [
+      "Kammerspiel"
+    ]
+  },
+  "real time": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "one take": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "single take": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "one shot": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "oneshot": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "echtzeit": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "anthology": {
+    "narrative": [
+      "Episoden & Anthologie"
+    ]
+  },
+  "anthologie": {
+    "narrative": [
+      "Episoden & Anthologie"
+    ]
+  },
+  "episodenfilm": {
+    "narrative": [
+      "Episoden & Anthologie"
+    ]
+  },
+  "flashback": {
+    "narrative": [
+      "Rückblenden"
+    ]
+  },
+  "flashbacks": {
+    "narrative": [
+      "Rückblenden"
+    ]
+  },
+  "rückblenden": {
+    "narrative": [
+      "Rückblenden"
+    ]
+  },
+  "ensemble cast": {
+    "narrative": [
+      "Ensemble"
+    ]
+  },
+  "ensemble": {
+    "narrative": [
+      "Ensemble"
+    ]
+  },
+  "multiple perspectives": {
+    "narrative": [
+      "Ensemble"
+    ]
+  },
+  "mockumentary": {
+    "narrative": [
+      "Found Footage & Mockumentary"
+    ]
+  },
+  "slow burn": {
+    "narrative": [
+      "Slow Burn"
+    ]
+  },
+  "langsam": {
+    "narrative": [
+      "Slow Burn"
+    ]
+  },
+  "ancient rome": {
+    "epoch": [
+      "Antike"
+    ]
+  },
+  "ancient greece": {
+    "epoch": [
+      "Antike"
+    ]
+  },
+  "antike": {
+    "epoch": [
+      "Antike"
+    ]
+  },
+  "gladiator": {
+    "epoch": [
+      "Antike"
+    ],
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "gladiatoren": {
+    "epoch": [
+      "Antike"
+    ]
+  },
+  "middle ages": {
+    "epoch": [
+      "Mittelalter"
+    ]
+  },
+  "medieval": {
+    "epoch": [
+      "Mittelalter"
+    ]
+  },
+  "mittelalter": {
+    "epoch": [
+      "Mittelalter"
+    ]
+  },
+  "ritter": {
+    "epoch": [
+      "Mittelalter"
+    ]
+  },
+  "victorian": {
+    "epoch": [
+      "19. Jahrhundert"
+    ]
+  },
+  "viktorianisch": {
+    "epoch": [
+      "19. Jahrhundert"
+    ]
+  },
+  "19th century": {
+    "epoch": [
+      "19. Jahrhundert"
+    ]
+  },
+  "1920s": {
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "20er jahre": {
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "1930s": {
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "world war i": {
+    "epoch": [
+      "1900–1945"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "1950s": {
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "50er": {
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "1960s": {
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "60er": {
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "cold war": {
+    "epoch": [
+      "1946–1969"
+    ],
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "kalter krieg": {
+    "epoch": [
+      "1946–1969"
+    ],
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "1970s": {
+    "epoch": [
+      "1970–1989"
+    ]
+  },
+  "70er": {
+    "epoch": [
+      "1970–1989"
+    ]
+  },
+  "1980s": {
+    "epoch": [
+      "1970–1989"
+    ]
+  },
+  "80er": {
+    "epoch": [
+      "1970–1989"
+    ]
+  },
+  "1990s": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "90er": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "present day": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "contemporary": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "near future": {
+    "epoch": [
+      "nahe Zukunft"
+    ]
+  },
+  "zukunft": {
+    "epoch": [
+      "nahe Zukunft"
+    ]
+  },
+  "far future": {
+    "epoch": [
+      "ferne Zukunft"
+    ]
+  },
+  "distant future": {
+    "epoch": [
+      "ferne Zukunft"
+    ]
+  },
+  "fantasy world": {
+    "epoch": [
+      "Fantasiewelt"
+    ]
+  },
+  "fantasiewelt": {
+    "epoch": [
+      "Fantasiewelt"
+    ]
+  },
+  "new york city": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "new york": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "los angeles": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "big city": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "urban": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "grossstadt": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "großstadt": {
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "small town": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "kleinstadt": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "rural": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "landleben": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "vorstadt": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "wilderness": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "forest": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "jungle": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "dschungel": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "regenwald": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "wildnis": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "island": {
+    "place": [
+      "isolierter Ort"
+    ]
+  },
+  "insel": {
+    "place": [
+      "isolierter Ort"
+    ]
+  },
+  "submarine": {
+    "place": [
+      "isolierter Ort",
+      "Meer"
+    ]
+  },
+  "uboot": {
+    "place": [
+      "isolierter Ort",
+      "Meer"
+    ]
+  },
+  "bunker": {
+    "place": [
+      "isolierter Ort"
+    ]
+  },
+  "ocean": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "sea": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "meer": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "ozean": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "küste": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "desert": {
+    "place": [
+      "Wüste"
+    ]
+  },
+  "wüste": {
+    "place": [
+      "Wüste"
+    ]
+  },
+  "battlefield": {
+    "place": [
+      "Schlachtfeld"
+    ]
+  },
+  "schlachtfeld": {
+    "place": [
+      "Schlachtfeld"
+    ]
+  },
+  "space": {
+    "place": [
+      "Weltraum"
+    ],
+    "subgenres": [
+      "Weltraum"
+    ]
+  },
+  "gore": {
+    "intensity": 5
+  },
+  "splatter": {
+    "intensity": 5
+  },
+  "extreme violence": {
+    "intensity": 5
+  },
+  "torture": {
+    "intensity": 5
+  },
+  "cannibal": {
+    "intensity": 5
+  },
+  "anime": {
+    "format": "anime"
+  },
+  "animation": {
+    "format": "animation"
+  },
+  "miniseries": {
+    "format": "miniserie"
+  },
+  "miniserie": {
+    "format": "miniserie"
+  },
+  "hitman": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ],
+    "themes": [
+      "Selbstjustiz"
+    ]
+  },
+  "assassin": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ]
+  },
+  "auftragskiller": {
+    "subgenres": [
+      "Einzelkämpfer"
+    ]
+  },
+  "fbi": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "police": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "manhunt": {
+    "subgenres": [
+      "Ermittlung"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "stalker": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "psychopath": {
+    "subgenres": [
+      "Psychothriller"
+    ],
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "psychologie": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "politics": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ]
+  },
+  "politik": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ]
+  },
+  "propaganda": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "election": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "nuclear war": {
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "epoch": [
+      "nahe Zukunft"
+    ]
+  },
+  "atomic bomb": {
+    "themes": [
+      "Krieg & Trauma"
+    ],
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "hacking": {
+    "themes": [
+      "Technologie & KI",
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "double cross": {
+    "themes": [
+      "Loyalität & Verrat"
+    ]
+  },
+  "jealousy": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "divorce": {
+    "themes": [
+      "Familie",
+      "Trauer & Verlust"
+    ]
+  },
+  "orphan": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "illness": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "cancer": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "suicide": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "sacrifice": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "justice": {
+    "themes": [
+      "Moral & Gewissen"
+    ]
+  },
+  "death penalty": {
+    "themes": [
+      "Moral & Gewissen"
+    ]
+  },
+  "frontier": {
+    "place": [
+      "Wildnis & Natur"
+    ],
+    "epoch": [
+      "19. Jahrhundert"
+    ]
+  },
+  "gold rush": {
+    "epoch": [
+      "19. Jahrhundert"
+    ],
+    "themes": [
+      "Gier & Exzess"
+    ]
+  },
+  "island survival": {
+    "subgenres": [
+      "Survival-Thriller"
+    ],
+    "place": [
+      "isolierter Ort"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "desert survival": {
+    "subgenres": [
+      "Survival-Thriller"
+    ],
+    "place": [
+      "Wüste"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "jungle adventure": {
+    "place": [
+      "Wildnis & Natur"
+    ],
+    "subgenres": [
+      "Abenteuer-Action"
+    ]
+  },
+  "sea adventure": {
+    "place": [
+      "Meer"
+    ],
+    "subgenres": [
+      "Abenteuer-Action"
+    ]
+  },
+  "car chase": {
+    "subgenres": [
+      "Buddy-Action"
+    ]
+  },
+  "verfolgungsjagd": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "sword fight": {
+    "subgenres": [
+      "Martial Arts"
+    ]
+  },
+  "robot uprising": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "mad scientist": {
+    "themes": [
+      "Technologie & KI",
+      "Wahnsinn"
+    ]
+  },
+  "genetic engineering": {
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "road trip": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "wedding night": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "midlife crisis": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "class struggle": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "civil rights": {
+    "themes": [
+      "Rassismus & Ausgrenzung",
+      "Rebellion & Widerstand"
+    ]
+  },
+  "whistleblowing": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "media manipulation": {
+    "themes": [
+      "Medien & Showbiz",
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "corporate greed": {
+    "themes": [
+      "Konzerne & Kapitalismus",
+      "Gier & Exzess"
+    ]
+  },
+  "nature strikes back": {
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "coming of age story": {
+    "subgenres": [
+      "Coming of Age"
+    ],
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "sports underdog": {
+    "subgenres": [
+      "Sportfilm"
+    ],
+    "themes": [
+      "Ehrgeiz"
+    ]
+  },
+  "prison drama": {
+    "subgenres": [
+      "Gefängnisfilm"
+    ]
+  },
+  "legal thriller": {
+    "subgenres": [
+      "Gerichtsdrama"
+    ]
+  },
+  "spy thriller": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "political conspiracy": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "home invasion thriller": {
+    "subgenres": [
+      "Belagerung & Home Invasion"
+    ]
+  },
+  "revenge tale": {
+    "subgenres": [
+      "Rachethriller"
+    ],
+    "themes": [
+      "Rache"
+    ]
+  },
+  "kidnapping thriller": {
+    "subgenres": [
+      "Entführung"
+    ]
+  },
+  "time travel romance": {
+    "subgenres": [
+      "Zeitreise"
+    ],
+    "themes": [
+      "Zeit",
+      "Liebe & Obsession"
+    ],
+    "strong": true
+  },
+  "space mission": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "alien contact": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ]
+  },
+  "postapocalyptic survival": {
+    "subgenres": [
+      "Postapokalypse"
+    ],
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "cyberpunk city": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "place": [
+      "Grossstadt"
+    ]
+  },
+  "superhero origin": {
+    "subgenres": [
+      "Superhelden"
+    ],
+    "themes": [
+      "Heldentum"
+    ],
+    "strong": true
+  },
+  "dark fairy tale": {
+    "subgenres": [
+      "Dark Fantasy"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "mythic quest": {
+    "subgenres": [
+      "Mythologie & Märchen"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "martial arts tournament": {
+    "subgenres": [
+      "Martial Arts"
+    ],
+    "themes": [
+      "Rivalität"
+    ],
+    "strong": true
+  },
+  "war epic": {
+    "subgenres": [
+      "Historienepos"
+    ],
+    "tone": [
+      "episch"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "biographical drama": {
+    "subgenres": [
+      "Biopic"
+    ]
+  },
+  "rise and fall story": {
+    "subgenres": [
+      "Aufstieg und Fall"
+    ],
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "tragic love story": {
+    "subgenres": [
+      "Tragische Romanze"
+    ],
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "historical spectacle": {
+    "subgenres": [
+      "Historienepos"
+    ],
+    "tone": [
+      "episch"
+    ]
+  },
+  "crime documentary": {
+    "subgenres": [
+      "True-Crime-Doku"
+    ]
+  },
+  "artist portrait": {
+    "subgenres": [
+      "Porträt"
+    ]
+  },
+  "wilderness survival": {
+    "subgenres": [
+      "Survival-Doku"
+    ],
+    "themes": [
+      "Überleben"
+    ],
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "gangster saga": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ],
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "heist comedy": {
+    "subgenres": [
+      "Heist"
+    ],
+    "tone": [
+      "leicht"
+    ],
+    "strong": true
+  },
+  "whodunit party": {
+    "subgenres": [
+      "Whodunit"
+    ],
+    "strong": true
+  },
+  "occult ritual": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ],
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "slasher camp": {
+    "subgenres": [
+      "Slasher"
+    ],
+    "place": [
+      "Wildnis & Natur"
+    ],
+    "strong": true
+  },
+  "zombie outbreak": {
+    "subgenres": [
+      "Zombie & Infektion"
+    ],
+    "themes": [
+      "Überleben"
+    ],
+    "strong": true
+  },
+  "vampire romance": {
+    "subgenres": [
+      "Vampire & Gothic"
+    ],
+    "themes": [
+      "Liebe & Obsession"
+    ],
+    "strong": true
+  },
+  "found footage horror": {
+    "subgenres": [
+      "Found Footage"
+    ],
+    "narrative": [
+      "Found Footage & Mockumentary"
+    ],
+    "strong": true
+  },
+  "mind bending": {
+    "subgenres": [
+      "Mindfuck"
+    ],
+    "narrative": [
+      "nicht-linear"
+    ]
+  },
+  "slow burn thriller": {
+    "subgenres": [
+      "Psychothriller"
+    ],
+    "narrative": [
+      "Slow Burn"
+    ]
+  },
+  "one shot film": {
+    "narrative": [
+      "Echtzeit & One-Shot"
+    ]
+  },
+  "anthology film": {
+    "narrative": [
+      "Episoden & Anthologie"
+    ]
+  },
+  "ensemble drama": {
+    "narrative": [
+      "Ensemble"
+    ],
+    "subgenres": [
+      "Charakterstudie"
+    ]
+  },
+  "flashback structure": {
+    "narrative": [
+      "Rückblenden"
+    ]
+  },
+  "unreliable memory": {
+    "narrative": [
+      "unzuverlässiger Erzähler"
+    ],
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "small town secrets": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ],
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "big city night": {
+    "place": [
+      "Grossstadt"
+    ],
+    "tone": [
+      "cool"
+    ]
+  },
+  "desert road": {
+    "place": [
+      "Wüste"
+    ]
+  },
+  "ocean crossing": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "battlefield horror": {
+    "place": [
+      "Schlachtfeld"
+    ],
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "isolated cabin": {
+    "place": [
+      "isolierter Ort"
+    ],
+    "subgenres": [
+      "Belagerung & Home Invasion"
+    ]
+  },
+  "1920s crime": {
+    "epoch": [
+      "1900–1945"
+    ],
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "cold war spy": {
+    "epoch": [
+      "1946–1969"
+    ],
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "seventies thriller": {
+    "epoch": [
+      "1970–1989"
+    ],
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "near future dystopia": {
+    "epoch": [
+      "nahe Zukunft"
+    ],
+    "subgenres": [
+      "Dystopie"
+    ],
+    "strong": true
+  },
+  "far future voyage": {
+    "epoch": [
+      "ferne Zukunft"
+    ],
+    "subgenres": [
+      "Space Opera"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "ancient myth": {
+    "epoch": [
+      "Antike"
+    ],
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "medieval quest": {
+    "epoch": [
+      "Mittelalter"
+    ],
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "victorian ghost": {
+    "epoch": [
+      "19. Jahrhundert"
+    ],
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ]
+  },
+  "present day thriller": {
+    "epoch": [
+      "Gegenwart"
+    ],
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "fantasy realm": {
+    "epoch": [
+      "Fantasiewelt"
+    ],
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "gore fest": {
+    "intensity": 5,
+    "subgenres": [
+      "Body Horror"
+    ]
+  },
+  "splatter comedy": {
+    "intensity": 5,
+    "tone": [
+      "schwarzhumorig"
+    ]
+  },
+  "extreme violence film": {
+    "intensity": 5
+  },
+  "family secret": {
+    "themes": [
+      "Familie",
+      "Geheimnisse"
+    ]
+  },
+  "parent and child": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "grief and loss": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "memory and identity": {
+    "themes": [
+      "Erinnerung & Wahrnehmung",
+      "Identität"
+    ]
+  },
+  "power and corruption": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "greed and excess": {
+    "themes": [
+      "Gier & Exzess"
+    ]
+  },
+  "faith and fanaticism": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "race and exclusion": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "love and obsession": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "loneliness and isolation": {
+    "themes": [
+      "Einsamkeit & Isolation"
+    ]
+  },
+  "loyalty and betrayal": {
+    "themes": [
+      "Loyalität & Verrat"
+    ]
+  },
+  "rebellion and resistance": {
+    "themes": [
+      "Rebellion & Widerstand"
+    ]
+  },
+  "truth and revelation": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "technology and humanity": {
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "war and trauma": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "society and class": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "media and showbusiness": {
+    "themes": [
+      "Medien & Showbiz"
+    ]
+  },
+  "corporations and capital": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "nature against man": {
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "aging and mortality": {
+    "themes": [
+      "Alter & Vergänglichkeit"
+    ]
+  },
+  "myth and legend": {
+    "themes": [
+      "Mythos & Legende"
+    ]
+  },
+  "coming of age theme": {
+    "themes": [
+      "Erwachsenwerden"
+    ]
+  },
+  "survival theme": {
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "revenge theme": {
+    "themes": [
+      "Rache"
+    ]
+  },
+  "guilt theme": {
+    "themes": [
+      "Schuld"
+    ]
+  },
+  "friendship theme": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "hero theme": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "secret theme": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "time theme": {
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "addiction theme": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "ambition theme": {
+    "themes": [
+      "Ehrgeiz"
+    ]
+  },
+  "rivalry theme": {
+    "themes": [
+      "Rivalität"
+    ]
+  },
+  "moral theme": {
+    "themes": [
+      "Moral & Gewissen"
+    ]
+  },
+  "madness theme": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "self justice": {
+    "themes": [
+      "Selbstjustiz"
+    ]
+  },
+  "con and impostor": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "surveillance state": {
+    "themes": [
+      "Überwachung & Verschwörung"
+    ]
+  },
+  "rise and fall theme": {
+    "themes": [
+      "Aufstieg & Fall"
+    ]
+  },
+  "supernatural horror": {
+    "subgenres": [
+      "Übernatürlicher Horror"
+    ],
+    "strong": true
+  },
+  "psychological horror": {
+    "subgenres": [
+      "Psychothriller"
+    ],
+    "tone": [
+      "beklemmend"
+    ],
+    "strong": true
+  },
+  "survival thriller": {
+    "subgenres": [
+      "Survival-Thriller"
+    ],
+    "themes": [
+      "Überleben"
+    ],
+    "strong": true
+  },
+  "murder investigation": {
+    "subgenres": [
+      "Ermittlung"
+    ],
+    "strong": true
+  },
+  "investigation": {
+    "subgenres": [
+      "Ermittlung"
+    ],
+    "strong": true
+  },
+  "police detective": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "post-apocalyptic future": {
+    "subgenres": [
+      "Postapokalypse"
+    ],
+    "strong": true
+  },
+  "dark future": {
+    "subgenres": [
+      "Dystopie"
+    ],
+    "epoch": [
+      "nahe Zukunft"
+    ],
+    "strong": true
+  },
+  "space war": {
+    "subgenres": [
+      "Space Opera"
+    ],
+    "place": [
+      "Weltraum"
+    ],
+    "strong": true
+  },
+  "satanic cult": {
+    "subgenres": [
+      "Okkult & Dämonen"
+    ],
+    "themes": [
+      "Glaube & Fanatismus"
+    ],
+    "strong": true
+  },
+  "terrorist plot": {
+    "subgenres": [
+      "Politthriller & Verschwörung"
+    ],
+    "strong": true
+  },
+  "intense": {
+    "tone": [
+      "spannungsgeladen"
+    ]
+  },
+  "dramatic": {
+    "tone": [
+      "emotional"
+    ]
+  },
+  "tragic": {
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "tragic hero": {
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "grim": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "distressing": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "grimdark": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "macabre": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "cruel": {
+    "tone": [
+      "düster"
+    ]
+  },
+  "brutality": {
+    "tone": [
+      "düster"
+    ],
+    "intensityDelta": 1
+  },
+  "amused": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "cheerful": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "hilarious": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "playful": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "exuberant": {
+    "tone": [
+      "leicht"
+    ]
+  },
+  "mysterious": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "ominous": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "anxious": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "frightened": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "nervous": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "horrified": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "paranoia": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "psychological": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "depressing": {
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "somber": {
+    "tone": [
+      "melancholisch"
+    ]
+  },
+  "disturbed": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "empathetic": {
+    "tone": [
+      "emotional"
+    ]
+  },
+  "sympathetic": {
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "hopeful": {
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "inspirational": {
+    "tone": [
+      "warmherzig"
+    ]
+  },
+  "surrealism": {
+    "tone": [
+      "surreal"
+    ]
+  },
+  "magic realism": {
+    "tone": [
+      "surreal"
+    ]
+  },
+  "1940s": {
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "1910s": {
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "1900s": {
+    "epoch": [
+      "1900–1945"
+    ]
+  },
+  "post world war ii": {
+    "epoch": [
+      "1946–1969"
+    ]
+  },
+  "2000s": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "2010s": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "2020s": {
+    "epoch": [
+      "Gegenwart"
+    ]
+  },
+  "future": {
+    "epoch": [
+      "nahe Zukunft"
+    ]
+  },
+  "transhumanism": {
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "father daughter relationship": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "mother son relationship": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "father son relationship": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "parent child relationship": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "estranged son": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "single father": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "single mother": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "pregnancy": {
+    "themes": [
+      "Eltern & Kinder"
+    ]
+  },
+  "infidelity": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "struggle for survival": {
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "family relationships": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "sibling relationship": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "husband wife relationship": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "dysfunctional family": {
+    "subgenres": [
+      "Familiendrama"
+    ],
+    "themes": [
+      "Familie"
+    ]
+  },
+  "male friendship": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "unlikely friendship": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "death of father": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "death of husband": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "death of daughter": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "dying and death": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "funeral": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "widow": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "suicide attempt": {
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "tragedy": {
+    "tone": [
+      "melancholisch"
+    ],
+    "themes": [
+      "Trauer & Verlust"
+    ]
+  },
+  "drug addiction": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "drugs": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "cocaine": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "marijuana": {
+    "themes": [
+      "Sucht"
+    ]
+  },
+  "drug cartel": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "drug lord": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "criminal underworld": {
+    "subgenres": [
+      "Gangster & Mafia"
+    ]
+  },
+  "child kidnapping": {
+    "subgenres": [
+      "Entführung"
+    ]
+  },
+  "robbery": {
+    "subgenres": [
+      "Heist"
+    ]
+  },
+  "race against time": {
+    "themes": [
+      "Zeit"
+    ]
+  },
+  "dreams": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "dream world": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "subconscious": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "nightmare": {
+    "tone": [
+      "beklemmend"
+    ],
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "hallucination": {
+    "themes": [
+      "Erinnerung & Wahrnehmung"
+    ]
+  },
+  "alter ego": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "dissociative identity disorder": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "split personality": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "secret identity": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "deception": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "con man": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "fraudster": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "christianity": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "catholic": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "church": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "bible": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "priest": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "sin": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "ku klux klan": {
+    "themes": [
+      "Rassismus & Ausgrenzung"
+    ]
+  },
+  "police corruption": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "authoritarian": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "guerrilla warfare": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "behind enemy lines": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "journalist": {
+    "themes": [
+      "Wahrheit & Enthüllung"
+    ]
+  },
+  "cautionary": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "disappearance": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "mysterious disappearance": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "loner": {
+    "themes": [
+      "Einsamkeit & Isolation"
+    ]
+  },
+  "psychiatric hospital": {
+    "themes": [
+      "Wahnsinn"
+    ]
+  },
+  "vengeance": {
+    "subgenres": [
+      "Rachethriller"
+    ],
+    "themes": [
+      "Rache"
+    ],
+    "strong": true
+  },
+  "relentless vengeance": {
+    "subgenres": [
+      "Rachethriller"
+    ],
+    "themes": [
+      "Rache"
+    ],
+    "strong": true
+  },
+  "stalking": {
+    "subgenres": [
+      "Psychothriller"
+    ]
+  },
+  "super power": {
+    "subgenres": [
+      "Superhelden"
+    ]
+  },
+  "elves": {
+    "subgenres": [
+      "High Fantasy"
+    ],
+    "strong": true
+  },
+  "hobbit": {
+    "subgenres": [
+      "High Fantasy"
+    ],
+    "strong": true
+  },
+  "wizard": {
+    "subgenres": [
+      "High Fantasy"
+    ],
+    "strong": true
+  },
+  "dwarf": {
+    "subgenres": [
+      "High Fantasy"
+    ]
+  },
+  "sword and sorcery": {
+    "subgenres": [
+      "High Fantasy"
+    ],
+    "strong": true
+  },
+  "prison cell": {
+    "subgenres": [
+      "Gefängnisfilm"
+    ]
+  },
+  "multiple storylines": {
+    "narrative": [
+      "Ensemble"
+    ]
+  },
+  "twist": {
+    "narrative": [
+      "Plot-Twist"
+    ]
+  },
+  "alien planet": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "spacecraft": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "space station": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "space adventure": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "wormhole": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "themes": [
+      "Zeit"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "moon": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "nasa": {
+    "subgenres": [
+      "Weltraum"
+    ],
+    "place": [
+      "Weltraum"
+    ]
+  },
+  "suburban": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "suburbia": {
+    "place": [
+      "Kleinstadt & Provinz"
+    ]
+  },
+  "mountain": {
+    "place": [
+      "Wildnis & Natur"
+    ]
+  },
+  "sandstorm": {
+    "place": [
+      "Wüste"
+    ]
+  },
+  "caribbean sea": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "überleben": {
+    "themes": [
+      "Überleben"
+    ]
+  },
+  "roboter": {
+    "subgenres": [
+      "Cyberpunk & KI"
+    ],
+    "themes": [
+      "Technologie & KI",
+      "Was ist ein Mensch"
+    ]
+  },
+  "bankraub": {
+    "subgenres": [
+      "Heist"
+    ],
+    "strong": true
+  },
+  "serie": {
+    "format": "serie"
+  },
+  "brutal": {
+    "tone": [
+      "düster"
+    ],
+    "intensityDelta": 1
+  },
+  "intensiv": {
+    "tone": [
+      "spannungsgeladen"
+    ]
+  },
+  "katz und maus": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "cop thriller": {
+    "subgenres": [
+      "Ermittlung"
+    ]
+  },
+  "camp": {
+    "tone": [
+      "abgedreht"
+    ]
+  },
+  "over the top": {
+    "tone": [
+      "abgedreht"
+    ]
+  },
+  "klaustrophobie": {
+    "tone": [
+      "beklemmend"
+    ],
+    "narrative": [
+      "Kammerspiel"
+    ]
+  },
+  "höhenangst": {
+    "tone": [
+      "beklemmend"
+    ]
+  },
+  "panzer": {
+    "themes": [
+      "Krieg & Trauma"
+    ]
+  },
+  "queer": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "diktatur": {
+    "themes": [
+      "Macht & Korruption"
+    ]
+  },
+  "wirtschaft": {
+    "themes": [
+      "Konzerne & Kapitalismus"
+    ]
+  },
+  "gauner": {
+    "themes": [
+      "Täuschung & Hochstapelei"
+    ]
+  },
+  "konversionstherapie": {
+    "themes": [
+      "Identität",
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "mittelerde": {
+    "subgenres": [
+      "High Fantasy"
+    ],
+    "strong": true
+  },
+  "game of thrones": {
+    "subgenres": [
+      "High Fantasy"
+    ],
+    "strong": true
+  },
+  "mma": {
+    "subgenres": [
+      "Martial Arts"
+    ],
+    "strong": true
+  },
+  "paradoxon": {
+    "subgenres": [
+      "Mindfuck"
+    ],
+    "strong": true
+  },
+  "reiche familie": {
+    "themes": [
+      "Familie",
+      "Gier & Exzess"
+    ]
+  },
+  "erbschaft": {
+    "themes": [
+      "Familie"
+    ]
+  },
+  "bruderschaft": {
+    "themes": [
+      "Freundschaft"
+    ]
+  },
+  "romanze": {
+    "themes": [
+      "Liebe & Obsession"
+    ]
+  },
+  "schönheitswahn": {
+    "themes": [
+      "Gesellschaftskritik & Klasse"
+    ]
+  },
+  "shakespeare": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  },
+  "spirituell": {
+    "themes": [
+      "Glaube & Fanatismus"
+    ]
+  },
+  "star wars": {
+    "subgenres": [
+      "Space Opera"
+    ],
+    "place": [
+      "Weltraum"
+    ],
+    "strong": true
+  },
+  "tauchen": {
+    "place": [
+      "Meer"
+    ]
+  },
+  "tischtennis": {
+    "subgenres": [
+      "Sportfilm"
+    ]
+  },
+  "verschwinden": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "vermisst": {
+    "themes": [
+      "Geheimnisse"
+    ]
+  },
+  "waldbrand": {
+    "themes": [
+      "Natur gegen Mensch"
+    ]
+  },
+  "xenomorph": {
+    "subgenres": [
+      "Alien-Kontakt"
+    ],
+    "strong": true
+  },
+  "blutmeer": {
+    "intensity": 5
+  },
+  "bravery": {
+    "themes": [
+      "Heldentum"
+    ]
+  },
+  "lgbt": {
+    "themes": [
+      "Identität"
+    ]
+  },
+  "infiltration": {
+    "subgenres": [
+      "Spionage"
+    ]
+  },
+  "historical drama": {
+    "subgenres": [
+      "Literaturverfilmung & Kostüm"
+    ]
+  }
+}
