@@ -21,8 +21,10 @@
   const modeNetwork = document.getElementById('mode-network');
   const modeDirector = document.getElementById('mode-director');
   const modeRating = document.getElementById('mode-rating');
+  const modeProfile = document.getElementById('mode-profile');
   const netRating = document.getElementById('net-rating');
   const MODE_KEY = 'moviebylucia-view-v1';
+  const recoveryLink = /(?:^|[#&])type=recovery(?:&|$)/.test(location.hash);
 
   let archive = null;
   let removed = new Set();
@@ -56,6 +58,9 @@
   let relayoutPending = new Map();
   let pendingGlide = false;
   let netRatingOn = false;
+  let account = null;
+  let recoveryOn = null;
+  let leaving = false;
   let selectedId = null;
   let links = [];
   let activeLinkId = null;
@@ -63,11 +68,39 @@
   let lastTapAt = 0;
   let lastTapId = null;
 
+  function needsProfile() {
+    return Boolean(globalThis.AppConfig && globalThis.AppConfig.profileRequired);
+  }
+
   function showStoreError() {
     const note = document.getElementById('store-note');
     if (!note) return;
+    note.classList.remove('is-sync');
     note.hidden = false;
     note.textContent = 'Der Speicher ist voll. Neue Änderungen bleiben nur in dieser Sitzung.';
+  }
+
+  function showSyncState(failed) {
+    const note = document.getElementById('store-note');
+    if (!note) return;
+    if (!failed) {
+      if (!note.classList.contains('is-sync')) return;
+      note.hidden = true;
+      note.classList.remove('is-sync');
+      note.replaceChildren();
+      return;
+    }
+    note.classList.add('is-sync');
+    note.hidden = false;
+    note.replaceChildren(document.createTextNode('Nicht gespeichert – '));
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'erneut versuchen';
+    retry.addEventListener('click', () => {
+      retry.disabled = true;
+      retrySync().finally(() => { retry.disabled = false; });
+    });
+    note.append(retry);
   }
 
   if (globalThis.Store) globalThis.Store.setError(showStoreError);
@@ -618,6 +651,9 @@
     const full = fullOf(film);
     const head = el('div', 'panel-head');
     head.append(el('h1', null, film.title));
+    if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
+      head.append(el('p', 'unsynced', 'nicht synchronisiert'));
+    }
     if (film.year) head.append(el('p', 'sub', film.year));
     if (full.director) {
       const director = el('button', 'credit credit-link', `Regie ${full.director}`);
@@ -1034,7 +1070,7 @@
   function savedMode() {
     try {
       const raw = localStorage.getItem(MODE_KEY);
-      if (raw === 'director' || raw === 'rating' || raw === 'network') return raw;
+      if (raw === 'director' || raw === 'rating' || raw === 'network' || raw === 'profile') return raw;
     } catch {
       /* private mode can refuse storage */
     }
@@ -1113,6 +1149,18 @@
     modeNetwork.setAttribute('aria-selected', next === 'network' ? 'true' : 'false');
     modeDirector.setAttribute('aria-selected', next === 'director' ? 'true' : 'false');
     modeRating.setAttribute('aria-selected', next === 'rating' ? 'true' : 'false');
+    if (modeProfile) modeProfile.setAttribute('aria-selected', next === 'profile' ? 'true' : 'false');
+    const profile = document.getElementById('profile');
+    if (profile) profile.hidden = next !== 'profile';
+    document.body.classList.toggle('is-profile', next === 'profile');
+    document.body.classList.toggle('is-rating', ratingView);
+    if (next === 'profile') {
+      networkEl.hidden = true;
+      wall.hidden = true;
+      document.body.classList.remove('is-network');
+      renderProfile();
+      return Promise.resolve();
+    }
     if (next === 'network') {
       const shown = showNetwork();
       if (relayoutTimer || relayoutIdle || relayoutWait) flushRelayout();
@@ -1230,6 +1278,7 @@
   modeNetwork.addEventListener('click', () => setMode('network'));
   modeDirector.addEventListener('click', () => setMode('director'));
   modeRating.addEventListener('click', () => setMode('rating'));
+  if (modeProfile) modeProfile.addEventListener('click', () => setMode('profile'));
   netRating.addEventListener('click', () => {
     netRatingOn = !netRatingOn;
     netRating.setAttribute('aria-pressed', netRatingOn ? 'true' : 'false');
@@ -2043,9 +2092,558 @@
     else openListImport();
   });
 
+  function readyCloud() {
+    if (globalThis.Cloud && globalThis.Cloud.ready) return Promise.resolve(globalThis.Cloud);
+    return new Promise((resolve) => {
+      window.addEventListener('cloud:ready', () => resolve(globalThis.Cloud), { once: true });
+    });
+  }
+
+  function lockScreen() {
+    document.documentElement.classList.add('needs-auth');
+    const gate = document.getElementById('gate');
+    if (gate) gate.hidden = false;
+  }
+
+  function unlockScreen() {
+    document.documentElement.classList.remove('needs-auth');
+    const gate = document.getElementById('gate');
+    if (gate) gate.hidden = true;
+  }
+
+  function authText(error) {
+    if (!error) return 'Keine Verbindung.';
+    const message = String(error.message || error.error_description || error.msg || '');
+    if (error.name === 'TypeError' || /failed to fetch|network|load failed/i.test(message)) return 'Keine Verbindung.';
+    if (/vergeben|already registered|already been registered/i.test(message)) return 'Dieser Benutzername ist vergeben.';
+    if (/invalid login|invalid credentials/i.test(message)) return 'Das Passwort ist falsch.';
+    if (/at least|too short|weak password|zu kurz/i.test(message)) return 'Das Passwort ist zu kurz.';
+    if (/Benutzername|Passwort|stimmen nicht|Verbindung|Zeichen|eingerichtet|ungültig|eintragen/.test(message)) return message;
+    return 'Keine Verbindung.';
+  }
+
+  function authField(label, type, name, autocomplete) {
+    const wrap = document.createElement('label');
+    wrap.append(document.createTextNode(label));
+    const input = document.createElement('input');
+    input.type = type;
+    input.name = name;
+    input.autocomplete = autocomplete;
+    input.autocapitalize = 'none';
+    input.spellcheck = false;
+    wrap.append(input);
+    return { wrap, input };
+  }
+
+  function countWord(count, one, many) {
+    return `${count} ${count === 1 ? one : many}`;
+  }
+
+  function starterIds() {
+    const ids = [];
+    (window.FILMS || []).forEach((film) => { if (film && film.id) ids.push(film.id); });
+    starterAdded.forEach((film) => { if (film && film.id && !ids.includes(film.id)) ids.push(film.id); });
+    return ids;
+  }
+
+  function findFilmRecord(id) {
+    return byId.get(id)
+      || added.find((film) => film && film.id === id)
+      || (archive && archive.added || []).find((film) => film && film.id === id)
+      || (window.FILMS || []).find((film) => film && film.id === id)
+      || starterAdded.find((film) => film && film.id === id)
+      || null;
+  }
+
+  function catalogRow(id) {
+    const film = findFilmRecord(id);
+    if (!film || !film.title) return null;
+    const base = (baseFacets && baseFacets[id])
+      || (archive && archive.facetOverrides[id])
+      || (globalThis.FILM_FACETS || {})[id]
+      || null;
+    const score = base && typeof base.tmdbRating === 'number' ? base.tmdbRating : null;
+    const votes = base && typeof base.tmdbVotes === 'number' ? base.tmdbVotes : null;
+    return {
+      id,
+      imdb_id: base && base.imdbId ? base.imdbId : null,
+      title: film.title,
+      original_title: film.original || null,
+      year: film.year ? String(film.year) : null,
+      kind: /^tmdb:tv:/.test(id) ? 'tv' : 'movie',
+      poster: (base && base.poster) || film.poster || null,
+      tmdb_rating: score,
+      tmdb_votes: Number.isFinite(votes) ? votes : null,
+      facets: base,
+    };
+  }
+
+  async function recoveryEnabled() {
+    if (recoveryOn != null) return recoveryOn;
+    try {
+      const response = await fetch('/api/recovery?action=status');
+      const data = response.ok ? await response.json() : null;
+      recoveryOn = Boolean(data && data.enabled);
+    } catch {
+      recoveryOn = false;
+    }
+    return recoveryOn;
+  }
+
+  function renderProfile() {
+    const root = document.getElementById('profile');
+    if (!root) return;
+    const name = (account && (account.display_name || account.username)) || 'Profil';
+    const handle = account && account.username ? `@${account.username}` : '';
+    root.replaceChildren();
+    root.append(el('h1', null, name));
+    root.append(el('p', 'handle', handle));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.placeholder = 'zurücksetzen';
+    input.setAttribute('aria-label', 'zurücksetzen eingeben');
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.textContent = 'Archiv zurücksetzen';
+    reset.disabled = true;
+    input.addEventListener('input', () => {
+      reset.disabled = input.value.trim().toLocaleLowerCase('de') !== 'zurücksetzen';
+    });
+    reset.addEventListener('click', async () => {
+      reset.disabled = true;
+      const next = await globalThis.Store.reset();
+      if (!next) return;
+      adoptArchive(next);
+      if (network) {
+        network.setFilms(FILMS);
+        if (networkReady) network.reflow();
+      }
+      input.value = '';
+      reset.disabled = true;
+    });
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.textContent = 'Abmelden';
+    out.addEventListener('click', () => { leave(); });
+    root.append(input, reset, out);
+  }
+
+  async function leave() {
+    if (leaving) return;
+    leaving = true;
+    relayoutJob += 1;
+    if (globalThis.Store && globalThis.Store.clearUser) globalThis.Store.clearUser();
+    archive = null;
+    FILMS = [];
+    byId.clear();
+    started = false;
+    account = null;
+    selectedId = null;
+    wall.replaceChildren();
+    wall.hidden = true;
+    networkEl.hidden = true;
+    panel.hidden = true;
+    document.body.classList.remove('has-selection', 'is-network', 'is-rating', 'is-profile');
+    const profile = document.getElementById('profile');
+    if (profile) {
+      profile.hidden = true;
+      profile.replaceChildren();
+    }
+    closeSheet();
+    if (network && network.setFilms) network.setFilms([]);
+    try {
+      if (globalThis.Cloud && globalThis.Cloud.signOut) await globalThis.Cloud.signOut();
+    } catch {
+      /* die lokale Sitzung ist schon zu */
+    }
+    lockScreen();
+    renderAuth('in');
+    leaving = false;
+  }
+
+  function finishImport() {
+    try {
+      if (localStorage.getItem('moviebylucia-import-pending') !== '1') return;
+      localStorage.removeItem('moviebylucia-import-pending');
+    } catch {
+      return;
+    }
+    if (globalThis.Store && globalThis.Store.clearLegacy) globalThis.Store.clearLegacy();
+  }
+
+  async function retrySync() {
+    if (!globalThis.Store) return;
+    try {
+      const empty = await globalThis.Store.cloudEmpty();
+      if (empty === false) {
+        await globalThis.Store.pull();
+        const current = globalThis.Store.current();
+        if (current) {
+          adoptArchive(current);
+          if (!started) await startApp();
+          else showRoster();
+        }
+        showSyncState(false);
+      } else {
+        const ok = await globalThis.Store.flush();
+        if (ok) finishImport();
+      }
+    } catch {
+      showSyncState(true);
+    }
+  }
+
+  function openImport() {
+    const preview = globalThis.Store.legacyPreview(idMap, starterIds());
+    if (!preview) {
+      openSheet(gateView());
+      return;
+    }
+    const box = document.createElement('div');
+    box.append(el('h2', null, 'Lokales Archiv in dein Profil übernehmen?'));
+    box.append(el('p', null, `${countWord(preview.ratings, 'Wertung', 'Wertungen')}, ${countWord(preview.films, 'Film', 'Filme')}, ${countWord(preview.corrections, 'Korrektur', 'Korrekturen')}`));
+    const take = choiceButton('Übernehmen');
+    const skip = choiceButton('Nicht übernehmen');
+    take.addEventListener('click', async () => {
+      take.disabled = true;
+      skip.disabled = true;
+      const installed = globalThis.Store.replace(preview.data);
+      try { localStorage.setItem('moviebylucia-import-pending', '1'); } catch { /* die Übernahme bleibt im Cache */ }
+      adoptArchive(installed);
+      closeSheet();
+      await startApp();
+      const ok = await globalThis.Store.flush();
+      if (ok) finishImport();
+    });
+    skip.addEventListener('click', () => openSheet(gateView()));
+    box.append(take, skip);
+    openSheet(box);
+  }
+
+  async function openSession(session, registered) {
+    if (!session || !session.user || !globalThis.Cloud || !globalThis.Cloud.client) {
+      lockScreen();
+      renderAuth('in', 'Keine Verbindung.');
+      return;
+    }
+    globalThis.Store.bind({
+      userId: session.user.id,
+      client: globalThis.Cloud.client,
+      starterIds,
+      catalog: catalogRow,
+    });
+    globalThis.Store.setSyncError(showSyncState);
+    try {
+      account = await globalThis.Cloud.profile();
+    } catch {
+      const meta = session.user.user_metadata || {};
+      account = { username: meta.username || '', display_name: meta.username || '' };
+    }
+    const cached = globalThis.Store.load();
+    if (registered) {
+      unlockScreen();
+      openSheet(gateView());
+      return;
+    }
+    if (cached) {
+      unlockScreen();
+      adoptArchive(cached);
+      startApp();
+      try {
+        const empty = await globalThis.Store.cloudEmpty();
+        if (empty === false) {
+          await globalThis.Store.pull();
+          adoptArchive(globalThis.Store.current());
+          showRoster();
+        } else {
+          const ok = await globalThis.Store.flush();
+          if (ok) finishImport();
+        }
+      } catch {
+        showSyncState(true);
+      }
+      return;
+    }
+    let empty = null;
+    try {
+      empty = await globalThis.Store.cloudEmpty();
+    } catch {
+      empty = null;
+    }
+    if (empty === false) {
+      try {
+        await globalThis.Store.pull();
+        unlockScreen();
+        adoptArchive(globalThis.Store.current());
+        startApp();
+      } catch {
+        unlockScreen();
+        showSyncState(true);
+      }
+      return;
+    }
+    unlockScreen();
+    if (empty === true && globalThis.Store.hasLegacy()) {
+      openImport();
+      return;
+    }
+    if (empty === null) showSyncState(true);
+    openSheet(gateView());
+  }
+
+  function renderAuth(view, notice) {
+    const card = document.getElementById('gate-card');
+    if (!card) return;
+    card.replaceChildren();
+    const error = el('p', 'auth-error', notice || '');
+    error.setAttribute('role', 'status');
+
+    if (view === 'password') {
+      card.append(el('h1', null, 'Neues Passwort setzen'));
+      const first = authField('Neues Passwort', 'password', 'password', 'new-password');
+      const second = authField('Passwort wiederholen', 'password', 'repeat', 'new-password');
+      const save = document.createElement('button');
+      save.type = 'submit';
+      save.textContent = 'Passwort setzen';
+      const form = document.createElement('form');
+      form.append(first.wrap, second.wrap, error, save);
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const password = first.input.value;
+        if (password.length < 6) {
+          error.textContent = 'Das Passwort ist zu kurz.';
+          return;
+        }
+        if (password !== second.input.value) {
+          error.textContent = 'Die Passwörter stimmen nicht überein.';
+          return;
+        }
+        save.disabled = true;
+        try {
+          await globalThis.Cloud.updatePassword(password);
+          const session = await globalThis.Cloud.getSession();
+          await openSession(session, false);
+        } catch (cause) {
+          error.textContent = authText(cause);
+          save.disabled = false;
+        }
+      });
+      card.append(form);
+      first.input.focus();
+      return;
+    }
+
+    if (view === 'forgot') {
+      card.append(el('h1', null, 'Passwort vergessen?'));
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.textContent = 'Zurück zur Anmeldung';
+      back.addEventListener('click', () => renderAuth('in'));
+      recoveryEnabled().then((enabled) => {
+        if (!enabled) {
+          card.insertBefore(el('p', 'auth-note', 'Melde dich bei Luciano.'), back);
+          return;
+        }
+        const name = authField('Benutzername', 'text', 'username', 'username');
+        const send = document.createElement('button');
+        send.type = 'submit';
+        send.textContent = 'Link schicken';
+        const form = document.createElement('form');
+        form.append(name.wrap, error, send);
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const username = name.input.value.trim().toLowerCase();
+          if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+            error.textContent = 'Der Benutzername braucht 3 bis 20 Zeichen: a–z, 0–9 oder _.';
+            return;
+          }
+          send.disabled = true;
+          try {
+            const response = await fetch('/api/recovery?action=reset', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username }),
+            });
+            const data = await response.json().catch(() => null);
+            if (response.status === 503) {
+              error.textContent = 'Melde dich bei Luciano.';
+              return;
+            }
+            error.textContent = (data && data.message) || 'Falls eine bestätigte E-Mail hinterlegt ist, wurde ein Link verschickt.';
+          } catch {
+            error.textContent = 'Keine Verbindung.';
+            send.disabled = false;
+          }
+        });
+        card.insertBefore(form, back);
+        name.input.focus();
+      });
+      card.append(back);
+      return;
+    }
+
+    const signingIn = view !== 'up';
+    card.append(el('h1', null, signingIn ? 'Anmelden' : 'Registrieren'));
+    const name = authField('Benutzername', 'text', 'username', 'username');
+    const password = authField('Passwort', 'password', 'password', signingIn ? 'current-password' : 'new-password');
+    const form = document.createElement('form');
+    form.append(name.wrap, password.wrap);
+    let repeat = null;
+    let mail = null;
+    let nameHint = null;
+    if (!signingIn) {
+      repeat = authField('Passwort wiederholen', 'password', 'repeat', 'new-password');
+      form.append(repeat.wrap);
+      nameHint = el('p', 'auth-hint', '');
+      form.append(nameHint);
+      let nameToken = 0;
+      name.input.addEventListener('input', () => {
+        const token = nameToken + 1;
+        nameToken = token;
+        const value = name.input.value.trim().toLowerCase();
+        if (!value) {
+          nameHint.textContent = '';
+          return;
+        }
+        if (!/^[a-z0-9_]{3,20}$/.test(value)) {
+          nameHint.textContent = '3 bis 20 Zeichen: a–z, 0–9 oder _.';
+          return;
+        }
+        nameHint.textContent = '';
+        window.setTimeout(async () => {
+          if (token !== nameToken) return;
+          try {
+            const free = await globalThis.Cloud.usernameAvailable(value);
+            if (token !== nameToken) return;
+            nameHint.textContent = free ? '' : 'Dieser Benutzername ist vergeben.';
+          } catch {
+            if (token !== nameToken) return;
+            nameHint.textContent = 'Keine Verbindung.';
+          }
+        }, 400);
+      });
+      recoveryEnabled().then((enabled) => {
+        if (!enabled || !form.isConnected) return;
+        mail = authField('E-Mail (freiwillig, nur zum Zurücksetzen)', 'email', 'email', 'email');
+        form.insertBefore(mail.wrap, error);
+      });
+    }
+    const submit = document.createElement('button');
+    submit.type = 'submit';
+    submit.textContent = signingIn ? 'Anmelden' : 'Registrieren';
+    const swap = document.createElement('button');
+    swap.type = 'button';
+    swap.textContent = signingIn ? 'Registrieren' : 'Anmelden';
+    swap.addEventListener('click', () => renderAuth(signingIn ? 'up' : 'in'));
+    form.append(error, submit, swap);
+    if (signingIn) {
+      const forgot = document.createElement('button');
+      forgot.type = 'button';
+      forgot.textContent = 'Passwort vergessen?';
+      forgot.addEventListener('click', () => renderAuth('forgot'));
+      form.append(forgot);
+    }
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const username = name.input.value.trim().toLowerCase();
+      const secret = password.input.value;
+      if (!username || !secret) {
+        error.textContent = 'Bitte Benutzername und Passwort eintragen.';
+        return;
+      }
+      if (!/^[a-z0-9_]{3,20}$/.test(username)) {
+        error.textContent = 'Der Benutzername braucht 3 bis 20 Zeichen: a–z, 0–9 oder _.';
+        return;
+      }
+      if (secret.length < 6) {
+        error.textContent = 'Das Passwort ist zu kurz.';
+        return;
+      }
+      if (repeat && secret !== repeat.input.value) {
+        error.textContent = 'Die Passwörter stimmen nicht überein.';
+        return;
+      }
+      if (!signingIn && nameHint && nameHint.textContent === 'Dieser Benutzername ist vergeben.') {
+        error.textContent = 'Dieser Benutzername ist vergeben.';
+        return;
+      }
+      const email = mail && mail.input.value.trim();
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        error.textContent = 'Die E-Mail sieht ungültig aus.';
+        return;
+      }
+      submit.disabled = true;
+      try {
+        if (signingIn) {
+          const data = await globalThis.Cloud.signIn(username, secret);
+          await openSession(data.session, false);
+          return;
+        }
+        const data = await globalThis.Cloud.signUp(username, secret, email || undefined);
+        if (!data || !data.session) {
+          error.textContent = 'Die Anmeldung ist noch nicht frei. Schalte die E-Mail-Bestätigung im Supabase-Dashboard aus.';
+          submit.disabled = false;
+          return;
+        }
+        if (email && data.session.access_token && await recoveryEnabled()) {
+          try {
+            await fetch('/api/recovery?action=verify', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${data.session.access_token}`,
+              },
+              body: JSON.stringify({ email }),
+            });
+          } catch {
+            /* registriert, die Bestätigung kann später nochmal geschickt werden */
+          }
+        }
+        await openSession(data.session, true);
+      } catch (cause) {
+        error.textContent = authText(cause);
+        submit.disabled = false;
+      }
+    });
+    form.append(el('p', 'auth-note', 'Notizen bleiben privat.'));
+    card.append(form);
+    name.input.focus();
+  }
+
+  async function enterAccount() {
+    lockScreen();
+    if (!document.querySelector('#gate-card form')) renderAuth('in');
+    await readyCloud();
+    if (!globalThis.Cloud || !globalThis.Cloud.enabled) {
+      renderAuth('in', globalThis.Cloud && globalThis.Cloud.error ? 'Keine Verbindung.' : 'Anmeldung ist nicht eingerichtet.');
+      return;
+    }
+    globalThis.Cloud.onAuthChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        lockScreen();
+        renderAuth('password');
+      }
+    });
+    let session = null;
+    try {
+      session = await globalThis.Cloud.getSession();
+    } catch {
+      renderAuth('in', 'Keine Verbindung.');
+      return;
+    }
+    if (recoveryLink && session) {
+      renderAuth('password');
+      return;
+    }
+    if (!session) return;
+    await openSession(session, false);
+  }
+
   async function boot() {
     wall.hidden = true;
     networkEl.hidden = true;
+    if (needsProfile()) renderAuth('in');
     try {
       const response = await fetch('data/added-films.json');
       if (response.ok) {
@@ -2070,6 +2668,10 @@
     await ensureGraphPoints();
     rekeyGraphPoints();
     overlayFacets(facetTable);
+    if (needsProfile()) {
+      await enterAccount();
+      return;
+    }
     const existing = globalThis.Store.load();
     if (existing && globalThis.Store.migrateIds) globalThis.Store.migrateIds(idMap);
     if (existing) {

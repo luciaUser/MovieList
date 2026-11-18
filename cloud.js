@@ -104,6 +104,21 @@ async function start() {
       if (error) throw error;
       return Boolean(data);
     },
+    async updatePassword(password) {
+      const { data, error } = await client.auth.updateUser({ password });
+      if (error) throw error;
+      return data;
+    },
+    async profile() {
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError) throw sessionError;
+      const user = sessionData && sessionData.session && sessionData.session.user;
+      if (!user) return null;
+      const { data, error } = await client.from('profiles').select('username, display_name').eq('id', user.id).single();
+      if (error) throw error;
+      return data;
+    },
+    client,
   };
 
   globalThis.Cloud = Cloud;
