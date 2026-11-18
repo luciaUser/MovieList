@@ -1072,18 +1072,7 @@
     const section = el('section', 'group');
     const heading = el('div', 'trait-head');
     heading.append(el('h2', null, 'Merkmale'));
-    const edit = el('button', 'text-button', 'Bearbeiten');
-    edit.type = 'button';
-    edit.addEventListener('click', () => beginEdit(film));
-    const needsReview = full.source === 'tmdb' && full.reviewed === false;
-    if (!editing && !needsReview) heading.append(edit);
     section.append(heading);
-    if (!editing && needsReview) {
-      const note = el('p', 'review-note');
-      note.append(document.createTextNode('Merkmale aus TMDB übernommen – bitte prüfen'));
-      note.append(edit);
-      section.append(note);
-    }
     section.append(editing ? traitEditor(film) : traitView(full));
     panel.append(section);
   }

@@ -626,6 +626,8 @@ body.is-network {
 
 .trait-head h2 { margin: 0; }
 
+.trait-head + * { margin-top: 12px; }
+
 .text-button,
 .review-note button {
   padding: 0;
