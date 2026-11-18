@@ -80,6 +80,7 @@
     Object.entries(asObject(source.positions)).forEach(([id, point]) => {
       if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return;
       if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+      if (point.x === 0 && point.y === 0) return;
       next.positions[id] = { x: point.x, y: point.y };
     });
     Object.entries(asObject(source.entries)).forEach(([id, row]) => {
@@ -495,9 +496,11 @@
       if (!row || !syncableId(row.film_id)) return;
       const id = row.film_id;
       if (row.hidden) next.hidden.push(id);
-      const x = Number(row.pos_x);
-      const y = Number(row.pos_y);
-      if (Number.isFinite(x) && Number.isFinite(y)) next.positions[id] = { x, y };
+      if (row.pos_x != null && row.pos_y != null) {
+        const x = Number(row.pos_x);
+        const y = Number(row.pos_y);
+        if (Number.isFinite(x) && Number.isFinite(y) && !(x === 0 && y === 0)) next.positions[id] = { x, y };
+      }
       if (row.facet_overrides && typeof row.facet_overrides === 'object') next.facetOverrides[id] = row.facet_overrides;
       const local = {};
       const rating = Number(row.rating);
