@@ -1,6 +1,9 @@
 (function attachNetwork(root) {
-  const WORLD_W = 2500;
-  const WORLD_H = 4000;
+  // Die Weltfläche passt sich dem Seitenverhältnis des Bildschirms an (lange Seite 4000).
+  const WORLD_LONG = 4000;
+  const VIEW_MARGIN = 0.06;
+  let WORLD_W = 2500;
+  let WORLD_H = 4000;
 
   function readStored() {
     const store = root.Store;
@@ -63,11 +66,105 @@
       return films.map(merged);
     }
 
-    function worldOf(point) {
+    // Anzeige-Transformation: Rohpositionen gleichmässig in die Weltfläche einpassen,
+    // bei Bedarf um 90° gedreht, damit die lange Seite der Karte zur langen Seite des Bildschirms passt.
+    let fitView = null;
+
+    function sizeWorld() {
+      const rect = viewSize();
+      const width = rect.width;
+      const height = rect.height - chromeTop();
+      // Unsichtbare Karte (anderer Tab): Grösse beibehalten, sie wird beim Anzeigen neu eingepasst.
+      if (width < 50 || height < 50) return;
+      if (width >= height) {
+        WORLD_W = WORLD_LONG;
+        WORLD_H = Math.round(WORLD_LONG * (height / width));
+      } else {
+        WORLD_H = WORLD_LONG;
+        WORLD_W = Math.round(WORLD_LONG * (width / height));
+      }
+      world.style.width = `${WORLD_W}px`;
+      world.style.height = `${WORLD_H}px`;
+      [lines, svg].forEach((layer) => {
+        layer.setAttribute('viewBox', `0 0 ${WORLD_W} ${WORLD_H}`);
+        layer.setAttribute('width', String(WORLD_W));
+        layer.setAttribute('height', String(WORLD_H));
+      });
+    }
+
+    function computeView(source) {
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      source.forEach((point) => {
+        if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+        minX = Math.min(minX, point.x);
+        maxX = Math.max(maxX, point.x);
+        minY = Math.min(minY, point.y);
+        maxY = Math.max(maxY, point.y);
+      });
+      if (!Number.isFinite(minX)) {
+        minX = 0;
+        maxX = aspect;
+        minY = 0;
+        maxY = 1;
+      }
+      const spanX = Math.max(maxX - minX, 1e-6);
+      const spanY = Math.max(maxY - minY, 1e-6);
+      const mapPortrait = spanY > spanX;
+      const worldPortrait = WORLD_H > WORLD_W;
+      const rotate = mapPortrait !== worldPortrait && Math.abs(Math.log(spanY / spanX)) > 0.15;
+      const w = rotate ? spanY : spanX;
+      const h = rotate ? spanX : spanY;
+      const innerW = WORLD_W * (1 - (2 * VIEW_MARGIN));
+      const innerH = WORLD_H * (1 - (2 * VIEW_MARGIN));
+      const factor = Math.min(innerW / w, innerH / h);
       return {
-        x: (point.x / aspect) * WORLD_W,
-        y: point.y * WORLD_H,
+        minX,
+        maxX,
+        minY,
+        maxY,
+        rotate,
+        factor,
+        ox: (WORLD_W - (w * factor)) / 2,
+        oy: (WORLD_H - (h * factor)) / 2,
       };
+    }
+
+    function worldOf(point) {
+      if (!fitView) fitView = computeView(points);
+      const view = fitView;
+      const u = view.rotate ? point.y - view.minY : point.x - view.minX;
+      const v = view.rotate ? view.maxX - point.x : point.y - view.minY;
+      return {
+        x: view.ox + (u * view.factor),
+        y: view.oy + (v * view.factor),
+      };
+    }
+
+    function placeAllButtons() {
+      buttons.forEach((button, id) => {
+        const point = points.get(id);
+        if (!point) return;
+        const at = worldOf(point);
+        button.style.left = `${at.x}px`;
+        button.style.top = `${at.y}px`;
+      });
+    }
+
+    function refit(source) {
+      sizeWorld();
+      fitView = computeView(source || points);
+      placeAllButtons();
+      buildLabels();
+      drawEdges();
+    }
+
+    // Positionen, die früher hart auf die Kante gesetzt wurden, gelten als ungültig und werden neu platziert.
+    function onEdge(point) {
+      const eps = 1e-6;
+      return point.x <= eps || point.y <= eps || point.x >= aspect - eps || point.y >= 1 - eps;
     }
 
     function remember(id, point) {
@@ -94,19 +191,31 @@
       if (changed) writeStored(stored);
     }
 
-    function loadGraph(graph) {
-      graphNodes = new Map((graph.nodes || []).map((node) => [node.id, node]));
+    function collectPoints() {
       points = new Map();
+      let repaired = false;
       films.forEach((film) => {
         const saved = stored[film.id];
         if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-          remember(film.id, saved);
-          return;
+          if (!onEdge(saved)) {
+            remember(film.id, saved);
+            return;
+          }
+          delete stored[film.id];
+          repaired = true;
         }
         const node = graphNodes.get(film.id);
-        if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) remember(film.id, node);
+        if (node && Number.isFinite(node.x) && Number.isFinite(node.y) && !onEdge(node)) remember(film.id, node);
       });
+      if (repaired) writeStored(stored);
       placeMissing();
+      sizeWorld();
+      fitView = computeView(points);
+    }
+
+    function loadGraph(graph) {
+      graphNodes = new Map((graph.nodes || []).map((node) => [node.id, node]));
+      collectPoints();
     }
 
     function genreOf(film) {
@@ -372,13 +481,17 @@
         from.set(film.id, { x: current.x, y: current.y });
         to.set(film.id, { x: target.x, y: target.y });
       });
+      const targetView = new Map(points);
+      to.forEach((point, id) => targetView.set(id, point));
+      sizeWorld();
+      fitView = computeView(targetView);
       const finish = () => {
         if (glideToken !== token) return;
         endGlide = null;
         to.forEach((point, id) => {
           remember(id, point);
-          placeButton(id, point);
         });
+        placeAllButtons();
         buildLabels();
         drawEdges();
         paint();
@@ -613,7 +726,7 @@
         buttons.set(film.id, button);
         world.append(button);
       }
-      buildLabels();
+      refit();
       paint();
       ensureImages();
       settle();
@@ -629,13 +742,7 @@
       remember(film.id, placed);
       stored[film.id] = { x: placed.x, y: placed.y };
       writeStored(stored);
-      const button = buttons.get(film.id);
-      if (button) {
-        const at = worldOf(placed);
-        button.style.left = `${at.x}px`;
-        button.style.top = `${at.y}px`;
-      }
-      buildLabels();
+      refit();
       paint();
       return placed;
     }
@@ -647,6 +754,7 @@
     }
 
     function resize() {
+      refit();
       const previous = minScale;
       limitsOfScale();
       if (!userMoved || Math.abs(scale - previous) < 0.0001) {
@@ -777,7 +885,7 @@
         if (button) button.remove();
         buttons.delete(id);
         points.delete(id);
-        buildLabels();
+        refit();
         settle();
       },
       setFilms(next) {
@@ -785,17 +893,7 @@
       },
       reflow() {
         stored = readStored();
-        points = new Map();
-        films.forEach((film) => {
-          const saved = stored[film.id];
-          if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-            remember(film.id, saved);
-            return;
-          }
-          const node = graphNodes.get(film.id);
-          if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) remember(film.id, node);
-        });
-        placeMissing();
+        collectPoints();
         buildFilms();
         buildLabels();
         fit();

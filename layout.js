@@ -369,11 +369,39 @@
           points[j].y += uy * push;
         }
       }
-      points.forEach((point) => {
-        point.x = Math.min(width, Math.max(0, point.x));
-        point.y = Math.min(height, Math.max(0, point.y));
-      });
+      // Kein Zurücksetzen auf die Kanten mehr: Die Anzeige passt die Karte selbst ein.
+      void width;
+      void height;
     }
+  }
+
+  // Passt die Punkte gleichmässig (ohne Verzerrung) in den Rahmen [0, aspect] × [0, 1] mit Rand ein.
+  function fitUniform(points, tune) {
+    if (!points.length) return;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    points.forEach((point) => {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    });
+    const width = tune.aspect;
+    const pad = tune.margin;
+    const innerW = width * (1 - (2 * pad));
+    const innerH = 1 - (2 * pad);
+    const spanX = maxX - minX;
+    const spanY = maxY - minY;
+    if (spanX <= innerW && spanY <= innerH && minX >= pad * width && minY >= pad) return;
+    const factor = Math.min(1, innerW / (spanX || 1), innerH / (spanY || 1));
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    points.forEach((point) => {
+      point.x = (width / 2) + ((point.x - cx) * factor);
+      point.y = 0.5 + ((point.y - cy) * factor);
+    });
   }
 
   function cross(o, a, b) {
@@ -718,6 +746,7 @@
     }, start);
     if (!points) return null;
     separate(points, tune);
+    fitUniform(points, tune);
     return {
       nodes: list.map((film, index) => ({ id: film.id, x: points[index].x, y: points[index].y })),
     };
