@@ -394,8 +394,29 @@
       .replace(/"/g, '&quot;');
   }
 
+  function originalIdOf(id) {
+    for (const [from, to] of idMap) {
+      if (to === id) return from;
+    }
+    return null;
+  }
+
+  function knownPoster(film) {
+    if (!film) return '';
+    const direct = posters.get(film.id);
+    if (direct) return direct;
+    const original = originalIdOf(film.id);
+    if (original && posters.get(original)) return posters.get(original);
+    if (film.poster) return film.poster;
+    const facets = globalThis.FILM_FACETS || {};
+    const row = facets[film.id] || (original ? facets[original] : null);
+    return row && typeof row.poster === 'string' ? row.poster : '';
+  }
+
   function posterSrc(film) {
-    return posters.get(film.id) || placeholder(film);
+    const src = knownPoster(film);
+    if (src && film && !film.poster) film.poster = src;
+    return src || placeholder(film);
   }
 
   function buildWall() {
@@ -1257,13 +1278,22 @@
       const data = await readPosters();
       if (!data) return;
       let changed = false;
-      Object.entries(data.posters || {}).forEach(([id, url]) => {
-        if (typeof url === 'string' && url && posters.get(id) !== url) {
+      Object.entries(data.posters || {}).forEach(([rawId, url]) => {
+        if (typeof url !== 'string' || !url) return;
+        const keyOf = globalThis.Store && globalThis.Store.filmKey;
+        const facets = (globalThis.FILM_FACETS || {})[rawId];
+        const mapped = idMap.get(rawId)
+          || (keyOf && facets ? keyOf({ id: rawId, tmdbId: facets.tmdbId, tmdbType: facets.tmdbType }) : null)
+          || rawId;
+        [rawId, mapped].forEach((id) => {
+          if (posters.get(id) === url) return;
           posters.set(id, url);
-          const image = wall.querySelector(`[data-id="${id}"] img`);
+          const film = byId.get(id);
+          if (film && !film.poster) film.poster = url;
+          const image = wall.querySelector(`[data-id="${CSS.escape(id)}"] img`);
           if (image) image.src = url;
           changed = true;
-        }
+        });
       });
       if (changed && network) network.paint();
       if (data.done || data.configured === false) return;
@@ -1536,6 +1566,17 @@
     if (mode === 'network' && network) network.resize();
   });
 
+  function refreshPosterImages() {
+    wall.querySelectorAll('[data-id] img').forEach((image) => {
+      const holder = image.closest('[data-id]');
+      const film = holder ? byId.get(holder.dataset.id) : null;
+      if (!film) return;
+      const src = posterSrc(film);
+      if (src && image.src !== src && !src.startsWith('data:')) image.src = src;
+    });
+    if (network) network.paint();
+  }
+
   async function loadStoredFacets() {
     try {
       const response = await fetch('data/facets.json');
@@ -1544,6 +1585,7 @@
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       overlayFacets(canonicalFacets(data));
       FILMS.forEach(patchFilmFromFacets);
+      refreshPosterImages();
       if (network) network.refresh();
       if (!selectedId) return;
       const film = byId.get(selectedId);
