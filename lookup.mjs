@@ -35,6 +35,8 @@ function parseQuery(raw) {
   }
   const imdb = query.match(/tt\d{5,}/i);
   if (imdb) return { kind: 'imdb', id: imdb[0].toLowerCase() };
+  const titled = query.match(/^(.*?)\s*\((\d{4})\)\s*$/);
+  if (titled && titled[1].trim()) return { kind: 'text', text: titled[1].trim(), year: titled[2] };
   return { kind: 'text', text: query };
 }
 
@@ -91,7 +93,7 @@ export async function lookupFilm(raw) {
   try {
     if (parsed.kind === 'imdb') hit = await findByImdb(parsed.id);
     else if (parsed.kind === 'tmdb') hit = hitFromPayload(await details(parsed.type, parsed.id), parsed.type);
-    else hit = await search(parsed.text);
+    else hit = await search(parsed.text, parsed.year);
   } catch {
     throw fail(502, 'Der Abruf ist gerade nicht möglich.');
   }

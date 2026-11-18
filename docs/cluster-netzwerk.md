@@ -4,7 +4,7 @@ Gemeinsame Grundlage für alle Cursor-Prompts (Prompt 0 bis 9). Jeder Prompt beg
 
 ## A1. Ziel
 
-Die Genre-Wand wird durch eine Netzwerk-Karte ersetzt. Ähnliche Filme liegen nah beieinander und bilden Subgenre-Cluster auf Genre-Inseln. Verwandte Genres liegen nebeneinander, fremde weit weg. Filme mit mehreren Genres liegen zwischen den Inseln (Brückenfilme). Die Ansichten Regie und Rating bleiben wie bisher bestehen. Die App ist gratis und kann an Freunde weitergegeben werden: alle nutzen dieselbe Web-Adresse, jede Person hat ihr eigenes Archiv im eigenen Browser.
+Die Genre-Wand wird durch eine Netzwerk-Karte ersetzt. Ähnliche Filme liegen nah beieinander und bilden Subgenre-Cluster auf Genre-Inseln. Verwandte Genres liegen nebeneinander, fremde weit weg. Filme mit mehreren Genres liegen zwischen den Inseln (Brückenfilme). Die Ansichten Regie und Rating bleiben wie bisher bestehen. Die App ist gratis und kann an Freunde weitergegeben werden: alle nutzen dieselbe Web-Adresse, jede Person hat ein Pflicht-Profil mit eigenem Archiv (ab Teil 2).
 
 ## A2. Grundregel: Position und Linien sind getrennt
 
@@ -159,7 +159,9 @@ Ein Modul für Node-Script und Browser (`globalThis.Layout`), damit Freunde ihre
 - Alle persönlichen Daten liegen im localStorage unter `moviebylucia-archive-v2`: `{ version: 2, startList: 'luciano' | 'leer', hidden: [], added: [], facetOverrides: {}, positions: {}, entries: { id: { rating, watched, favorite, next, memo } } }`. Alte Schlüssel (`moviebylucia-v1`, `moviebylucia-added-v1`) werden beim ersten Start übernommen.
 - Erster Besuch: Auswahl «Mit Lucianos Liste starten», «Leer starten» oder «Eigene Liste einfügen» (ein Titel pro Zeile, optional mit Jahr oder IMDb-/TMDB-Link; oder CSV mit Spalten Name/Title und Year, z. B. Letterboxd-Export).
 - Import mehrerer Titel: je 3 gleichzeitig, Fortschritt «34 / 120», Liste nicht gefundener Titel mit «nochmals suchen», Duplikate übersprungen. Danach automatisch `Layout.layoutAll` im Browser (in Portionen, UI bleibt bedienbar) und Positionen speichern.
-- Menü neben dem Plus: Export (JSON), Import, Karte neu ordnen, Archiv zurücksetzen (mit Eingabe von «zurücksetzen», kein Browser-Dialog).
+- Kein Export, kein Import, kein Button «Karte neu ordnen». Die Sicherung kommt über das Konto (Teil 2). Ab Teil 2 ist ein Profil Pflicht, darum braucht es keinen Hinweis für nicht angemeldete Nutzer.
+- Kein eigenes Archiv-Menü neben dem Plus mehr. «Archiv zurücksetzen» (mit Eingabe von «zurücksetzen», kein Browser-Dialog) liegt in den Einstellungen des Profils (A18).
+- **Automatisches sanftes Neuordnen:** Nach jedem Hinzufügen, Entfernen oder Ändern von Merkmalen wird die Karte neu berechnet, aber mit Warmstart von den aktuellen Positionen (t-SNE mit vorhandenen Positionen als Startwerten, ohne Early Exaggeration, ca. 300 Iterationen, kleine Lernrate). Bestehende Filme verschieben sich nur leicht. Die Berechnung läuft in einem Web Worker; ausserhalb des Netzwerk-Tabs mit niedriger Priorität, sobald der Browser Zeit hat. Beim Wechsel ins Netzwerk wird eine laufende Berechnung abgeschlossen und die Filme gleiten in ca. 600 ms in ihre neuen Positionen (prefers-reduced-motion: ohne Animation). Mehrere Änderungen kurz nacheinander werden zu einer Berechnung zusammengefasst. Neue Positionen werden gespeichert.
 - Panel: «Aus meinem Archiv entfernen» (Startlisten-Filme werden versteckt, eigene gelöscht).
 - `scripts/apply_export.mjs` übernimmt einen Export von Luciano in die Startliste (`data/facets.json`, `data/added-films.json`, danach `npm run graph`).
 
@@ -171,24 +173,31 @@ Ein Modul für Node-Script und Browser (`globalThis.Layout`), damit Freunde ihre
 
 ---
 
-# Teil 2 – Freunde, Profile und gemeinsame Wunschlisten
+# Teil 2 – Profile, Folgen und gemeinsame Wunschlisten
 
 Grundlage für Prompt 10 bis 15. Setzt voraus, dass Prompt 0 bis 9 umgesetzt sind.
 
 ## A13. Grundidee
 
-- Wer sich anmeldet, hat ein Profil. Archiv, Wertungen und Wunschlisten werden in einer Datenbank gespeichert und sind auf jedem Gerät gleich.
-- Ohne Anmeldung funktioniert alles wie bisher lokal im Browser.
-- Freunde sehen gegenseitig, welche Filme der andere wie bewertet hat, was er gesehen hat und was auf seiner Liste «Als Nächstes» steht. Notizen bleiben immer privat.
-- Wunschlisten können mehrere Mitglieder haben. Alle Mitglieder können Filme hinzufügen, entfernen und mit «Will ich» markieren. Änderungen erscheinen bei allen sofort.
-- Oben kommt ein vierter Tab mit Personen-Icon: **Netzwerk · Regie · Rating · (Person)**.
+- **Ein Profil ist Pflicht.** Ohne Anmeldung zeigt die App nur Anmelden/Registrieren. Direkt nach der Registrierung kommt der Startdialog aus A11 («Mit Lucianos Liste starten», «Leer starten», «Eigene Liste einfügen»).
+- Archiv, Wertungen, Folgen und Wunschlisten liegen in der Datenbank und sind nach dem Anmelden auf jedem Gerät gleich. localStorage ist nur noch Zwischenspeicher.
+- Lucianos bisherige lokale Daten werden bei seiner ersten Anmeldung einmalig hochgeladen (danach wird der lokale Speicher nur noch als Cache genutzt).
+- **Folgen statt Freundschaft:** Man folgt anderen Profilen. Öffentliche Profile kann man direkt folgen; bei privaten Profilen braucht es eine bestätigte Folge-Anfrage. Follower sehen Archiv, Wertungen, Gesehen, Als Nächstes, Top 5 und Lieblingspersonen. Notizen bleiben immer privat.
+- **Gemeinsame Wunschlisten** nur mit Leuten, die sich gegenseitig folgen. Alle Mitglieder können Filme hinzufügen, entfernen und mit «Will ich» markieren; Änderungen erscheinen sofort bei allen.
+- Oben ein vierter Tab mit Personen-Icon: **Netzwerk · Regie · Rating · (Person)**. Er öffnet das eigene Profil.
 
 ## A14. Dienst und Kosten
 
 - **Supabase**, Gratis-Plan: Postgres-Datenbank, Anmeldung, Realtime. Projekte im Gratis-Plan pausieren nach 7 Tagen ohne Nutzung und müssen dann im Supabase-Dashboard mit einem Klick fortgesetzt werden.
 - Im Browser wird `@supabase/supabase-js@2` als ES-Modul von `https://esm.sh` geladen. Das ist die einzige Browser-Abhängigkeit.
 - `config.js` enthält `SUPABASE_URL` und den öffentlichen `SUPABASE_ANON_KEY`. Der Anon-Key darf öffentlich sein, die Sicherheit kommt aus Row Level Security (RLS). Der `service_role`-Key kommt nie in den Code.
-- Anmeldung: E-Mail + Passwort (E-Mail-Bestätigung im Dashboard ausgeschaltet, damit keine Mails nötig sind). Optional zusätzlich «Mit Google anmelden».
+- Anmeldung nur mit **Benutzername + Passwort**, keine E-Mail sichtbar. Intern wird für Supabase Auth eine Adresse `<benutzername>@users.invalid` gebildet (reservierte Domain, es werden nie Mails verschickt). E-Mail-Bestätigung im Dashboard ausgeschaltet. Akzeptiert Supabase `.invalid` nicht, wird eine andere reservierte Domain verwendet und hier dokumentiert.
+- Benutzername: 3–20 Zeichen a–z, 0–9, _, klein geschrieben, eindeutig, nicht änderbar (ist der Login). Anzeigename frei änderbar.
+- **Freiwillige E-Mail zur Wiederherstellung:** Bei der Registrierung und später im Profil kann man eine echte E-Mail angeben («nur zum Zurücksetzen»). Sie wird in der privaten Tabelle `recovery_emails` (`user_id`, `email`, `verified`, `token_hash`, `token_expires`, `updated_at`) gespeichert, nur für den Besitzer lesbar, nie für andere sichtbar. Der Login bleibt immer der Benutzername (Auth-Adresse bleibt `@users.invalid`).
+- Bestätigung: Nach dem Eintragen schickt `api/recovery.js` (Aktion `verify`) einen Bestätigungslink. Erst bestätigte Adressen werden für den Reset verwendet.
+- Passwort vergessen: Eingabe des Benutzernamens → `api/recovery.js` (Aktion `reset`) sucht serverseitig die bestätigte Adresse, erzeugt mit der Supabase Admin-API (`auth.admin.generateLink`, type `recovery`, für die `@users.invalid`-Adresse) einen Link und verschickt ihn über den eigenen SMTP-Dienst an die echte Adresse. Die Antwort an den Browser ist immer gleich («Falls eine bestätigte E-Mail hinterlegt ist, wurde ein Link verschickt»), damit niemand herausfinden kann, wer eine E-Mail hat. Höchstens 3 Anfragen pro Benutzername und Stunde.
+- Ohne bestätigte E-Mail: Hinweis «Passwort vergessen? Melde dich bei Luciano.», Reset im Supabase-Dashboard.
+- Server-Umgebungsvariablen nur auf Vercel/lokal, nie im Code: `SUPABASE_SERVICE_ROLE_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`. Fehlen die SMTP-Werte, blendet die App alle E-Mail-Felder aus (`/api/recovery?status` meldet `{ enabled: false }`).
 
 ## A15. Einheitliche Film-IDs
 
@@ -196,8 +205,8 @@ Damit Freunde vom selben Film sprechen, gilt überall die ID `tmdb:movie:27205` 
 
 ## A16. Datenbank (`supabase/schema.sql`)
 
-- `profiles` (id = auth.users.id, `username` eindeutig, klein, 3–20 Zeichen a–z0–9_, `display_name`, `share_ratings` bool Standard true, `created_at`). Wird per Trigger beim Registrieren angelegt.
-- `friendships` (`id`, `requester`, `addressee`, `status` 'pending' | 'accepted', `created_at`), eindeutig pro Paar unabhängig von der Richtung.
+- `profiles` (id = auth.users.id, `username` eindeutig, klein, 3–20 Zeichen a–z0–9_, `display_name`, `is_private` bool Standard false, `top_films` text[] (bis 5 Film-IDs, Reihenfolge = Rang), `pinned_people` jsonb (`{ actors: [], directors: [] }`, je bis 5), `created_at`). Wird per Trigger beim Registrieren angelegt.
+- `follows` (`follower`, `followee`, `status` 'pending' | 'accepted', `created_at`), Primärschlüssel (follower, followee), kein Folgen von sich selbst. Bei öffentlichem Profil wird direkt 'accepted' gesetzt (Trigger), bei privatem 'pending'.
 - `films` (gemeinsamer Katalog): `id` (A15), `imdb_id`, `title`, `original_title`, `year`, `kind`, `poster`, `tmdb_rating`, `tmdb_votes`, `facets` jsonb, `updated_at`.
 - `entries` (`user_id`, `film_id`, `rating` numeric 0–10 oder null, `watched`, `favorite`, `next`, `in_archive`, `hidden`, `facet_overrides` jsonb, `pos_x`, `pos_y`, `updated_at`), Primärschlüssel (user_id, film_id).
 - `notes` (`user_id`, `film_id`, `memo`, `updated_at`), nur für den Besitzer lesbar.
@@ -207,30 +216,37 @@ Damit Freunde vom selben Film sprechen, gilt überall die ID `tmdb:movie:27205` 
 - `wishlist_votes` (`item_id`, `user_id`, `created_at`) = «Will ich».
 
 **RLS-Regeln:**
-- Hilfsfunktion `are_friends(a, b)` (security definer, stable).
-- `profiles`: lesen für angemeldete Nutzer (nur id, username, display_name), ändern nur das eigene.
-- `friendships`: lesen, wenn man beteiligt ist; anlegen nur als requester; annehmen nur als addressee; löschen durch beide.
-- `entries`: eigene vollständig; lesen von Freunden nur, wenn `are_friends` und deren `share_ratings` true ist.
+- Hilfsfunktionen (security definer, stable): `can_view(viewer, owner)` = viewer ist owner oder hat eine akzeptierte Folge auf owner; `mutual(a, b)` = beide folgen sich akzeptiert.
+- `profiles`: id, username, display_name, is_private und die Zähler (Filme, Follower, Folgt) lesbar für alle Angemeldeten; top_films und pinned_people nur, wenn `can_view`. Ändern nur das eigene.
+- `follows`: akzeptierte Folgen für alle Angemeldeten lesbar (für die Zähler und Listen), offene Anfragen nur für die beiden Beteiligten; anlegen nur als follower; annehmen oder ablehnen nur als followee; löschen durch beide (entfolgen bzw. Follower entfernen).
+- `entries`: eigene vollständig; lesen durch andere nur, wenn `can_view(auth.uid(), user_id)`.
 - `notes`: nur eigene.
 - `films`: lesen für alle Angemeldeten; anlegen und ändern für Angemeldete (Katalog).
-- `wishlists`, `wishlist_items`, `wishlist_votes`: lesen und schreiben nur für Mitglieder; Mitglieder hinzufügen nur durch owner und nur Freunde; eigene Votes setzen und löschen.
-- Realtime für `wishlist_items`, `wishlist_votes`, `wishlist_members`, `friendships`.
+- `wishlists`, `wishlist_items`, `wishlist_votes`: lesen und schreiben nur für Mitglieder; Mitglieder hinzufügen nur durch owner und nur Personen mit `mutual(owner, neues Mitglied)`; eigene Votes setzen und löschen.
+- Realtime für `wishlist_items`, `wishlist_votes`, `wishlist_members`, `follows`.
+- View oder Funktion `profile_stats(user_id)`: Anzahl Filme im Archiv, Follower, Folgt (nur akzeptierte).
 - Funktion `delete_my_account()` löscht alle eigenen Daten und den Auth-Nutzer.
 
 ## A17. Synchronisation
 
-- `store.js` bekommt zwei Speicher: lokal (wie bisher) und Cloud. Angemeldet ist die Cloud die Quelle, localStorage dient als Zwischenspeicher für schnellen Start und offline.
-- Erste Anmeldung auf einem Gerät mit lokalen Daten: Dialog «Lokales Archiv mit deinem Konto zusammenführen?» Bei Konflikten gewinnt der neuere `updated_at`.
+- `store.js` bekommt einen Cloud-Adapter. Die Cloud ist immer die Quelle (Profil ist Pflicht), localStorage dient als Zwischenspeicher pro Benutzer für schnellen Start und offline.
+- Erste Anmeldung auf einem Gerät mit lokalen Daten aus der Zeit ohne Konto (moviebylucia-archive-v2): Dialog «Lokales Archiv in dein Profil übernehmen?» mit Vorschau. Bei Konflikten gewinnt der neuere `updated_at`. Danach werden die alten lokalen Schlüssel gelöscht. Abmelden leert den Zwischenspeicher dieses Benutzers.
 - Änderungen werden gebündelt (Debounce 800 ms) geschrieben. Offline gesammelte Änderungen werden nachgeholt. Fehler zeigen eine dezente Meldung «Nicht gespeichert – erneut versuchen».
-- Hinzugefügte Filme landen im Katalog `films` (upsert), damit Freunde Titel, Poster und Facetten sehen.
+- Hinzugefügte Filme landen im Katalog `films` (upsert), damit Follower Titel, Poster und Facetten sehen.
 
-## A18. Freunde-Tab
+## A18. Profil-Tab und Profile anderer
 
-- **Nicht angemeldet:** Anmelden / Registrieren (E-Mail, Passwort, Benutzername), kurzer Text, dass Notizen privat bleiben.
-- **Mein Profil:** Name, @benutzername, Zahlen (bewertet, gesehen, Wunschlisten), Einstellung «Wertungen für Freunde sichtbar», Abmelden, Konto löschen (Eingabe «löschen» zur Bestätigung).
-- **Freunde:** Liste, Suche nach Benutzername, Einladungslink `/?freund=benutzername`, offene Anfragen (annehmen, ablehnen), Freund entfernen.
-- **Profil eines Freundes:** Coverwand seiner Filme gruppiert nach seiner Wertung (wie der Rating-Tab), oben ein Vergleich: «Ihr habt beide gesehen: 23», «Euer grösster Unterschied», «Hat er hoch bewertet, du noch nicht gesehen». Seine «Als Nächstes»-Liste.
-- **Im Panel jedes Films:** Zeile «Freunde» mit den Wertungen der Freunde, die den Film bewertet haben, und Button «Zu Wunschliste hinzufügen».
-- **Im Netzwerk:** Schalter «Mit Freund vergleichen» färbt die Karte nach der Wertung eines gewählten Freundes. Filme, die er nicht hat, werden ausgeblendet.
-- **Wunschlisten:** Übersicht aller Listen, in denen man Mitglied ist. Neue Liste mit Titel und Freunden als Mitgliedern. In der Liste: Filme mit Poster, wer ihn hinzugefügt hat, «Will ich»-Zähler mit Namen, Sortierung nach Stimmen oder neu. Filme hinzufügen über Suche (eigenes Archiv, Freunde-Archive, TMDB). Status «zusammen geschaut», danach Hinweis an alle Mitglieder, den Film zu bewerten. Mitglieder verwalten (owner), Liste verlassen, Liste löschen (owner).
-- Gestaltung im bestehenden Stil. Das Personen-Icon ist ein Inline-SVG im gleichen Strich wie das Plus-Icon.
+- **Nicht angemeldet:** ganze App gesperrt, nur Anmelden / Registrieren (Benutzername, Passwort, Passwort wiederholen, optional E-Mail zur Wiederherstellung nach A14). Hinweis, dass Notizen privat bleiben.
+- **Tab mit Personen-Icon** (Inline-SVG im Strich des Plus-Icons). Ein kleiner weisser Punkt bei offenen Folge-Anfragen oder neuen Wunschlisten-Hinweisen.
+- **Eigenes Profil, kurz und knapp oben:**
+  - Anzeigename, @benutzername
+  - drei Zahlen: Filme im Archiv · Follower · Folgt (Follower und Folgt klickbar → Listen)
+  - Top 5 Filme als Poster in einer Reihe (Rang 1–5). Standard: die 5 bestbewerteten; «Bearbeiten» erlaubt eigene Auswahl und Reihenfolge (Suche im eigenen Archiv, Ziehen zum Sortieren).
+  - Lieblingsschauspieler und Lieblingsregie: je bis 5 Namen. Automatisch: Personen mit mindestens 2 bewerteten Filmen im Archiv, sortiert nach Durchschnittswertung, dann Anzahl. Angepinnte Personen (pinned_people) stehen zuerst. Klick auf einen Namen hebt im Netzwerk alle Filme dieser Person hervor.
+  - darunter: Wunschlisten, Folge-Anfragen (bei privatem Profil), Einstellungen (Anzeigename, privates Profil, Wiederherstellungs-E-Mail, Abmelden, Archiv zurücksetzen mit Eingabe «zurücksetzen» – leert Wertungen, Filme und Korrekturen, Profil und Folgen bleiben –, Konto löschen mit Eingabe «löschen»).
+- **Suche nach Profilen** über Benutzername; Einladungslink `/?profil=benutzername`.
+- **Profil einer anderen Person:** gleicher Kopf (Zahlen, Top 5, Lieblingspersonen) mit Button Folgen / Angefragt / Entfolgen. Wenn sichtbar (`can_view`): Coverwand ihrer Filme gruppiert nach ihrer Wertung (wie der Rating-Tab), ihre «Als Nächstes»-Liste und ein Vergleich: «Ihr habt beide gesehen: 23», «Euer grösster Unterschied», «Hat sie hoch bewertet, du noch nicht gesehen». Bei privatem Profil ohne Folge nur Kopf ohne Top 5 und Lieblingspersonen.
+- **Im Panel jedes Films:** Zeile «Gefolgte» mit den Wertungen der Profile, denen man folgt (z. B. «anna 8,5 · tom 6,0»), und Button «Zu Wunschliste hinzufügen».
+- **Im Netzwerk:** Schalter «Mit Profil vergleichen» färbt die Karte nach der Wertung eines gefolgten Profils, Filme ohne seine Wertung werden ausgeblendet.
+- **Wunschlisten:** Übersicht aller Listen, in denen man Mitglied ist. Neue Liste mit Titel und Mitgliedern (nur gegenseitige Folgen). In der Liste: Poster, wer hinzugefügt hat, «Will ich»-Zähler mit Namen, Sortierung nach Stimmen oder neu, Status «zusammen geschaut» mit anschliessendem Bewertungshinweis an alle. Owner verwaltet Mitglieder, benennt um, löscht; Mitglieder können austreten.
+- Gestaltung im bestehenden Stil.

@@ -177,8 +177,9 @@
     return joint;
   }
 
-  async function embed(squared, tune, report) {
+  async function embed(squared, tune, report, start) {
     const n = squared.length;
+    const warm = Array.isArray(start);
     const joint = affinities(squared, tune.perplexity);
     const rng = mulberry32(tune.seed);
     const y = new Float64Array(n * 2);
@@ -187,13 +188,20 @@
     const grad = new Float64Array(n * 2);
     const weight = new Float64Array(n * n);
     for (let i = 0; i < n; i += 1) {
-      y[i * 2] = (rng() - 0.5) * 1e-4;
-      y[i * 2 + 1] = (rng() - 0.5) * 1e-4;
+      const seeded = warm && start[i] && Number.isFinite(start[i].x) && Number.isFinite(start[i].y);
+      if (seeded) {
+        y[i * 2] = start[i].x;
+        y[i * 2 + 1] = start[i].y;
+      } else {
+        y[i * 2] = (rng() - 0.5) * 1e-4;
+        y[i * 2 + 1] = (rng() - 0.5) * 1e-4;
+      }
       gains[i * 2] = 1;
       gains[i * 2 + 1] = 1;
     }
     const ticks = tune.iterations;
     for (let tick = 0; tick < ticks; tick += 1) {
+      if (tune.shouldStop && tune.shouldStop()) return null;
       const boost = tick < tune.exaggerationIters ? tune.exaggeration : 1;
       let normal = 0;
       for (let i = 0; i < n; i += 1) {
@@ -237,9 +245,11 @@
       }
       meanX /= n;
       meanY /= n;
-      for (let i = 0; i < n; i += 1) {
-        y[i * 2] -= meanX;
-        y[i * 2 + 1] -= meanY;
+      if (!warm) {
+        for (let i = 0; i < n; i += 1) {
+          y[i * 2] -= meanX;
+          y[i * 2 + 1] -= meanY;
+        }
       }
       if (report) await report(tick + 1, ticks);
     }
@@ -655,5 +665,63 @@
     return { id: film.id, x, y };
   }
 
-  root.Layout = { layoutAll, placeOne };
+  async function relayout(films, positions, opts) {
+    const options = opts || {};
+    const tune = settings({
+      iterations: options.iterations == null ? 300 : options.iterations,
+      // Die Punkte stehen schon im Rahmen. Die kalte Lernrate 100 würde die Karte sprengen.
+      learningRate: options.learningRate == null ? 0.0002 : options.learningRate,
+      exaggeration: 1,
+      exaggerationIters: 0,
+      momentum: options.momentum == null ? 0.5 : options.momentum,
+      momentumFinal: options.momentumFinal == null ? 0.5 : options.momentumFinal,
+    });
+    tune.shouldStop = typeof options.shouldStop === 'function' ? options.shouldStop : null;
+    tune.collisionTicks = options.collisionTicks == null ? 8 : options.collisionTicks;
+    const list = (films || []).slice().sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    const n = list.length;
+    if (!n) return { nodes: [] };
+    const known = new Map();
+    list.forEach((film) => {
+      const point = readPosition(positions, film.id);
+      if (point) known.set(film.id, { x: point.x, y: point.y });
+    });
+    const start = list.map((film) => {
+      const point = known.get(film.id);
+      if (point) return { x: point.x, y: point.y };
+      const placed = placeOne(film, list, known);
+      const next = { x: placed.x, y: placed.y };
+      known.set(film.id, next);
+      return next;
+    });
+    if (n < 2) {
+      return { nodes: list.map((film, index) => ({ id: film.id, x: start[index].x, y: start[index].y })) };
+    }
+    if (tune.shouldStop && tune.shouldStop()) return null;
+    root.Similarity.prepare(list);
+    const kin = genreKinship(list);
+    const squared = Array.from({ length: n }, () => new Float64Array(n));
+    for (let i = 0; i < n; i += 1) {
+      if (tune.shouldStop && tune.shouldStop()) return null;
+      for (let j = i + 1; j < n; j += 1) {
+        const score = root.Similarity.similarity(list[i], list[j], 'layout').score;
+        const dist = distanceOf(list[i], list[j], score, tune, kin);
+        squared[i][j] = dist * dist;
+        squared[j][i] = dist * dist;
+      }
+      squared[i][i] = -1;
+      if ((i + 1) % 20 === 0 && i + 1 < n) await pause();
+    }
+    const points = await embed(squared, tune, async (tick, ticks) => {
+      if (tick % 20 !== 0 && tick !== ticks) return;
+      if (tick < ticks) await pause();
+    }, start);
+    if (!points) return null;
+    separate(points, tune);
+    return {
+      nodes: list.map((film, index) => ({ id: film.id, x: points[index].x, y: points[index].y })),
+    };
+  }
+
+  root.Layout = { layoutAll, placeOne, relayout };
 })(globalThis);

@@ -48,18 +48,28 @@
   </header>
 
   <main id="wall" hidden aria-label="Filmcover. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></main>
-  <div id="network" aria-label="Netzwerk. Ziehen verschiebt die Karte, Scrollen zoomt. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen.">
+  <div id="network" hidden aria-label="Netzwerk. Ziehen verschiebt die Karte, Scrollen zoomt. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen.">
     <div class="net-world"></div>
     <div id="net-bar" hidden></div>
+    <div id="empty-net" class="empty" hidden>
+      <p>Dein Archiv ist noch leer.</p>
+      <button type="button" data-empty="add">Film hinzufügen</button>
+      <button type="button" data-empty="list">Liste einfügen</button>
+    </div>
   </div>
 
   <aside id="panel" hidden aria-live="polite"></aside>
+  <div id="sheet" hidden>
+    <div class="sheet-card" id="sheet-body" role="dialog" aria-modal="true"></div>
+  </div>
+  <p id="store-note" hidden role="status"></p>
 
   <script src="films.js"></script>
   <script src="facets.js"></script>
   <script src="similarity.config.js"></script>
   <script src="similarity.js"></script>
   <script src="layout.js"></script>
+  <script src="store.js"></script>
   <script src="network.js"></script>
   <script src="app.js"></script>
 </body>

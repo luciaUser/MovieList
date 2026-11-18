@@ -1,10 +1,4 @@
 (() => {
-  const ADDED_KEY = 'moviebylucia-added-v1';
-  const REMOVED_KEY = 'moviebylucia-removed-v1';
-  const FACET_KEY = 'moviebylucia-facets-v1';
-  let removed = new Set(loadRemoved());
-  let FILMS = (window.FILMS || []).filter((film) => !removed.has(film.id));
-  const STORE = 'moviebylucia-v1';
   const LINK_GROUPS = {
     director: 'Gleiche Handschrift',
     cast: 'Gleiche Handschrift',
@@ -30,26 +24,36 @@
   const netRating = document.getElementById('net-rating');
   const MODE_KEY = 'moviebylucia-view-v1';
 
-  const state = loadState();
-  const byId = new Map(FILMS.map((film) => [film.id, film]));
+  let archive = null;
+  let removed = new Set();
+  let FILMS = [];
+  let state = {};
+  const byId = new Map();
   const posters = new Map();
-  let added = loadAdded().filter((film) => !removed.has(film.id) && !FILMS.some((item) => item.id === film.id));
-  FILMS = FILMS.concat(added);
-  added.forEach((film) => byId.set(film.id, film));
-  added.forEach((film) => {
-    if (film.poster) posters.set(film.id, film.poster);
-  });
+  let added = [];
+  let facetOverrides = {};
+  let baseFacets = {};
+  let starterAdded = [];
+  let started = false;
+  let importBusy = false;
 
-  let facetOverrides = loadFacetOverrides();
   let vocabulary = null;
   let editDraft = null;
-  overlayFacets(globalThis.FILM_FACETS || {});
-  FILMS.forEach(patchFilmFromFacets);
 
   let mode = 'network';
   let ratingView = false;
   let network = null;
   let networkReady = false;
+  let graphPoints = null;
+  let relayoutTimer = 0;
+  let relayoutIdle = 0;
+  let relayoutIdleTimer = false;
+  let relayoutJob = 0;
+  let relayoutWorker = null;
+  let relayoutWait = null;
+  let relayoutDirty = false;
+  let relayoutPending = new Map();
+  let pendingGlide = false;
   let netRatingOn = false;
   let selectedId = null;
   let links = [];
@@ -58,46 +62,69 @@
   let lastTapAt = 0;
   let lastTapId = null;
 
-  function loadRemoved() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(REMOVED_KEY) || '[]');
-      return Array.isArray(raw) ? raw.filter((id) => typeof id === 'string' && id) : [];
-    } catch {
-      return [];
-    }
+  function showStoreError() {
+    const note = document.getElementById('store-note');
+    if (!note) return;
+    note.hidden = false;
+    note.textContent = 'Der Speicher ist voll. Neue Änderungen bleiben nur in dieser Sitzung.';
+  }
+
+  if (globalThis.Store) globalThis.Store.setError(showStoreError);
+
+  function persist() {
+    if (!archive || !globalThis.Store) return false;
+    archive.hidden = [...removed];
+    archive.added = added;
+    archive.facetOverrides = facetOverrides;
+    archive.entries = state;
+    const ok = globalThis.Store.save(archive);
+    if (!ok) showStoreError();
+    return ok;
   }
 
   function saveRemoved() {
-    try {
-      localStorage.setItem(REMOVED_KEY, JSON.stringify([...removed]));
-    } catch {
-      /* private mode can refuse storage; the session still works */
-    }
-  }
-
-  function loadFacetOverrides() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(FACET_KEY) || '{}');
-      return raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
-    } catch {
-      return {};
-    }
+    persist();
   }
 
   function saveFacetOverrides() {
-    try {
-      localStorage.setItem(FACET_KEY, JSON.stringify(facetOverrides));
-    } catch {
-      /* private mode can refuse storage; the session still works */
-    }
+    persist();
   }
 
-  function overlayFacets(base) {
-    const next = { ...(base || {}) };
+  function applyFacets() {
+    const next = { ...baseFacets };
     Object.entries(facetOverrides).forEach(([id, facets]) => {
       if (facets && typeof facets === 'object') next[id] = facets;
     });
     globalThis.FILM_FACETS = next;
+    FILMS.forEach(patchFilmFromFacets);
+  }
+
+  function overlayFacets(base) {
+    baseFacets = { ...(base || {}) };
+    applyFacets();
+  }
+
+  function adoptArchive(next) {
+    archive = next;
+    removed = new Set(archive.hidden || []);
+    facetOverrides = archive.facetOverrides;
+    state = archive.entries;
+    added = (archive.added || []).filter((film) => film && film.id && !removed.has(film.id));
+    const seen = new Set();
+    FILMS = [];
+    byId.clear();
+    posters.clear();
+    const starter = archive.startList === 'leer' ? [] : (window.FILMS || []).concat(starterAdded);
+    starter.concat(added).forEach((film) => {
+      if (!film || !film.id || removed.has(film.id) || seen.has(film.id)) return;
+      seen.add(film.id);
+      FILMS.push(film);
+      byId.set(film.id, film);
+      if (film.poster) posters.set(film.id, film.poster);
+    });
+    applyFacets();
+    if (network) network.setFilms(FILMS);
+    refreshEmpty();
   }
 
   function patchFilmFromFacets(film) {
@@ -108,24 +135,6 @@
       film.cluster = facets.genres[0];
     }
     if (facets.director) film.director = facets.director;
-  }
-
-  function loadAdded() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(ADDED_KEY) || '[]');
-      return Array.isArray(raw) ? raw.filter((film) => film && film.id && film.title) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function loadState() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORE) || '{}');
-      return raw && typeof raw === 'object' ? raw : {};
-    } catch {
-      return {};
-    }
   }
 
   function entry(id) {
@@ -140,20 +149,18 @@
   }
 
   function removeFilm(id) {
-    removed.add(id);
-    saveRemoved();
-    added = added.filter((film) => film.id !== id);
-    try {
-      localStorage.setItem(ADDED_KEY, JSON.stringify(added));
-    } catch {
-      /* private mode can refuse storage; the session still works */
+    const own = added.some((film) => film.id === id);
+    if (own) {
+      added = added.filter((film) => film.id !== id);
+      removed.delete(id);
+      delete state[id];
+      delete facetOverrides[id];
+      if (archive && archive.positions) delete archive.positions[id];
+      if (globalThis.FILM_FACETS) delete globalThis.FILM_FACETS[id];
+    } else if (!removed.has(id)) {
+      removed.add(id);
     }
-    delete state[id];
-    try {
-      localStorage.setItem(STORE, JSON.stringify(state));
-    } catch {
-      /* private mode can refuse storage; the session still works */
-    }
+    persist();
     FILMS = FILMS.filter((film) => film.id !== id);
     byId.delete(id);
     posters.delete(id);
@@ -163,15 +170,13 @@
       network.dropFilm(id);
     }
     if (mode !== 'network') buildWall();
+    refreshEmpty();
+    scheduleRelayout();
   }
 
   function writeEntry(id, patch) {
     state[id] = { ...entry(id), ...patch };
-    try {
-      localStorage.setItem(STORE, JSON.stringify(state));
-    } catch {
-      /* private mode can refuse storage; the session still works */
-    }
+    persist();
   }
 
   function hex(color) {
@@ -362,6 +367,13 @@
   function buildWall() {
     const selected = selectedId;
     wall.replaceChildren();
+    if (!FILMS.length) {
+      wall.append(emptyBlock());
+      selectedId = selected;
+      paint();
+      refreshEmpty();
+      return;
+    }
     filmGroups().forEach((group) => {
       const bar = document.createElement('div');
       bar.className = 'genre-bar';
@@ -590,7 +602,7 @@
 
     const remove = el('button', 'remove-film');
     remove.type = 'button';
-    remove.setAttribute('aria-label', 'Film entfernen');
+    remove.setAttribute('aria-label', 'Aus meinem Archiv entfernen');
     remove.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.4h6v2.2H9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.8 6.4h16.4v2.1H3.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5.6 8.5h12.8l-.9 12.1H6.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.4v6.2M12 11.4v6.2M15 11.4v6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
     remove.addEventListener('click', () => removeFilm(film.id));
     const closeIcon = el('button', 'panel-close');
@@ -852,16 +864,12 @@
         cluster: film.cluster,
         director: film.director,
       };
-      try {
-        localStorage.setItem(ADDED_KEY, JSON.stringify(added));
-      } catch {
-        /* private mode can refuse storage; the session still works */
-      }
+      persist();
     }
     editDraft = null;
     links = linksFor(film);
     activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
-    if (network) network.moveFilm(film);
+    scheduleRelayout();
     renderPanel(film);
     applyNetworkFocus();
     paint();
@@ -1064,18 +1072,26 @@
       try {
         const response = await fetch('data/graph.json');
         const graph = response.ok ? await response.json() : { nodes: [] };
+        rememberGraph(graph);
         view.loadGraph(graph);
       } catch {
         view.loadGraph({ nodes: [] });
       }
       view.build();
       networkReady = true;
+      pendingGlide = false;
       applyNetworkFocus();
+      refreshEmpty();
       return;
     }
     view.paint();
     view.resize();
+    if (pendingGlide) {
+      pendingGlide = false;
+      view.glide(archive.positions);
+    }
     applyNetworkFocus();
+    refreshEmpty();
   }
 
   function showWall() {
@@ -1096,7 +1112,11 @@
     modeNetwork.setAttribute('aria-selected', next === 'network' ? 'true' : 'false');
     modeDirector.setAttribute('aria-selected', next === 'director' ? 'true' : 'false');
     modeRating.setAttribute('aria-selected', next === 'rating' ? 'true' : 'false');
-    if (next === 'network') return showNetwork();
+    if (next === 'network') {
+      const shown = showNetwork();
+      if (relayoutTimer || relayoutIdle || relayoutWait) flushRelayout();
+      return shown;
+    }
     showWall();
     return Promise.resolve();
   }
@@ -1308,7 +1328,11 @@
       year: yearOf(film),
     };
     const pool = new Map();
-    (window.FILMS || []).forEach((item) => pool.set(item.id, item));
+    if (!archive || archive.startList !== 'leer') {
+      (window.FILMS || []).forEach((item) => pool.set(item.id, item));
+      starterAdded.forEach((item) => pool.set(item.id, item));
+    }
+    FILMS.forEach((item) => pool.set(item.id, item));
     added.forEach((item) => pool.set(item.id, item));
     for (const item of pool.values()) {
       const known = identityOf(item);
@@ -1359,20 +1383,17 @@
     rememberFacets(film.id, facets);
     if (film.poster) posters.set(film.id, film.poster);
     added.push(film);
-    try {
-      localStorage.setItem(ADDED_KEY, JSON.stringify(added));
-    } catch {
-      /* private mode can refuse storage; the session still works */
-    }
+    persist();
     FILMS.push(film);
     byId.set(film.id, film);
+    seatProvisional(film);
     const genre = (facets.genres || [])[0];
     const sub = (facets.subgenres || [])[0];
     if (genre && sub) addStatus.textContent = `Eingeordnet als ${genre} · ${sub}`;
     else if (genre) addStatus.textContent = `Eingeordnet als ${genre}`;
     else addStatus.textContent = 'Eingeordnet.';
     addQuery.value = '';
-    revealFilm(film);
+    revealFilm(film).then(() => scheduleRelayout());
   }
 
   addButton.addEventListener('click', () => {
@@ -1417,6 +1438,15 @@
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
+      if (sheetOpen()) {
+        if (importBusy) {
+          requestCancel();
+          return;
+        }
+        if (!archive) return;
+        closeSheet();
+        return;
+      }
       if (searchForm.classList.contains('is-open')) {
         closeSearch();
         return;
@@ -1463,10 +1493,521 @@
     }
   }
 
-  setMode(savedMode());
-  loadPosters();
-  loadStoredFacets();
-  ensureVocab().catch(() => {
-    /* Bearbeiten holt das Vokabular erneut */
+  let importCancel = false;
+  let importAbort = null;
+
+  function requestCancel() {
+    importCancel = true;
+    if (importAbort) importAbort.abort();
+  }
+
+  function openSheet(node) {
+    const sheet = document.getElementById('sheet');
+    const body = document.getElementById('sheet-body');
+    body.replaceChildren(node);
+    sheet.hidden = false;
+  }
+
+  function closeSheet() {
+    const sheet = document.getElementById('sheet');
+    if (!sheet) return;
+    sheet.hidden = true;
+    document.getElementById('sheet-body').replaceChildren();
+  }
+
+  function sheetOpen() {
+    const sheet = document.getElementById('sheet');
+    return Boolean(sheet && !sheet.hidden);
+  }
+
+  function choiceButton(label) {
+    const button = el('button', 'choice', label);
+    button.type = 'button';
+    return button;
+  }
+
+  function emptyBlock() {
+    const box = document.createElement('div');
+    box.className = 'empty';
+    box.append(el('p', null, 'Dein Archiv ist noch leer.'));
+    const add = choiceButton('Film hinzufügen');
+    add.dataset.empty = 'add';
+    const list = choiceButton('Liste einfügen');
+    list.dataset.empty = 'list';
+    box.append(add, list);
+    return box;
+  }
+
+  function refreshEmpty() {
+    const node = document.getElementById('empty-net');
+    if (!node) return;
+    node.hidden = FILMS.length > 0 || mode !== 'network';
+  }
+
+  function showRoster() {
+    if (network && networkReady) {
+      network.setFilms(FILMS);
+      network.reflow();
+    }
+    if (mode === 'network') {
+      if (!networkReady) showNetwork();
+    } else buildWall();
+    refreshEmpty();
+  }
+
+  function startApp() {
+    if (started) return Promise.resolve(showRoster());
+    started = true;
+    const ready = setMode(savedMode());
+    loadPosters();
+    loadStoredFacets();
+    ensureVocab().catch(() => {
+      /* Bearbeiten holt das Vokabular erneut */
+    });
+    return ready;
+  }
+
+  function gateView() {
+    const box = document.createElement('div');
+    box.append(el('h2', null, 'Womit willst du starten?'));
+    const luciano = choiceButton('Mit Lucianos Liste starten');
+    luciano.addEventListener('click', () => beginArchive('luciano'));
+    const empty = choiceButton('Leer starten');
+    empty.addEventListener('click', () => beginArchive('leer'));
+    const own = choiceButton('Eigene Liste einfügen');
+    own.addEventListener('click', () => openListImport({ gate: true }));
+    box.append(luciano, empty, own);
+    return box;
+  }
+
+  function beginArchive(kind) {
+    adoptArchive(globalThis.Store.create(kind));
+    closeSheet();
+    startApp();
+  }
+
+  function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let quoted = false;
+    const source = String(text || '');
+    for (let i = 0; i < source.length; i += 1) {
+      const char = source[i];
+      if (quoted) {
+        if (char === '"') {
+          if (source[i + 1] === '"') {
+            cell += '"';
+            i += 1;
+          } else quoted = false;
+        } else cell += char;
+        continue;
+      }
+      if (char === '"') {
+        quoted = true;
+        continue;
+      }
+      if (char === ',') {
+        row.push(cell);
+        cell = '';
+        continue;
+      }
+      if (char === '\n') {
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = '';
+        continue;
+      }
+      if (char !== '\r') cell += char;
+    }
+    if (cell.length || row.length) {
+      row.push(cell);
+      rows.push(row);
+    }
+    return rows.filter((line) => line.some((value) => String(value).trim()));
+  }
+
+  function queriesFromText(text) {
+    return String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  }
+
+  function queriesFromCsv(text) {
+    const rows = parseCsv(text);
+    if (!rows.length) return [];
+    const header = rows[0].map((item) => item.trim().toLowerCase());
+    const name = header.findIndex((item) => item === 'name' || item === 'title');
+    if (name < 0) return queriesFromText(text);
+    const year = header.findIndex((item) => item === 'year');
+    return rows.slice(1).map((line) => {
+      const title = String(line[name] || '').trim();
+      if (!title) return '';
+      const when = year >= 0 ? String(line[year] || '').trim() : '';
+      return /^\d{4}$/.test(when) ? `${title} (${when})` : title;
+    }).filter(Boolean);
+  }
+
+  function readFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsText(file);
+    });
+  }
+
+  function placeImported(film, facets) {
+    if (findExisting(film, facets) || byId.has(film.id)) return false;
+    if (facets) rememberFacets(film.id, facets);
+    if (film.poster) posters.set(film.id, film.poster);
+    added.push(film);
+    FILMS.push(film);
+    byId.set(film.id, film);
+    seatProvisional(film);
+    persist();
+    scheduleRelayout();
+    return true;
+  }
+
+  async function fetchFilm(query, signal) {
+    const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`, { signal });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data || !data.film || !data.facets) {
+      throw new Error((data && data.error) || 'Dazu finde ich keinen Film.');
+    }
+    return data;
+  }
+
+  async function importQueries(queries, onProgress) {
+    const misses = [];
+    let cursor = 0;
+    let done = 0;
+    let skipped = 0;
+    let addedCount = 0;
+    importAbort = new AbortController();
+    const signal = importAbort.signal;
+    async function worker() {
+      while (!importCancel) {
+        const index = cursor;
+        cursor += 1;
+        if (index >= queries.length) return;
+        const query = queries[index];
+        try {
+          const data = await fetchFilm(query, signal);
+          if (importCancel) return;
+          if (placeImported(data.film, data.facets)) addedCount += 1;
+          else skipped += 1;
+        } catch (error) {
+          if (!importCancel && !(error && error.name === 'AbortError')) {
+            misses.push({
+              query,
+              message: error && error.message ? error.message : 'Der Abruf ist gerade nicht möglich.',
+            });
+          }
+        }
+        if (importCancel) return;
+        done += 1;
+        onProgress(done, queries.length);
+      }
+    }
+    const width = Math.min(3, Math.max(queries.length, 1));
+    await Promise.all(Array.from({ length: width }, () => worker()));
+    return { misses, skipped, addedCount };
+  }
+
+  function rememberGraph(graph) {
+    if (!graphPoints) graphPoints = {};
+    (graph && graph.nodes || []).forEach((node) => {
+      if (Number.isFinite(node.x) && Number.isFinite(node.y)) graphPoints[node.id] = { x: node.x, y: node.y };
+    });
+  }
+
+  async function ensureGraphPoints() {
+    if (graphPoints) return graphPoints;
+    graphPoints = {};
+    try {
+      const response = await fetch('data/graph.json');
+      if (response.ok) rememberGraph(await response.json());
+    } catch {
+      /* ohne Startdatei bleiben nur die eigenen Positionen */
+    }
+    return graphPoints;
+  }
+
+  function positionMap() {
+    const map = {};
+    if (graphPoints) {
+      Object.entries(graphPoints).forEach(([id, point]) => {
+        map[id] = { x: point.x, y: point.y };
+      });
+    }
+    if (archive && archive.positions) {
+      Object.entries(archive.positions).forEach(([id, point]) => {
+        if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) map[id] = { x: point.x, y: point.y };
+      });
+    }
+    return map;
+  }
+
+  function seatProvisional(film) {
+    if (!archive || !globalThis.Layout || !film) return;
+    const current = archive.positions[film.id];
+    if (current && Number.isFinite(current.x) && Number.isFinite(current.y)) return;
+    const placed = globalThis.Layout.placeOne(fullOf(film), FILMS.map((item) => fullOf(item)), positionMap());
+    archive.positions[film.id] = { x: placed.x, y: placed.y };
+    persist();
+  }
+
+  function applyLayoutNodes(nodes) {
+    if (!archive || !nodes) return;
+    nodes.forEach((node) => {
+      if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return;
+      archive.positions[node.id] = { x: node.x, y: node.y };
+    });
+    persist();
+    if (network && networkReady && mode === 'network') network.glide(archive.positions);
+    else if (network && networkReady) pendingGlide = true;
+  }
+
+  function ensureLayoutWorker() {
+    if (relayoutWorker) return relayoutWorker;
+    relayoutWorker = new Worker('layout.worker.js');
+    relayoutWorker.onerror = () => {
+      relayoutPending.forEach((resolve) => resolve());
+      relayoutPending.clear();
+    };
+    relayoutWorker.onmessage = (event) => {
+      const data = event.data || {};
+      const resolve = relayoutPending.get(data.id);
+      if (!resolve) return;
+      relayoutPending.delete(data.id);
+      if (data.id === relayoutJob && !relayoutDirty && data.nodes) applyLayoutNodes(data.nodes);
+      resolve();
+    };
+    return relayoutWorker;
+  }
+
+  function startLayoutJob() {
+    const id = relayoutJob + 1;
+    relayoutJob = id;
+    const films = FILMS.map((film) => fullOf(film));
+    const positions = positionMap();
+    return new Promise((resolve) => {
+      relayoutPending.set(id, resolve);
+      ensureLayoutWorker().postMessage({ id, films, positions });
+    });
+  }
+
+  function runRelayout() {
+    if (!archive || !FILMS.length || !globalThis.Layout) return Promise.resolve();
+    if (relayoutWait) {
+      relayoutDirty = true;
+      return relayoutWait;
+    }
+    relayoutDirty = false;
+    relayoutWait = ensureGraphPoints().then(() => startLayoutJob()).finally(() => {
+      relayoutWait = null;
+      if (!relayoutDirty) return null;
+      relayoutDirty = false;
+      return runRelayout();
+    });
+    return relayoutWait;
+  }
+
+  function cancelRelayoutIdle() {
+    if (!relayoutIdle) return;
+    if (relayoutIdleTimer) window.clearTimeout(relayoutIdle);
+    else if (window.cancelIdleCallback) window.cancelIdleCallback(relayoutIdle);
+    relayoutIdle = 0;
+  }
+
+  function deferRelayout() {
+    relayoutTimer = 0;
+    if (mode === 'network') {
+      runRelayout();
+      return;
+    }
+    cancelRelayoutIdle();
+    if (window.requestIdleCallback) {
+      relayoutIdleTimer = false;
+      relayoutIdle = window.requestIdleCallback(() => {
+        relayoutIdle = 0;
+        runRelayout();
+      });
+      return;
+    }
+    relayoutIdleTimer = true;
+    relayoutIdle = window.setTimeout(() => {
+      relayoutIdle = 0;
+      runRelayout();
+    }, 400);
+  }
+
+  function scheduleRelayout() {
+    if (!archive || !FILMS.length || !globalThis.Layout) return;
+    window.clearTimeout(relayoutTimer);
+    relayoutTimer = window.setTimeout(deferRelayout, 2000);
+  }
+
+  function flushRelayout() {
+    const pending = relayoutTimer || relayoutIdle || relayoutWait;
+    window.clearTimeout(relayoutTimer);
+    relayoutTimer = 0;
+    cancelRelayoutIdle();
+    if (!pending) return Promise.resolve();
+    return runRelayout();
+  }
+
+  function renderMisses(node, misses, status) {
+    node.replaceChildren();
+    if (!misses.length) return;
+    node.append(el('h3', null, 'Nicht gefunden'));
+    const again = choiceButton('nochmals suchen');
+    again.addEventListener('click', async () => {
+      const queries = [...node.querySelectorAll('.miss-row input')].map((input) => input.value.trim()).filter(Boolean);
+      if (!queries.length) return;
+      again.disabled = true;
+      importCancel = false;
+      importBusy = true;
+      const result = await importQueries(queries, (done, total) => {
+        status.textContent = `${done} / ${total}`;
+      });
+      importBusy = false;
+      again.disabled = false;
+      showRoster();
+      renderMisses(node, result.misses, status);
+      if (!result.misses.length) closeSheet();
+    });
+    const rows = misses.map((miss) => {
+      const row = document.createElement('div');
+      row.className = 'miss-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = miss.query;
+      const search = document.createElement('button');
+      search.type = 'button';
+      search.textContent = 'suchen';
+      const note = el('p', 'miss-note', miss.message);
+      search.addEventListener('click', async () => {
+        const query = input.value.trim();
+        if (!query) return;
+        search.disabled = true;
+        try {
+          const data = await fetchFilm(query);
+          if (placeImported(data.film, data.facets)) {
+            row.remove();
+            showRoster();
+            status.textContent = 'Abgelegt.';
+          } else {
+            note.textContent = 'Den Film gibt es schon.';
+            row.remove();
+          }
+        } catch (error) {
+          note.textContent = error && error.message ? error.message : 'Dazu finde ich keinen Film.';
+        } finally {
+          search.disabled = false;
+        }
+      });
+      row.append(input, search, note);
+      return row;
+    });
+    node.append(again, ...rows);
+  }
+
+  function openListImport(options) {
+    const gate = Boolean(options && options.gate);
+    const box = document.createElement('div');
+    box.append(el('h2', null, 'Eigene Liste einfügen'));
+    const field = document.createElement('textarea');
+    field.placeholder = 'Ein Titel pro Zeile. Optional: Titel (Jahr) oder ein Link.';
+    const file = document.createElement('input');
+    file.type = 'file';
+    file.accept = '.csv,text/csv';
+    file.className = 'sr';
+    const pick = choiceButton('CSV-Datei');
+    let csvText = '';
+    pick.addEventListener('click', () => file.click());
+    file.addEventListener('change', async () => {
+      const chosen = file.files && file.files[0];
+      if (!chosen) return;
+      csvText = await readFile(chosen);
+      pick.textContent = chosen.name;
+    });
+    const status = el('p', 'sheet-status', '');
+    status.setAttribute('role', 'status');
+    const go = choiceButton('Liste holen');
+    const cancel = choiceButton(gate ? 'Zurück' : 'Abbrechen');
+    const misses = document.createElement('div');
+    box.append(field, pick, file, status, go, cancel, misses);
+    openSheet(box);
+    cancel.addEventListener('click', () => {
+      if (importBusy) {
+        requestCancel();
+        cancel.disabled = true;
+        status.textContent = 'Wird abgebrochen …';
+        return;
+      }
+      if (gate && !archive) openSheet(gateView());
+      else closeSheet();
+    });
+    go.addEventListener('click', async () => {
+      const queries = csvText ? queriesFromCsv(csvText) : queriesFromText(field.value);
+      if (!queries.length) {
+        status.textContent = 'Trag mindestens einen Titel ein.';
+        return;
+      }
+      if (!archive) adoptArchive(globalThis.Store.create('leer'));
+      go.disabled = true;
+      importCancel = false;
+      importBusy = true;
+      cancel.textContent = 'Abbrechen';
+      const result = await importQueries(queries, (done, total) => {
+        status.textContent = `${done} / ${total}`;
+      });
+      importBusy = false;
+      cancel.disabled = false;
+      cancel.textContent = 'Schließen';
+      await startApp();
+      showRoster();
+      const parts = [];
+      if (result.addedCount) parts.push(`${result.addedCount} hinzugefügt`);
+      if (result.skipped) parts.push(`${result.skipped} übersprungen`);
+      if (result.misses.length) parts.push(`${result.misses.length} nicht gefunden`);
+      if (importCancel) parts.unshift('Abgebrochen');
+      status.textContent = parts.join(', ') || 'Nichts Neues.';
+      if (result.misses.length && !importCancel) renderMisses(misses, result.misses, status);
+      else closeSheet();
+    });
+  }
+
+  document.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-empty]');
+    if (!button) return;
+    if (button.dataset.empty === 'add') openAdd();
+    else openListImport();
   });
+
+  async function boot() {
+    wall.hidden = true;
+    networkEl.hidden = true;
+    try {
+      const response = await fetch('data/added-films.json');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data)) starterAdded = data.filter((film) => film && film.id && film.title);
+      }
+    } catch {
+      /* ohne Zusatzfilme bleibt die Startliste bei films.js */
+    }
+    await ensureGraphPoints();
+    const existing = globalThis.Store.load();
+    if (existing) {
+      adoptArchive(existing);
+      startApp();
+      return;
+    }
+    openSheet(gateView());
+  }
+
+  boot();
 })();

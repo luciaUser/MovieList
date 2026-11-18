@@ -1,23 +1,17 @@
 (function attachNetwork(root) {
   const WORLD_W = 2500;
   const WORLD_H = 4000;
-  const POS_KEY = 'moviebylucia-positions-v2';
 
   function readStored() {
-    try {
-      const raw = JSON.parse(localStorage.getItem(POS_KEY) || '{}');
-      return raw && typeof raw === 'object' ? raw : {};
-    } catch {
-      return {};
-    }
+    const store = root.Store;
+    const current = store && store.current();
+    const positions = current && current.positions;
+    return positions && typeof positions === 'object' && !Array.isArray(positions) ? positions : {};
   }
 
   function writeStored(stored) {
-    try {
-      localStorage.setItem(POS_KEY, JSON.stringify(stored));
-    } catch {
-      /* private mode can refuse storage; the session still works */
-    }
+    const store = root.Store;
+    if (store) store.savePositions(stored);
   }
 
   function create(options) {
@@ -352,6 +346,68 @@
     function worldPoint(id) {
       const point = points.get(id);
       return point ? worldOf(point) : null;
+    }
+
+    let glideToken = 0;
+    let endGlide = null;
+
+    function placeButton(id, point) {
+      const button = buttons.get(id);
+      if (!button) return;
+      const at = worldOf(point);
+      button.style.left = `${at.x}px`;
+      button.style.top = `${at.y}px`;
+    }
+
+    function glide(nextMap) {
+      if (endGlide) endGlide();
+      const token = glideToken + 1;
+      glideToken = token;
+      const from = new Map();
+      const to = new Map();
+      films.forEach((film) => {
+        const target = nextMap && nextMap[film.id];
+        if (!target || !Number.isFinite(target.x) || !Number.isFinite(target.y)) return;
+        const current = points.get(film.id) || target;
+        from.set(film.id, { x: current.x, y: current.y });
+        to.set(film.id, { x: target.x, y: target.y });
+      });
+      const finish = () => {
+        if (glideToken !== token) return;
+        endGlide = null;
+        to.forEach((point, id) => {
+          remember(id, point);
+          placeButton(id, point);
+        });
+        buildLabels();
+        drawEdges();
+        paint();
+      };
+      endGlide = finish;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || !to.size) {
+        finish();
+        return;
+      }
+      const started = performance.now();
+      const step = (now) => {
+        if (glideToken !== token) return;
+        const t = Math.min(1, (now - started) / 600);
+        const ease = 1 - ((1 - t) ** 3);
+        to.forEach((point, id) => {
+          const origin = from.get(id);
+          placeButton(id, {
+            x: origin.x + ((point.x - origin.x) * ease),
+            y: origin.y + ((point.y - origin.y) * ease),
+          });
+        });
+        if (t < 1) {
+          requestAnimationFrame(step);
+          return;
+        }
+        finish();
+      };
+      requestAnimationFrame(step);
     }
 
     function starEdges(ids, style) {
@@ -708,6 +764,11 @@
       refresh,
       resize,
       reveal,
+      pointOf(id) {
+        const point = points.get(id);
+        return point ? { x: point.x, y: point.y } : null;
+      },
+      glide,
       addFilm,
       moveFilm,
       dropFilm(id) {
@@ -721,6 +782,25 @@
       },
       setFilms(next) {
         films = next;
+      },
+      reflow() {
+        stored = readStored();
+        points = new Map();
+        films.forEach((film) => {
+          const saved = stored[film.id];
+          if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+            remember(film.id, saved);
+            return;
+          }
+          const node = graphNodes.get(film.id);
+          if (node && Number.isFinite(node.x) && Number.isFinite(node.y)) remember(film.id, node);
+        });
+        placeMissing();
+        buildFilms();
+        buildLabels();
+        fit();
+        userMoved = false;
+        paint();
       },
       setRating(on) {
         ratingOn = on;
