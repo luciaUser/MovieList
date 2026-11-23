@@ -105,6 +105,8 @@
   let wishSearchList = null;
   let wishMarkedId = null;
   let wishFocusId = null;
+  let wishUndoTimer = 0;
+  const posterFilled = new Set();
   let followDot = false;
   let wishDot = false;
   let selectedId = null;
@@ -791,7 +793,7 @@
     wrap.style.setProperty('--mid', colors.mid);
     wrap.style.setProperty('--core', colors.core);
     wrap.style.setProperty('--p', `${amount * 10}%`);
-    wrap.append(el('span', 'score-fill'), el('span', 'score-dim'));
+    wrap.append(el('span', 'score-fill'), el('span', 'score-dim'), el('span', 'score-grip'));
     if (editable) {
       const range = document.createElement('input');
       range.id = 'own-rate';
@@ -803,10 +805,6 @@
       range.value = String(amount);
       wrap.append(range);
       wrap._range = range;
-    } else {
-      const grip = el('span', 'score-grip');
-      grip.style.left = `calc(${amount * 10}% - 5px)`;
-      wrap.append(grip);
     }
     return wrap;
   }
@@ -1041,27 +1039,6 @@
     memo.addEventListener('input', () => writeEntry(film.id, { memo: memo.value }));
     field.append(memoLabel, memo);
     panel.append(field);
-
-    const toggles = el('div', 'toggles block');
-    toggles.append(
-      toggle('Gesehen', row.watched, (on) => {
-        writeEntry(film.id, { watched: on });
-        if (mode !== 'network' && !ratingView) buildWall();
-        renderPanel(film);
-        paint();
-      }),
-      toggle('Favorit', row.favorite, (on) => {
-        writeEntry(film.id, { favorite: on });
-        renderPanel(film);
-        paint();
-      }),
-      toggle('Als Nächstes', row.next, (on) => {
-        writeEntry(film.id, { next: on });
-        renderPanel(film);
-        paint();
-      }),
-    );
-    panel.append(toggles);
     appendTraits(film, full);
 
     [
@@ -1732,6 +1709,26 @@
     pop.setAttribute('aria-hidden', 'false');
     modeDirector.setAttribute('aria-expanded', 'true');
   });
+  function pinPhoneBar() {
+    const bar = document.querySelector('.modes');
+    if (!bar) return;
+    const phone = window.matchMedia('(max-width: 720px)').matches;
+    const viewport = window.visualViewport;
+    if (!phone || !viewport) {
+      bar.style.transform = '';
+      return;
+    }
+    const gap = window.innerHeight - (viewport.offsetTop + viewport.height);
+    bar.style.transform = gap > 0.5 ? `translateY(${-Math.round(gap)}px)` : '';
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', pinPhoneBar);
+    window.visualViewport.addEventListener('scroll', pinPhoneBar);
+  }
+  window.addEventListener('resize', pinPhoneBar);
+  pinPhoneBar();
+
   document.getElementById('sort-pop').addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button || !button.dataset.sort) return;
@@ -3986,7 +3983,7 @@
       button.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     } else {
       button.setAttribute('aria-label', 'Freundschaft entfernen');
-      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+      button.innerHTML = '<svg viewBox="0 0 23.8 21.2" aria-hidden="true"><path d="M0.9 0.9 22.9 20.3M22.9 0.9 0.9 20.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
     }
     return button;
   }
@@ -4735,9 +4732,19 @@
   }
 
   function wishFilmObject(item) {
+    const remote = item.film ? filmFromCatalog(item.film) : null;
     const local = byId.get(item.filmId);
-    if (local) return local;
-    if (item.film) return filmFromCatalog(item.film);
+    if (local) {
+      if (!knownPoster(local) && remote && remote.poster) {
+        local.poster = remote.poster;
+        posters.set(local.id, remote.poster);
+      }
+      return local;
+    }
+    if (remote) {
+      if (remote.poster) posters.set(remote.id, remote.poster);
+      return remote;
+    }
     return {
       id: item.filmId,
       title: 'Film',
@@ -4841,6 +4848,93 @@
     const n = Number(count) || 0;
     if (window.matchMedia('(max-width: 720px)').matches) return String(n);
     return n === 1 ? '1 Movie' : `${n} Movies`;
+  }
+
+  function canDropWishFilm(list, item) {
+    if (!account || !item) return false;
+    if (list && list.role === 'owner') return true;
+    return item.addedBy === account.id;
+  }
+
+  function showWishUndo(payload) {
+    let bar = document.getElementById('wish-undo');
+    if (!bar) {
+      bar = el('div', 'wish-undo');
+      bar.id = 'wish-undo';
+      document.body.append(bar);
+    }
+    bar.replaceChildren(document.createTextNode('Entfernt · '));
+    const undo = el('button', null, 'Rückgängig');
+    undo.type = 'button';
+    undo.addEventListener('click', async () => {
+      window.clearTimeout(wishUndoTimer);
+      bar.hidden = true;
+      const film = payload.film;
+      if (film) film.fromCatalog = true;
+      await addFilmToList(payload.listId, film, payload.facets);
+    });
+    bar.append(undo);
+    bar.hidden = false;
+    window.clearTimeout(wishUndoTimer);
+    wishUndoTimer = window.setTimeout(() => {
+      bar.hidden = true;
+    }, 4000);
+  }
+
+  function wishDrop(item, list, film) {
+    const control = el('span', 'wish-drop');
+    control.setAttribute('role', 'button');
+    control.setAttribute('aria-label', 'Aus der Liste entfernen');
+    control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    control.addEventListener('click', async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const poster = control.closest('.poster');
+      if (poster) poster.remove();
+      try {
+        await globalThis.Cloud.removeWishlistItem(item.id);
+      } catch (error) {
+        setWishStatus(wishFail(error));
+        loadWishlists();
+        return;
+      }
+      showWishUndo({
+        listId: list.id,
+        film,
+        facets: film.facets || facetsOf(film),
+      });
+      loadWishlists();
+    });
+    return control;
+  }
+
+  function schedulePosterFill(items) {
+    (items || []).forEach((item) => {
+      const row = item.film;
+      const id = (row && row.id) || item.filmId;
+      if (!id || posterFilled.has(id)) return;
+      const have = (row && (row.poster || (row.facets && row.facets.poster))) || posters.get(id);
+      if (have) {
+        if (!posters.get(id)) posters.set(id, have);
+        return;
+      }
+      const ref = String(id).match(/^tmdb[:\-](movie|tv)[:\-](\d+)$/);
+      if (!ref || !globalThis.Cloud || !globalThis.Cloud.upsertFilm) return;
+      posterFilled.add(id);
+      fetch(`/api/film?q=${encodeURIComponent(`https://www.themoviedb.org/${ref[1]}/${ref[2]}`)}`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then(async (data) => {
+          if (!data || !data.film) return;
+          const film = withCanonicalId(data.film, data.facets || {});
+          const payload = filmCatalogPayload(film, data.facets || {});
+          if (!payload.poster) return;
+          await globalThis.Cloud.upsertFilm(payload);
+          posters.set(payload.id, payload.poster);
+          const image = document.querySelector(`#wish-board [data-id="${CSS.escape(payload.id)}"] img`);
+          if (image) image.src = posterSrc({ id: payload.id, title: payload.title, poster: payload.poster });
+        })
+        .catch(() => {});
+    });
   }
 
   function wishPoster(film, rating) {
@@ -5075,7 +5169,9 @@
     button.type = 'button';
     button.className = 'wish-x';
     button.setAttribute('aria-label', 'Liste entfernen');
-    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    const sure = el('span', 'wish-sure', 'sure?');
+    button.append(sure);
+    button.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>');
     let timer = 0;
     button.addEventListener('click', async (event) => {
       event.stopPropagation();
@@ -5262,6 +5358,11 @@
       const data = await response.json().catch(() => null);
       if (!response.ok || !data || !data.film) return row;
       const film = withCanonicalId(data.film, data.facets || {});
+      const poster = film.poster || (row.film && row.film.poster) || (data.facets && data.facets.poster) || (row.facets && row.facets.poster) || '';
+      if (poster) {
+        film.poster = poster;
+        if (data.facets && !data.facets.poster) data.facets.poster = poster;
+      }
       return { ...row, film: { ...film, fromCatalog: false }, facets: data.facets || null, fromCatalog: false };
     } catch {
       return row;
@@ -5402,21 +5503,24 @@
     const names = el('span', 'wish-by-names');
     fillWishNames(names, list);
     by.append(names);
-    const side = el('span', 'genre-score', wishCountLabel(list.filmCount || 0));
+    const side = el('span', 'genre-score');
+    const sideText = el('span', 'genre-score-text', wishCountLabel(list.filmCount || 0));
+    side.append(sideText);
     bar.append(title, by, side);
     if (invited) {
       board.append(bar);
       return;
     }
-    side.addEventListener('click', () => {
+    side.classList.add('has-remove');
+    side.addEventListener('click', (event) => {
+      if (event.target.closest('.wish-x, .wish-sure')) return;
       if (wishCollapsed.has(list.id)) wishCollapsed.delete(list.id);
       else wishCollapsed.add(list.id);
       const shown = !wishCollapsed.has(list.id);
       const gridNode = board.querySelector(`.wish-grid[data-list="${list.id}"]`);
       if (gridNode) gridNode.hidden = !shown;
     });
-    const sure = el('span', 'wish-sure', 'sure?');
-    bar.append(sure, wishRemoveButton(list, bar));
+    side.append(wishRemoveButton(list, bar));
     board.append(bar);
     if (wishFocusId === list.id) {
       beginWishRename(title, list);
@@ -5429,7 +5533,7 @@
       items = [];
     }
     if (token !== wishBoardToken) return;
-    side.textContent = wishCountLabel(items.length);
+    sideText.textContent = wishCountLabel(items.length);
     const filmIds = items.map((item) => item.filmId).filter(Boolean);
     let ratings = [];
     if (list.members.length > 1 && filmIds.length && globalThis.Cloud.memberRatings) {
@@ -5464,13 +5568,15 @@
       const poster = wishPoster(film, list.members.length > 1 || average != null ? average : null);
       if (list.members.length < 2 && average == null) poster.classList.remove('is-rated');
       if (wishMarkedId && film.id === wishMarkedId) poster.classList.add('is-fresh');
+      if (canDropWishFilm(list, item)) poster.append(wishDrop(item, list, film));
       poster.addEventListener('click', () => openListedFilm(film, list));
       grid.append(poster);
     });
     board.append(grid);
+    schedulePosterFill(items);
     if (list.members.length > 1 && averages.length) {
       const avg = averages.reduce((sum, value) => sum + value, 0) / averages.length;
-      side.append(document.createTextNode(`  ★ ${avg.toFixed(1).replace('.', ',')}`));
+      sideText.append(document.createTextNode(`  ★ ${avg.toFixed(1).replace('.', ',')}`));
     }
   }
 
@@ -5839,8 +5945,15 @@
     const base = facets || facetsOf(film);
     if (!film.fromCatalog) {
       next = withCanonicalId({ ...film, genres: film.genres || [] }, base || {});
+      const payload = filmCatalogPayload(next, base);
+      const knownPosterUrl = next.poster || (base && base.poster) || '';
+      if (!payload.poster && knownPosterUrl) payload.poster = knownPosterUrl;
+      if (payload.poster) {
+        next.poster = payload.poster;
+        posters.set(payload.id, payload.poster);
+      }
       try {
-        await cloud.upsertFilm(filmCatalogPayload(next, base));
+        await cloud.upsertFilm(payload);
       } catch (error) {
         return wishFail(error);
       }
