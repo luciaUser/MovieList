@@ -80,6 +80,9 @@
   let skipProfileHome = false;
   let panelFilm = null;
   let compareId = null;
+  let lensId = null;
+  let lensPack = null;
+  let guestNet = false;
   let compareName = '';
   let pendingInvite = new URLSearchParams(location.search).get('profil') || '';
   let searchTimer = 0;
@@ -205,6 +208,15 @@
       film.cluster = facets.genres[0];
     }
     if (facets.director) film.director = facets.director;
+  }
+
+  function viewEntry(id) {
+    if (lensPack && lensPack.entryOf) return lensPack.entryOf(id);
+    return entry(id);
+  }
+
+  function activeFilms() {
+    return lensPack ? lensPack.films : FILMS;
   }
 
   function entry(id) {
@@ -353,8 +365,8 @@
   function filmGroups() {
     if (ratingView) {
       const groups = new Map();
-      FILMS.forEach((film) => {
-        const bucket = ratingBucket(entry(film.id).rating);
+      activeFilms().forEach((film) => {
+        const bucket = ratingBucket(viewEntry(film.id).rating);
         if (!groups.has(bucket)) groups.set(bucket, []);
         groups.get(bucket).push(film);
       });
@@ -367,13 +379,13 @@
         .map((bucket) => ({
           label: ratingLabel(bucket),
           films: groups.get(bucket).slice().sort((a, b) => (
-            (entry(b.id).rating ?? -1) - (entry(a.id).rating ?? -1)
+            (viewEntry(b.id).rating ?? -1) - (viewEntry(a.id).rating ?? -1)
             || a.title.localeCompare(b.title, 'de')
           )),
         }));
     }
     const groups = new Map();
-    FILMS.forEach((film) => {
+    activeFilms().forEach((film) => {
       const keys = wallKeys(film);
       keys.forEach((key) => {
         if (!groups.has(key)) groups.set(key, []);
@@ -397,23 +409,24 @@
   }
 
   function wallKeys(film) {
-    if (wallSort === 'genre') return [film.cluster || 'Andere'];
+    const source = lensPack ? theirFull(film, lensPack.entryOf(film.id)) : film;
+    if (wallSort === 'genre') return [source.cluster || (source.genres && source.genres[0]) || 'Andere'];
     if (wallSort === 'cast') {
       const facets = (globalThis.FILM_FACETS || {})[film.id];
-      const names = (Array.isArray(film.cast) && film.cast.length ? film.cast : (facets && facets.cast) || [])
+      const names = (Array.isArray(source.cast) && source.cast.length ? source.cast : (facets && facets.cast) || [])
         .filter((name) => typeof name === 'string' && name.trim());
       return names.length ? [names[0]] : ['Ohne Besetzung'];
     }
-    return [film.director || 'Ohne Regie'];
+    return [source.director || 'Ohne Regie'];
   }
 
   function watchedCount(list) {
-    return list.reduce((sum, film) => sum + (entry(film.id).watched ? 1 : 0), 0);
+    return list.reduce((sum, film) => sum + (viewEntry(film.id).watched ? 1 : 0), 0);
   }
 
   function myAverage(films) {
     const scores = films
-      .map((film) => entry(film.id))
+      .map((film) => viewEntry(film.id))
       .filter((row) => row.rating != null)
       .map((row) => row.rating);
     if (!scores.length) return null;
@@ -478,7 +491,7 @@
   function buildWall() {
     const selected = selectedId;
     wall.replaceChildren();
-    if (!FILMS.length) {
+    if (!activeFilms().length) {
       wall.append(emptyBlock());
       selectedId = selected;
       paint();
@@ -520,6 +533,10 @@
     lastTapAt = now;
     lastTapId = film.id;
     if (again) {
+      if (lensPack) {
+        openFilm(film, mode === 'network' ? 'near' : false);
+        return;
+      }
       writeEntry(film.id, { watched: true });
       if (mode === 'network') {
         if (selectedId !== film.id) openFilm(film, false);
@@ -666,7 +683,7 @@
     document.body.classList.toggle('has-selection', Boolean(selectedId));
     document.body.classList.toggle('is-rating', ratingView);
     wall.querySelectorAll('.poster').forEach((button) => {
-      const row = entry(button.dataset.id);
+      const row = viewEntry(button.dataset.id);
       const selected = button.dataset.id === selectedId;
       button.classList.toggle('is-selected', selected);
       button.classList.toggle('is-rated', row.rating != null);
@@ -682,7 +699,9 @@
       button.classList.toggle('is-selected', button.dataset.id === selectedId);
     });
     wall.querySelectorAll('.genre-bar').forEach((bar) => {
-      const films = bar.dataset.ids.split(',').filter(Boolean).map((id) => byId.get(id)).filter(Boolean);
+      const films = bar.dataset.ids.split(',').filter(Boolean).map((id) => (
+        lensPack ? lensPack.films.find((film) => film.id === id) : byId.get(id)
+      )).filter(Boolean);
       const avg = myAverage(films);
       bar.querySelector('.genre-score').textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
       bar.querySelector('.genre-count').textContent = films.length === 1 ? '1 Film' : `${films.length} Filme`;
@@ -1211,14 +1230,129 @@
       films: FILMS,
       posterSrc,
       ratingColor,
-      entry,
+      entry: (id) => viewEntry(id),
       selectedId: () => selectedId,
       onChoose: choose,
     });
     return network;
   }
 
+  function lensPeople() {
+    const me = {
+      id: account && account.id,
+      name: (account && (account.display_name || account.username)) || 'Profil',
+    };
+    const others = (profileLists.following || [])
+      .filter((person) => person && person.id && person.id !== me.id)
+      .slice()
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'de'));
+    return [me, ...others];
+  }
+
+  function paintProfileSwitch() {
+    const host = document.getElementById('profile-switch');
+    if (!host) return;
+    if (!account) {
+      host.hidden = true;
+      host.replaceChildren();
+      return;
+    }
+    const people = lensPeople();
+    const index = Math.max(0, people.findIndex((person) => (lensId ? person.id === lensId : person.id === account.id)));
+    const current = people[index] || people[0];
+    host.replaceChildren();
+    const make = (person, currentOne) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = person.name || 'Profil';
+      if (currentOne) button.className = 'is-current';
+      button.addEventListener('click', () => setLens(person.id === account.id ? null : person.id));
+      return button;
+    };
+    const count = people.length;
+    if (count > 2) host.append(make(people[(index - 1 + count) % count], false));
+    host.append(make(current, true));
+    if (count > 1) {
+      const next = people[(index + 1) % count];
+      if (!host.querySelector('.is-current') || next.id !== current.id) host.append(make(next, false));
+    }
+    host.hidden = false;
+  }
+
+  async function setLens(id) {
+    const next = id && account && id !== account.id ? id : null;
+    if (next === lensId) {
+      paintProfileSwitch();
+      return;
+    }
+    lensId = next;
+    lensPack = null;
+    paintProfileSwitch();
+    if (!next) {
+      if (guestNet && network && network.restoreOwn) {
+        network.restoreOwn();
+        guestNet = false;
+      }
+      if (mode === 'profile') renderProfile();
+      else if (mode === 'network') showNetwork();
+      else showWall();
+      return;
+    }
+    const pack = await packFor(next).catch(() => null);
+    if (lensId !== next) return;
+    lensPack = pack;
+    if (!pack || !pack.canView) {
+      if (mode !== 'profile') {
+        skipProfileHome = true;
+        setMode('profile');
+      }
+      openOther(next);
+      return;
+    }
+    if (mode === 'profile') openOther(next);
+    else if (mode === 'network') showLensNetwork();
+    else showWall();
+  }
+
+  function shiftLens(dir) {
+    const people = lensPeople();
+    if (people.length < 2 || !account) return;
+    const index = Math.max(0, people.findIndex((person) => (lensId ? person.id === lensId : person.id === account.id)));
+    const person = people[(index + dir + people.length) % people.length];
+    setLens(person.id === account.id ? null : person.id);
+  }
+
+  async function showLensNetwork() {
+    wall.hidden = true;
+    networkEl.hidden = false;
+    document.body.classList.add('is-network');
+    if (!lensPack) return;
+    if (!networkReady) {
+      const savedId = lensId;
+      const savedPack = lensPack;
+      lensId = null;
+      lensPack = null;
+      await showNetwork();
+      if (lensId !== null || savedId == null) return;
+      lensId = savedId;
+      lensPack = savedPack;
+    }
+    const view = ensureNetwork();
+    const films = (lensPack.films || []).map((film) => theirFull(film, lensPack.entryOf(film.id)));
+    view.showGuest(films);
+    guestNet = true;
+    refreshEmpty();
+  }
+
   async function showNetwork() {
+    if (lensPack) {
+      showLensNetwork();
+      return;
+    }
+    if (guestNet && network && network.restoreOwn) {
+      network.restoreOwn();
+      guestNet = false;
+    }
     wall.hidden = true;
     networkEl.hidden = false;
     document.body.classList.add('is-network');
@@ -1447,12 +1581,46 @@
     closeSortMenu();
   });
   modeRating.addEventListener('click', () => setMode('rating'));
-  if (modeProfile) modeProfile.addEventListener('click', () => setMode('profile'));
-  netRating.addEventListener('click', () => {
-    netRatingOn = !netRatingOn;
-    netRating.setAttribute('aria-pressed', netRatingOn ? 'true' : 'false');
-    if (network) network.setRating(netRatingOn);
+  if (modeProfile) modeProfile.addEventListener('click', () => {
+    if (lensId) showOther(lensId);
+    else setMode('profile');
   });
+  const profileSwitch = document.getElementById('profile-switch');
+  let swipeX = 0;
+  let swipeY = 0;
+  let didSwipe = false;
+  function watchSwipe(node) {
+    if (!node) return;
+    node.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('#mode-director, #sort-pop, #search-open, #add-film')) return;
+      swipeX = event.clientX;
+      swipeY = event.clientY;
+      didSwipe = false;
+    });
+    node.addEventListener('pointerup', (event) => {
+      const dx = event.clientX - swipeX;
+      const dy = event.clientY - swipeY;
+      if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+      if (node === wall && mode === 'network') return;
+      didSwipe = true;
+      shiftLens(dx < 0 ? 1 : -1);
+    });
+  }
+  watchSwipe(profileSwitch);
+  watchSwipe(wall);
+  wall.addEventListener('click', (event) => {
+    if (!didSwipe) return;
+    didSwipe = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }, true);
+  if (netRating) {
+    netRating.addEventListener('click', () => {
+      netRatingOn = !netRatingOn;
+      netRating.setAttribute('aria-pressed', netRatingOn ? 'true' : 'false');
+      if (network) network.setRating(netRatingOn);
+    });
+  }
   if (netCompare) {
     netCompare.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -1808,10 +1976,17 @@
   function refreshEmpty() {
     const node = document.getElementById('empty-net');
     if (!node) return;
-    node.hidden = FILMS.length > 0 || mode !== 'network';
+    const count = lensPack ? lensPack.films.length : FILMS.length;
+    node.hidden = count > 0 || mode !== 'network';
   }
 
   function showRoster() {
+    if (lensPack) {
+      if (mode === 'network') showLensNetwork();
+      else if (mode !== 'profile') showWall();
+      refreshEmpty();
+      return;
+    }
     if (network && networkReady) {
       network.setFilms(FILMS);
       network.reflow();
@@ -1834,6 +2009,7 @@
     started = true;
     wallSort = savedWallSort();
     paintSortMenu();
+    paintProfileSwitch();
     const ready = setMode(savedMode());
     loadPosters();
     loadStoredFacets();
@@ -2539,6 +2715,7 @@
     };
     followDot = (names.pending || 0) > 0;
     applyProfileDot();
+    paintProfileSwitch();
   }
 
   function applyProfileDot() {
@@ -4706,6 +4883,14 @@
     byId.clear();
     started = false;
     account = null;
+    lensId = null;
+    lensPack = null;
+    guestNet = false;
+    const profileSwitchHost = document.getElementById('profile-switch');
+    if (profileSwitchHost) {
+      profileSwitchHost.hidden = true;
+      profileSwitchHost.replaceChildren();
+    }
     selectedId = null;
     wall.replaceChildren();
     wall.hidden = true;

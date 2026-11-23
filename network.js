@@ -901,6 +901,43 @@
         films = next;
       },
       reflow() {
+        films = options.films || [];
+        stored = readStored();
+        collectPoints();
+        buildFilms();
+        buildLabels();
+        fit();
+        userMoved = false;
+        paint();
+      },
+      showGuest(list) {
+        films = list || [];
+        points = new Map();
+        const layout = root.Layout;
+        const known = new Map();
+        films.forEach((film, index) => {
+          let placed = null;
+          if (layout && layout.placeOne) {
+            try { placed = layout.placeOne(film, films, known); } catch { placed = null; }
+          }
+          if (!placed || !Number.isFinite(placed.x) || !Number.isFinite(placed.y)) {
+            const angle = (index / Math.max(films.length, 1)) * Math.PI * 2;
+            placed = { x: 0.5 + Math.cos(angle) * 0.28, y: 0.5 + Math.sin(angle) * 0.28 };
+          }
+          const point = { x: placed.x, y: placed.y };
+          known.set(film.id, point);
+          points.set(film.id, point);
+        });
+        buildFilms();
+        buildLabels();
+        sizeWorld();
+        fitView = computeView(points);
+        fit();
+        userMoved = false;
+        paint();
+      },
+      restoreOwn() {
+        films = options.films || [];
         stored = readStored();
         collectPoints();
         buildFilms();

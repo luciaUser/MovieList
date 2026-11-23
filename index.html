@@ -25,7 +25,24 @@
         <button type="submit" class="sr">Ablegen</button>
       </form>
     </div>
+    <div id="profile-switch" hidden></div>
     <div class="modes" role="tablist" aria-label="Ansicht">
+      <button type="button" id="mode-network" class="icon-tab" role="tab" aria-selected="true" aria-label="Netzwerk">
+        <svg viewBox="6.7 3.5 25.6 22.7" aria-hidden="true">
+          <defs>
+            <linearGradient id="lit-network" gradientUnits="userSpaceOnUse" x1="0" y1="26.2" x2="0" y2="3.5">
+              <stop offset="0" stop-color="#ffffff"></stop>
+              <stop offset="1" stop-color="#8d8d8d"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M19.52 10.7986L19.52 16.7986" fill="none" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"></path>
+          <path d="M19.5208 16.7986L13.375 20.0884" fill="none" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"></path>
+          <path d="M19.52 16.7986L25.3162 20.3464" fill="none" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"></path>
+          <circle cx="19.52" cy="7.79859" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
+          <circle cx="28.02" cy="21.8915" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
+          <circle cx="11.02" cy="21.8914" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
+        </svg>
+      </button>
       <button type="button" id="mode-profile" class="icon-tab" role="tab" aria-selected="false" aria-label="Profil">
         <svg viewBox="8.9 3.9 22.2 26.3" aria-hidden="true">
           <defs>
@@ -51,22 +68,6 @@
           <path d="M9.33301 12.4472L12.733 11.0472V21.2472" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
         </svg>
       </button>
-      <button type="button" id="mode-network" class="icon-tab" role="tab" aria-selected="true" aria-label="Netzwerk">
-        <svg viewBox="6.7 3.5 25.6 22.7" aria-hidden="true">
-          <defs>
-            <linearGradient id="lit-network" gradientUnits="userSpaceOnUse" x1="0" y1="26.2" x2="0" y2="3.5">
-              <stop offset="0" stop-color="#ffffff"></stop>
-              <stop offset="1" stop-color="#8d8d8d"></stop>
-            </linearGradient>
-          </defs>
-          <path d="M19.52 10.7986L19.52 16.7986" fill="none" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"></path>
-          <path d="M19.5208 16.7986L13.375 20.0884" fill="none" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"></path>
-          <path d="M19.52 16.7986L25.3162 20.3464" fill="none" stroke="currentColor" stroke-width="1.67" stroke-linejoin="round"></path>
-          <circle cx="19.52" cy="7.79859" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
-          <circle cx="28.02" cy="21.8915" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
-          <circle cx="11.02" cy="21.8914" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
-        </svg>
-      </button>
       <div class="sort-wrap">
         <button type="button" id="mode-director" class="icon-tab" role="tab" aria-selected="false" aria-expanded="false" aria-haspopup="true" aria-controls="sort-pop" aria-label="Sortierung">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -76,7 +77,7 @@
                 <stop offset="1" stop-color="#8d8d8d"></stop>
               </linearGradient>
             </defs>
-            <path d="M5 10h14M5 14.4h14M5 18.8h14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+            <path d="M1.2 4.5h21.6M1.2 12h21.6M1.2 19.5h21.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
           </svg>
         </button>
         <div id="sort-pop" aria-hidden="true">
@@ -85,9 +86,6 @@
           <button type="button" data-sort="cast" aria-pressed="false">Schauspieler</button>
         </div>
       </div>
-      <button type="button" id="net-rating" aria-pressed="false">Wertung</button>
-      <button type="button" id="net-compare" aria-pressed="false" aria-expanded="false">Vergleichen</button>
-      <div id="compare-pop" hidden></div>
     </div>
     <form id="search-form" role="search">
       <div class="line-slot">

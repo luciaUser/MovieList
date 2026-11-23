@@ -81,6 +81,41 @@ header::before {
 
 header > * { pointer-events: auto; }
 
+#profile-switch {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  max-width: min(280px, 52vw);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  color: #6a6a6a;
+  font-size: 17px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  touch-action: pan-y;
+}
+
+#profile-switch[hidden] { display: none !important; }
+
+#profile-switch button {
+  width: auto;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+#profile-switch .is-current { color: #fff; }
+
 .add-film {
   position: relative;
   display: flex;
@@ -857,12 +892,6 @@ body.is-network {
 
 .net-film.is-favorite { outline: 2px solid rgba(255, 255, 255, 0.9); outline-offset: 1px; }
 
-#net-rating,
-#net-compare { display: none; }
-
-body.is-network #net-rating,
-body.is-network #net-compare { display: inline; }
-
 #compare-pop {
   position: absolute;
   z-index: 9;
@@ -971,34 +1000,21 @@ body.is-network #net-compare { display: inline; }
   .modes .icon-tab,
   .modes .sort-wrap { pointer-events: auto; }
 
-  #mode-profile { order: 1; }
-  .sort-wrap { order: 2; }
-  #mode-rating { order: 3; }
-  #mode-network { order: 4; }
-
   #sort-pop {
-    left: 0;
-    max-width: calc(100vw - 36px);
-  }
-
-  body.is-network #net-rating,
-  body.is-network #net-compare {
-    position: fixed;
-    z-index: 9;
-    top: 20px;
-    pointer-events: auto;
-  }
-
-  body.is-network #net-rating { left: 58px; }
-
-  body.is-network #net-compare { right: 52px; }
-
-  #compare-pop {
-    position: fixed;
-    top: 54px;
-    right: 16px;
     left: auto;
+    right: calc(100% + 14px);
+    max-width: calc(100vw - 36px);
+    clip-path: inset(-12px 0 -12px 100%);
+    transform: translateY(-50%) translateX(10px);
+    transform-origin: right center;
   }
+
+  .modes.is-sort-open #sort-pop {
+    clip-path: inset(-12px 0 -12px 0);
+    transform: translateY(-50%) translateX(0);
+  }
+
+  #profile-switch { max-width: min(220px, 58vw); }
 
   #net-bar { top: 78px; }
 
