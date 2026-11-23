@@ -421,7 +421,7 @@
     const shown = lines.slice(0, 5);
     const start = 360 - (shown.length - 1) * 28;
     const text = shown.map((part, index) => (
-      `<text x="250" y="${start + index * 56}" text-anchor="middle" fill="#f2f2f2" font-family="Kurdis Test, sans-serif" font-size="34">${escapeXml(part)}</text>`
+      `<text x="250" y="${start + index * 56}" text-anchor="middle" fill="#f2f2f2" font-family="Gilroy, sans-serif" font-size="34">${escapeXml(part)}</text>`
     )).join('');
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="500" height="750" viewBox="0 0 500 750"><rect width="500" height="750" fill="#000"/>${text}</svg>`;
     return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
