@@ -23,6 +23,7 @@
   const modeRating = document.getElementById('mode-rating');
   const modeProfile = document.getElementById('mode-profile');
   const netRating = document.getElementById('net-rating');
+  const netCompare = document.getElementById('net-compare');
   const MODE_KEY = 'moviebylucia-view-v1';
   const recoveryLink = /(?:^|[#&])type=recovery(?:&|$)/.test(location.hash);
 
@@ -65,10 +66,21 @@
   let profileMode = 'home';
   let settingsOpen = false;
   let profileStats = null;
-  let profileLists = { followers: [], following: [] };
+  let profileLists = { followers: [], following: [], requests: [] };
   let profileMail = null;
   let profileStatus = '';
   let followChannel = null;
+  let listKind = '';
+  let viewingId = null;
+  let otherToken = 0;
+  let otherCache = new Map();
+  let followedCache = null;
+  let skipProfileHome = false;
+  let panelFilm = null;
+  let compareId = null;
+  let compareName = '';
+  let pendingInvite = new URLSearchParams(location.search).get('profil') || '';
+  let searchTimer = 0;
   let selectedId = null;
   let links = [];
   let activeLinkId = null;
@@ -610,6 +622,7 @@
   }
 
   function clearSelection() {
+    panelFilm = null;
     selectedId = null;
     links = [];
     activeLinkId = null;
@@ -635,6 +648,9 @@
       button.querySelector('.poster-score').textContent = row.rating == null
         ? ''
         : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
+    });
+    document.querySelectorAll('.their-wall .poster').forEach((button) => {
+      button.classList.toggle('is-selected', button.dataset.id === selectedId);
     });
     wall.querySelectorAll('.genre-bar').forEach((bar) => {
       const films = bar.dataset.ids.split(',').filter(Boolean).map((id) => byId.get(id)).filter(Boolean);
@@ -666,7 +682,9 @@
   }
 
   function renderPanel(film) {
+    panelFilm = film;
     const row = entry(film.id);
+    const mine = byId.has(film.id);
     panel.replaceChildren();
     panel.hidden = false;
 
@@ -720,14 +738,24 @@
     imdb.append(el('span', 'star', '★'), el('span', null, film.imdbLabel));
     head.append(imdb);
     const genreRow = el('div', 'genre-row');
-    if (film.genres.length) {
+    if ((film.genres || []).length) {
       const pills = el('ul', 'pills');
       film.genres.forEach((genre) => pills.append(el('li', null, genre)));
       genreRow.append(pills);
     }
-    genreRow.append(remove);
+    if (mine) genreRow.append(remove);
     head.append(genreRow);
     panel.append(head);
+    const followed = el('div', 'followed-row');
+    followed.hidden = true;
+    panel.append(followed);
+    fillFollowed(film.id, followed);
+    if (!mine) {
+      const addMine = el('button', 'text-line', 'Zu meinem Archiv hinzufügen');
+      addMine.type = 'button';
+      addMine.addEventListener('click', () => addForeignFilm(film));
+      panel.append(addMine);
+    }
 
     const field = el('div', 'block');
     const rateLabel = el('label', null, 'Bewertung');
@@ -1164,9 +1192,16 @@
   }
 
   function setMode(next) {
+    if (next !== 'profile' && !started && account && !leaving) {
+      openSheet(gateView());
+      return Promise.resolve();
+    }
     if (next !== 'network') {
       spotlight = null;
       renderBar();
+      const pop = document.getElementById('compare-pop');
+      if (pop) pop.hidden = true;
+      if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
     }
     mode = next;
     ratingView = next === 'rating';
@@ -1183,7 +1218,8 @@
       networkEl.hidden = true;
       wall.hidden = true;
       document.body.classList.remove('is-network');
-      renderProfile();
+      if (skipProfileHome) skipProfileHome = false;
+      else renderProfile();
       return Promise.resolve();
     }
     if (next === 'network') {
@@ -1318,6 +1354,23 @@
     netRating.setAttribute('aria-pressed', netRatingOn ? 'true' : 'false');
     if (network) network.setRating(netRatingOn);
   });
+  if (netCompare) {
+    netCompare.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const pop = document.getElementById('compare-pop');
+      if (!pop) return;
+      if (!pop.hidden) {
+        pop.hidden = true;
+        netCompare.setAttribute('aria-expanded', 'false');
+        return;
+      }
+      openCompareMenu();
+    });
+  }
+  const compareBar = document.getElementById('compare-bar');
+  if (compareBar) {
+    compareBar.querySelector('button').addEventListener('click', () => stopCompare());
+  }
 
   document.getElementById('search-form').addEventListener('submit', (event) => {
     event.preventDefault();
@@ -1505,6 +1558,11 @@
   });
 
   document.addEventListener('pointerdown', (event) => {
+    const pop = document.getElementById('compare-pop');
+    if (pop && !pop.hidden && !pop.contains(event.target) && event.target !== netCompare) {
+      pop.hidden = true;
+      if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
+    }
     if (document.querySelector('header').contains(event.target)) return;
     if (addFilm.classList.contains('is-open')) closeAdd();
     if (searchForm.classList.contains('is-open')) closeSearch();
@@ -1666,7 +1724,7 @@
   }
 
   function startApp() {
-    if (started) return Promise.resolve(showRoster());
+    if (started) return Promise.resolve(showRoster()).then((value) => { queueInvite(); return value; });
     started = true;
     const ready = setMode(savedMode());
     loadPosters();
@@ -1674,7 +1732,7 @@
     ensureVocab().catch(() => {
       /* Bearbeiten holt das Vokabular erneut */
     });
-    return ready;
+    return Promise.resolve(ready).then((value) => { queueInvite(); return value; });
   }
 
   function gateView() {
@@ -2358,17 +2416,803 @@
     }
   }
 
+  function applyFollowLists(names) {
+    if (!names) return;
+    profileLists = {
+      followers: names.followers || [],
+      following: names.following || [],
+      requests: names.requests || [],
+    };
+    const dot = modeProfile && modeProfile.querySelector('.profile-dot');
+    if (dot) dot.hidden = !(names.pending > 0);
+  }
+
+  async function refreshFollowLists() {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.followNames) return;
+    applyFollowLists(await cloud.followNames());
+  }
+
+  function followFail(error) {
+    if (error && (error.name === 'TypeError' || /failed to fetch|network/i.test(String(error.message || '')))) {
+      return 'Keine Verbindung.';
+    }
+    return 'Das hat nicht geklappt.';
+  }
+
+  function repaintList() {
+    if (listKind === 'followers') paintNames('Follower', profileLists.followers, 'followers');
+    else if (listKind === 'following') paintNames('Folgt', profileLists.following, 'following');
+  }
+
+  async function changeFollow(id, action) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !id) return;
+    try {
+      if (action === 'follow') await cloud.follow(id);
+      else if (action === 'unfollow') await cloud.unfollow(id);
+      else if (action === 'remove') await cloud.removeFollower(id);
+      else if (action === 'accept') await cloud.acceptFollow(id);
+      else if (action === 'decline') await cloud.declineFollow(id);
+      otherCache.delete(id);
+      followedCache = null;
+      await refreshFollowLists();
+      refreshProfileDot();
+      if (profileMode === 'other' && viewingId === id) openOther(id, true);
+      else if (profileMode === 'home') paintProfile();
+      else if (profileMode === 'list') repaintList();
+      if (compareId === id) {
+        const person = (profileLists.following || []).find((item) => item.id === id);
+        if (person) applyCompare(person);
+        else stopCompare();
+      }
+      const node = panel.querySelector('.followed-row');
+      if (node && panelFilm && !panel.hidden) fillFollowed(panelFilm.id, node);
+    } catch (error) {
+      const note = profileRoot() && profileRoot().querySelector('.profile-status');
+      const text = followFail(error);
+      if (note) note.textContent = text;
+      else if (profileMode === 'home') {
+        profileStatus = text;
+        paintProfile();
+      }
+    }
+  }
+
+  function filmFromCatalog(row) {
+    const facets = row.facets && typeof row.facets === 'object' ? row.facets : {};
+    const yearNum = Number(String(row.year || '').slice(0, 4));
+    const genres = Array.isArray(facets.genres) ? facets.genres : [];
+    const score = row.tmdb_rating == null ? null : Number(row.tmdb_rating);
+    return {
+      id: row.id,
+      title: row.title || 'Film',
+      original: row.original_title || null,
+      year: row.year || '',
+      yearNum: Number.isFinite(yearNum) ? yearNum : null,
+      kind: row.kind === 'tv' ? 'serie' : 'film',
+      genres,
+      cluster: genres[0] || '',
+      director: facets.director || '',
+      cast: Array.isArray(facets.cast) ? facets.cast : [],
+      poster: row.poster || facets.poster || '',
+      imdb: Number.isFinite(score) ? score : null,
+      imdbLabel: Number.isFinite(score) ? String(score).replace('.', ',') : '–',
+      tags: Array.isArray(facets.themes) ? facets.themes : [],
+      meta: [],
+      facets,
+    };
+  }
+
+  function shapePack(raw) {
+    const filmRows = new Map((raw.films || []).map((row) => [row.id, row]));
+    const entryRows = new Map();
+    (raw.entries || []).forEach((row) => {
+      if (!row || row.hidden || row.in_archive === false) return;
+      entryRows.set(row.film_id, row);
+    });
+    const films = [];
+    entryRows.forEach((row, id) => {
+      const catalog = filmRows.get(id);
+      if (catalog && catalog.poster && !posters.get(id)) posters.set(id, catalog.poster);
+      const local = byId.get(id)
+        || (window.FILMS || []).find((item) => item.id === id)
+        || starterAdded.find((item) => item.id === id);
+      if (local) {
+        films.push(local);
+        return;
+      }
+      films.push(catalog ? filmFromCatalog(catalog) : {
+        id,
+        title: 'Film',
+        genres: [],
+        cast: [],
+        director: '',
+        year: '',
+        imdbLabel: '–',
+        poster: '',
+      });
+    });
+    const entryOf = (filmId) => {
+      const row = entryRows.get(filmId) || {};
+      const rating = Number(row.rating);
+      return {
+        rating: Number.isFinite(rating) && rating > 0 ? Math.round(rating * 10) / 10 : null,
+        watched: !!row.watched,
+        next: !!row.next,
+        favorite: !!row.favorite,
+        updatedAt: row.updated_at || '',
+        facetOverrides: row.facet_overrides && typeof row.facet_overrides === 'object' ? row.facet_overrides : null,
+      };
+    };
+    const catalogFilms = new Map((raw.headFilms || []).map((row) => [row.id, filmFromCatalog(row)]));
+    const headFilms = (raw.head && Array.isArray(raw.head.top_films) ? raw.head.top_films : [])
+      .map((id) => catalogFilms.get(id))
+      .filter(Boolean);
+    headFilms.forEach((film) => {
+      if (film.poster && !posters.get(film.id)) posters.set(film.id, film.poster);
+    });
+    return { ...raw, films, entryOf, headFilms };
+  }
+
+  async function packFor(id, fresh) {
+    if (!fresh && otherCache.has(id)) return otherCache.get(id);
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.loadOther) return null;
+    const raw = await cloud.loadOther(id);
+    if (!raw) return null;
+    const pack = shapePack(raw);
+    otherCache.set(id, pack);
+    return pack;
+  }
+
+  function theirFull(film, row) {
+    const base = {};
+    if (film.facets && typeof film.facets === 'object') Object.assign(base, film.facets);
+    const local = (globalThis.FILM_FACETS || {})[film.id];
+    if (local && typeof local === 'object') Object.assign(base, local);
+    if (row && row.facetOverrides) Object.assign(base, row.facetOverrides);
+    const merge = globalThis.Facets && globalThis.Facets.mergeFilm;
+    return merge ? merge(film, base) : film;
+  }
+
+  function theirPeople(pack) {
+    const actors = new Map();
+    const directors = new Map();
+    const add = (map, name, rating) => {
+      const key = String(name || '').trim();
+      if (!key) return;
+      const row = map.get(key) || { name: key, sum: 0, count: 0 };
+      row.sum += rating;
+      row.count += 1;
+      map.set(key, row);
+    };
+    pack.films.forEach((film) => {
+      const row = pack.entryOf(film.id);
+      if (row.rating == null) return;
+      const full = theirFull(film, row);
+      (full.cast || []).forEach((name) => add(actors, name, row.rating));
+      if (full.director) add(directors, full.director, row.rating);
+    });
+    return { actors, directors };
+  }
+
+  function theirPins(pack) {
+    const raw = pack.sensitive && pack.sensitive.pinned_people;
+    return {
+      actors: raw && Array.isArray(raw.actors) ? raw.actors.filter((name) => typeof name === 'string').slice(0, 5) : [],
+      directors: raw && Array.isArray(raw.directors) ? raw.directors.filter((name) => typeof name === 'string').slice(0, 5) : [],
+    };
+  }
+
+  function theirGroups(pack) {
+    const groups = new Map();
+    pack.films.forEach((film) => {
+      const bucket = ratingBucket(pack.entryOf(film.id).rating);
+      if (!groups.has(bucket)) groups.set(bucket, []);
+      groups.get(bucket).push(film);
+    });
+    return [...groups.keys()]
+      .sort((a, b) => {
+        if (a === 'none') return 1;
+        if (b === 'none') return -1;
+        return b - a;
+      })
+      .map((bucket) => ({
+        label: ratingLabel(bucket),
+        films: groups.get(bucket).slice().sort((a, b) => (
+          (pack.entryOf(b.id).rating ?? -1) - (pack.entryOf(a.id).rating ?? -1)
+          || String(a.title || '').localeCompare(b.title || '', 'de')
+        )),
+      }));
+  }
+
+  function theirPoster(film, pack) {
+    const row = pack.entryOf(film.id);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'poster';
+    button.dataset.id = film.id;
+    button.classList.toggle('is-rated', row.rating != null);
+    button.classList.toggle('is-favorite', !!row.favorite);
+    button.classList.toggle('is-selected', film.id === selectedId);
+    const image = document.createElement('img');
+    image.alt = '';
+    image.draggable = false;
+    image.decoding = 'async';
+    image.src = posterSrc(film);
+    const tint = document.createElement('span');
+    tint.className = 'tint';
+    tint.style.background = row.rating == null ? '' : ratingColor(row.rating);
+    const score = document.createElement('span');
+    score.className = 'poster-score';
+    score.textContent = row.rating == null ? '' : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
+    button.append(image, tint, score);
+    button.addEventListener('click', () => openFilm(film));
+    return button;
+  }
+
+  function paintTheirWall(pack) {
+    if (!pack.films.length) return el('p', 'profile-note', 'Noch keine Filme.');
+    const wallBox = el('div', 'their-wall');
+    theirGroups(pack).forEach((group) => {
+      const bar = document.createElement('div');
+      bar.className = 'genre-bar';
+      const scores = group.films.map((film) => pack.entryOf(film.id).rating).filter((value) => value != null);
+      const avg = scores.length ? scores.reduce((sum, value) => sum + value, 0) / scores.length : null;
+      bar.append(
+        el('span', 'genre-name', group.label),
+        el('span', 'genre-count', group.films.length === 1 ? '1 Film' : `${group.films.length} Filme`),
+        el('span', 'genre-score', avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`),
+      );
+      wallBox.append(bar);
+      group.films.forEach((film) => wallBox.append(theirPoster(film, pack)));
+    });
+    return wallBox;
+  }
+
+  function paintTheirNext(pack) {
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', 'Als Nächstes'));
+    const films = pack.films.filter((film) => pack.entryOf(film.id).next);
+    if (!films.length) {
+      block.append(el('p', 'profile-note', 'Noch nichts.'));
+      return block;
+    }
+    const row = el('div', 'mini-row');
+    films.forEach((film) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'mini-card';
+      card.setAttribute('aria-label', film.title);
+      const image = document.createElement('img');
+      image.alt = '';
+      image.src = posterSrc(film);
+      card.append(image);
+      card.addEventListener('click', () => openFilm(film));
+      row.append(card);
+    });
+    block.append(row);
+    return block;
+  }
+
+  function paintHeadTop(pack) {
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', 'Top 5'));
+    const films = pack.headFilms || [];
+    if (!films.length) {
+      block.append(el('p', 'profile-note', 'Noch zu wenig Wertungen'));
+      return block;
+    }
+    const row = el('div', 'top-row');
+    films.forEach((film, index) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'top-card';
+      card.setAttribute('aria-label', `${index + 1}. ${film.title}`);
+      const image = document.createElement('img');
+      image.alt = '';
+      image.src = posterSrc(film);
+      card.append(el('span', 'top-rank', String(index + 1)), image);
+      card.addEventListener('click', () => openFilm(film));
+      row.append(card);
+    });
+    block.append(row);
+    return block;
+  }
+
+  function paintTheirTop(pack) {
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', 'Top 5'));
+    const custom = pack.sensitive && Array.isArray(pack.sensitive.top_films) ? pack.sensitive.top_films : [];
+    const films = custom.length
+      ? custom.map((id) => pack.films.find((film) => film.id === id)).filter(Boolean).slice(0, 5)
+      : pack.films.filter((film) => pack.entryOf(film.id).rating != null).sort((a, b) => {
+        const diff = pack.entryOf(b.id).rating - pack.entryOf(a.id).rating;
+        if (diff) return diff;
+        return (Date.parse(pack.entryOf(b.id).updatedAt) || 0) - (Date.parse(pack.entryOf(a.id).updatedAt) || 0);
+      }).slice(0, 5);
+    if (!films.length) {
+      block.append(el('p', 'profile-note', custom.length
+        ? 'Die ausgewählten Filme sind nicht mehr im Archiv.'
+        : 'Noch zu wenig Wertungen'));
+      return block;
+    }
+    const row = el('div', 'top-row');
+    films.forEach((film, index) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'top-card';
+      card.setAttribute('aria-label', `${index + 1}. ${film.title}`);
+      const image = document.createElement('img');
+      image.alt = '';
+      image.src = posterSrc(film);
+      card.append(el('span', 'top-rank', String(index + 1)), image);
+      card.addEventListener('click', () => openFilm(film));
+      row.append(card);
+    });
+    block.append(row);
+    return block;
+  }
+
+  function meanScore(values) {
+    if (!values.length) return null;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  function paintComparison(pack) {
+    const section = document.createElement('section');
+    const myScores = [];
+    FILMS.forEach((film) => {
+      const row = entry(film.id);
+      if (row.rating != null) myScores.push(row.rating);
+    });
+    const theirScores = [];
+    let both = 0;
+    const gaps = [];
+    const high = [];
+    pack.films.forEach((film) => {
+      const row = pack.entryOf(film.id);
+      const mine = entry(film.id);
+      const seen = byId.has(film.id);
+      if (row.rating != null) theirScores.push(row.rating);
+      if (row.watched && seen && mine.watched) both += 1;
+      if (row.rating != null && seen && mine.rating != null) {
+        gaps.push({
+          film,
+          mine: mine.rating,
+          theirs: row.rating,
+          gap: Math.abs(mine.rating - row.rating),
+        });
+      }
+      if (row.rating != null && row.rating >= 8 && !(seen && mine.watched)) high.push(film);
+    });
+    const mineAvg = meanScore(myScores);
+    const theirAvg = meanScore(theirScores);
+    section.append(el('p', 'compare-line', `Ihr habt beide gesehen: ${both}`));
+    section.append(el('p', 'compare-line', `Durchschnitt: du ${mineAvg == null ? '–' : scoreText(mineAvg)} · sie ${theirAvg == null ? '–' : scoreText(theirAvg)}`));
+    gaps.sort((a, b) => b.gap - a.gap || String(a.film.title || '').localeCompare(b.film.title || '', 'de'));
+    const picked = gaps.slice(0, 3);
+    if (picked.length) {
+      const block = document.createElement('div');
+      block.append(el('p', 'profile-kicker', 'Euer grösster Unterschied'));
+      picked.forEach((item) => {
+        const line = el('button', 'text-line', `${item.film.title} · du ${scoreText(item.mine)} · sie ${scoreText(item.theirs)}`);
+        line.type = 'button';
+        line.addEventListener('click', () => openFilm(item.film));
+        block.append(line);
+      });
+      section.append(block);
+    }
+    high.sort((a, b) => pack.entryOf(b.id).rating - pack.entryOf(a.id).rating || String(a.title || '').localeCompare(b.title || '', 'de'));
+    const posters = high.slice(0, 10);
+    if (posters.length) {
+      const block = document.createElement('div');
+      block.append(el('p', 'profile-kicker', 'Hat sie hoch bewertet, du noch nicht gesehen'));
+      const row = el('div', 'mini-row');
+      posters.forEach((film) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'mini-card';
+        card.setAttribute('aria-label', film.title);
+        const image = document.createElement('img');
+        image.alt = '';
+        image.src = posterSrc(film);
+        card.append(image);
+        card.addEventListener('click', () => openFilm(film));
+        row.append(card);
+      });
+      block.append(row);
+      section.append(block);
+    }
+    return section;
+  }
+
+  function paintOther(pack) {
+    const root = profileRoot();
+    if (!root || !pack || !pack.profile) return;
+    const person = pack.profile;
+    root.classList.remove('profile-list');
+    root.replaceChildren();
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'back';
+    back.textContent = 'Zurück';
+    back.addEventListener('click', () => renderProfile());
+    root.append(back);
+    root.append(el('h1', null, person.display_name || person.username || 'Profil'));
+    root.append(el('p', 'handle', person.username ? `@${person.username}` : ''));
+    const follow = lineButton(pack.follow === 'accepted' ? 'Entfolgen' : pack.follow === 'pending' ? 'Angefragt' : 'Folgen');
+    follow.addEventListener('click', () => changeFollow(person.id, pack.follow === 'none' ? 'follow' : 'unfollow'));
+    root.append(follow);
+    const status = el('p', 'profile-status', '');
+    status.setAttribute('role', 'status');
+    root.append(status);
+    const stats = pack.stats || {};
+    const numbers = el('div', 'profile-stats');
+    numbers.append(
+      statNode(String(Number(stats.films) || 0), 'Filme'),
+      statNode(String(Number(stats.followers) || 0), 'Follower'),
+      statNode(String(Number(stats.following) || 0), 'Folgt'),
+    );
+    root.append(numbers);
+    if (!pack.canView) {
+      if (person.is_private) {
+        root.append(el('p', 'profile-note', 'Dieses Profil ist privat'));
+        return;
+      }
+      if (pack.head) {
+        root.append(paintHeadTop(pack));
+        const pins = theirPins({ sensitive: pack.head });
+        if (pins.actors.length) root.append(paintPeople('actors', 'Lieblingsschauspieler', new Map(), { readOnly: true, pins }));
+        if (pins.directors.length) root.append(paintPeople('directors', 'Lieblingsregie', new Map(), { readOnly: true, pins }));
+      }
+      return;
+    }
+    root.append(paintComparison(pack));
+    root.append(paintTheirTop(pack));
+    const people = theirPeople(pack);
+    const pins = theirPins(pack);
+    root.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors, { readOnly: true, pins }));
+    root.append(paintPeople('directors', 'Lieblingsregie', people.directors, { readOnly: true, pins }));
+    root.append(paintTheirWall(pack));
+    root.append(paintTheirNext(pack));
+  }
+
+  function showOther(id) {
+    if (!id) return;
+    if (mode !== 'profile') {
+      skipProfileHome = true;
+      setMode('profile');
+    }
+    openOther(id);
+  }
+
+  function openOther(id, fresh) {
+    viewingId = id;
+    profileMode = 'other';
+    listKind = '';
+    const token = ++otherToken;
+    const root = profileRoot();
+    if (!root) return;
+    root.classList.remove('profile-list');
+    if (!fresh && otherCache.has(id)) {
+      paintOther(otherCache.get(id));
+      return;
+    }
+    if (fresh) otherCache.delete(id);
+    root.replaceChildren(el('p', 'profile-note', '…'));
+    packFor(id, true).then((pack) => {
+      if (token !== otherToken || viewingId !== id) return;
+      if (!pack) {
+        root.replaceChildren(el('p', 'profile-note', 'Dieses Profil gibt es nicht.'));
+        return;
+      }
+      paintOther(pack);
+    }).catch(() => {
+      if (token !== otherToken) return;
+      root.replaceChildren(el('p', 'profile-note', 'Keine Verbindung.'));
+    });
+  }
+
+  function openProfileByName(name) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.profileByUsername) return;
+    cloud.profileByUsername(name).then((row) => {
+      if (!row || !row.id || (account && row.id === account.id)) return;
+      closeSheet();
+      showOther(row.id);
+    }).catch(() => {});
+  }
+
+  function clearInviteParam() {
+    const url = new URL(location.href);
+    if (!url.searchParams.has('profil')) return;
+    url.searchParams.delete('profil');
+    history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function queueInvite() {
+    if (!pendingInvite || !account) return;
+    const name = String(pendingInvite).trim().toLowerCase();
+    pendingInvite = '';
+    clearInviteParam();
+    if (!name || name === String(account.username || '').toLowerCase()) return;
+    openProfileByName(name);
+  }
+
+  function paintFinder() {
+    const block = el('div', 'profile-find');
+    const input = document.createElement('input');
+    input.type = 'search';
+    input.placeholder = 'Profile suchen';
+    input.setAttribute('aria-label', 'Profile suchen');
+    input.autocomplete = 'off';
+    const hits = el('div', 'profile-hits');
+    let token = 0;
+    input.addEventListener('input', () => {
+      const query = input.value.trim();
+      window.clearTimeout(searchTimer);
+      if (query.length < 2) {
+        hits.replaceChildren();
+        return;
+      }
+      searchTimer = window.setTimeout(async () => {
+        const mine = token + 1;
+        token = mine;
+        const cloud = globalThis.Cloud;
+        if (!cloud || !cloud.searchProfiles) return;
+        try {
+          const rows = await cloud.searchProfiles(query);
+          if (mine !== token) return;
+          hits.replaceChildren();
+          const list = (rows || []).filter((row) => !account || row.id !== account.id).slice(0, 10);
+          if (!list.length) {
+            hits.append(el('p', 'profile-note', 'Keine Profile.'));
+            return;
+          }
+          list.forEach((row) => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'hit-row';
+            button.append(document.createTextNode(row.display_name || row.username), el('small', null, `@${row.username}`));
+            button.addEventListener('click', () => showOther(row.id));
+            hits.append(button);
+          });
+        } catch {
+          if (mine === token) hits.replaceChildren(el('p', 'profile-note', 'Keine Verbindung.'));
+        }
+      }, 250);
+    });
+    const copy = lineButton('Einladungslink kopieren');
+    const note = el('p', 'profile-status', '');
+    note.setAttribute('role', 'status');
+    copy.addEventListener('click', async () => {
+      const name = account && account.username;
+      if (!name) return;
+      const url = `${location.origin}${location.pathname}?profil=${encodeURIComponent(name)}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        note.textContent = 'Link kopiert.';
+      } catch {
+        note.textContent = url;
+      }
+    });
+    block.append(input, hits, copy, note);
+    return block;
+  }
+
+  function paintRequests(root) {
+    if (!account || !account.is_private) return;
+    const rows = profileLists.requests || [];
+    if (!rows.length) return;
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', 'Anfragen'));
+    rows.forEach((person) => {
+      const line = el('div', 'request-line');
+      const name = el('button', 'text-line', person.name || person.username || 'Profil');
+      name.type = 'button';
+      if (person.id) name.addEventListener('click', () => showOther(person.id));
+      const accept = lineButton('Annehmen');
+      accept.addEventListener('click', () => changeFollow(person.id, 'accept'));
+      const decline = lineButton('Ablehnen');
+      decline.addEventListener('click', () => changeFollow(person.id, 'decline'));
+      line.append(name, accept, decline);
+      block.append(line);
+    });
+    root.append(block);
+  }
+
+  function addForeignFilm(film) {
+    if (!globalThis.Store || !film) return;
+    if (!archive) {
+      adoptArchive(globalThis.Store.create('leer'));
+      closeSheet();
+      started = true;
+      loadPosters();
+      loadStoredFacets();
+    }
+    const facets = film.facets || (globalThis.FILM_FACETS || {})[film.id] || {};
+    const existing = byId.get(film.id) || findExisting(film, facets);
+    if (existing) {
+      const kept = adopt(existing);
+      persist();
+      if (network) {
+        network.setFilms(FILMS);
+        if (!network.pointOf(kept.id)) network.addFilm(kept);
+      }
+      renderPanel(kept);
+      paint();
+      return;
+    }
+    const next = { ...film, genres: film.genres || [], cast: film.cast || [] };
+    if (facets && Object.keys(facets).length) rememberFacets(next.id, facets);
+    if (next.poster) posters.set(next.id, next.poster);
+    added.push(next);
+    persist();
+    FILMS.push(next);
+    byId.set(next.id, next);
+    seatProvisional(next);
+    if (network) {
+      network.setFilms(FILMS);
+      network.addFilm(next);
+    }
+    scheduleRelayout();
+    renderPanel(next);
+    paint();
+    if (mode !== 'network' && mode !== 'profile') buildWall();
+  }
+
+  function fillFollowed(filmId, node) {
+    if (!node) return;
+    followedRatings().then((map) => {
+      if (!panelFilm || panelFilm.id !== filmId || !node.isConnected) return;
+      const rows = (map && map.get(filmId)) || [];
+      if (!rows.length) {
+        node.hidden = true;
+        node.replaceChildren();
+        return;
+      }
+      node.hidden = false;
+      node.replaceChildren(el('span', 'profile-kicker', 'Gefolgte'));
+      const line = el('p', 'followed-names');
+      rows.forEach((person, index) => {
+        if (index) line.append(document.createTextNode(' · '));
+        const button = el('button', null, `${person.username} ${scoreText(person.rating)}`);
+        button.type = 'button';
+        button.addEventListener('click', () => showOther(person.id));
+        line.append(button);
+      });
+      node.append(line);
+    }).catch(() => {});
+  }
+
+  async function followedRatings() {
+    if (followedCache) return followedCache;
+    const map = new Map();
+    if (!(profileLists.following || []).length && globalThis.Cloud && globalThis.Cloud.followNames) {
+      const names = await globalThis.Cloud.followNames().catch(() => null);
+      if (names) applyFollowLists(names);
+    }
+    await Promise.all((profileLists.following || []).map(async (person) => {
+      const pack = await packFor(person.id);
+      if (!pack || !pack.canView) return;
+      pack.films.forEach((film) => {
+        const row = pack.entryOf(film.id);
+        if (row.rating == null) return;
+        const list = map.get(film.id) || [];
+        list.push({
+          id: person.id,
+          username: person.username || person.name || 'Profil',
+          rating: row.rating,
+        });
+        map.set(film.id, list);
+      });
+    }));
+    followedCache = map;
+    return map;
+  }
+
+  async function openCompareMenu() {
+    const pop = document.getElementById('compare-pop');
+    if (!pop || !netCompare) return;
+    if (!(profileLists.following || []).length && globalThis.Cloud && globalThis.Cloud.followNames) {
+      const names = await globalThis.Cloud.followNames().catch(() => null);
+      if (names) applyFollowLists(names);
+    }
+    pop.replaceChildren();
+    const people = profileLists.following || [];
+    if (!people.length) pop.append(el('p', null, 'Du folgst noch niemandem.'));
+    else {
+      people.forEach((person) => {
+        const button = el('button', null, person.username || person.name || 'Profil');
+        button.type = 'button';
+        button.addEventListener('click', () => applyCompare(person));
+        pop.append(button);
+      });
+    }
+    pop.hidden = false;
+    netCompare.setAttribute('aria-expanded', 'true');
+  }
+
+  async function applyCompare(person) {
+    compareId = person.id;
+    compareName = person.username || person.name || 'Profil';
+    const pack = await packFor(person.id);
+    const map = new Map();
+    if (pack && pack.canView) {
+      pack.films.forEach((film) => {
+        const row = pack.entryOf(film.id);
+        if (row.rating != null && byId.has(film.id)) map.set(film.id, row.rating);
+      });
+    }
+    ensureNetwork();
+    if (network && network.setCompare) network.setCompare(map);
+    if (netCompare) {
+      netCompare.setAttribute('aria-pressed', 'true');
+      netCompare.setAttribute('aria-expanded', 'false');
+    }
+    const bar = document.getElementById('compare-bar');
+    if (bar) {
+      bar.hidden = false;
+      const label = bar.querySelector('span');
+      if (label) label.textContent = `Vergleich mit ${compareName}`;
+    }
+    const pop = document.getElementById('compare-pop');
+    if (pop) pop.hidden = true;
+  }
+
+  function stopCompare() {
+    compareId = null;
+    compareName = '';
+    if (network && network.setCompare) network.setCompare(null);
+    if (netCompare) {
+      netCompare.setAttribute('aria-pressed', 'false');
+      netCompare.setAttribute('aria-expanded', 'false');
+    }
+    const bar = document.getElementById('compare-bar');
+    if (bar) bar.hidden = true;
+    const pop = document.getElementById('compare-pop');
+    if (pop) pop.hidden = true;
+  }
+
   function watchFollows(userId) {
     refreshProfileDot();
     const cloud = globalThis.Cloud;
     if (!cloud || !cloud.client || followChannel || !userId) return;
+    const bump = (payload) => {
+      const row = payload && ((payload.new && payload.new.follower) ? payload.new : payload.old);
+      const other = row && (row.follower === userId ? row.followee : row.follower);
+      if (other) otherCache.delete(other);
+      followedCache = null;
+      refreshProfileDot();
+      refreshFollowLists().then(() => {
+        const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
+        if (profileMode === 'home' && !typing) paintProfile();
+        else if (profileMode === 'list') repaintList();
+        else if (profileMode === 'other' && viewingId && (!other || viewingId === other)) openOther(viewingId, true);
+        if (compareId && (!other || compareId === other)) {
+          const person = (profileLists.following || []).find((item) => item.id === compareId);
+          if (person) applyCompare(person);
+          else stopCompare();
+        }
+        const node = panel.querySelector('.followed-row');
+        if (node && panelFilm && !panel.hidden) fillFollowed(panelFilm.id, node);
+      }).catch(() => {});
+    };
     followChannel = cloud.client.channel(`profile-follows-${userId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'follows',
         filter: `followee=eq.${userId}`,
-      }, () => { refreshProfileDot(); })
+      }, bump)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'follows',
+        filter: `follower=eq.${userId}`,
+      }, bump)
       .subscribe();
   }
 
@@ -2399,22 +3243,17 @@
         directors: Array.isArray(pinned.directors) ? pinned.directors.filter((name) => typeof name === 'string').slice(0, 5) : [],
       };
     }
-    if (names) {
-      profileLists = {
-        followers: names.followers || [],
-        following: names.following || [],
-      };
-      const dot = modeProfile && modeProfile.querySelector('.profile-dot');
-      if (dot) dot.hidden = !(names.pending > 0);
-    }
+    if (names) applyFollowLists(names);
     profileMail = mail;
     if (profileMode === 'home') paintProfile();
   }
 
-  function paintNames(title, names) {
+  function paintNames(title, names, kind) {
     const root = profileRoot();
     if (!root) return;
     profileMode = 'list';
+    listKind = kind || '';
+    viewingId = null;
     root.classList.add('profile-list');
     root.replaceChildren();
     root.append(el('h1', null, title));
@@ -2424,18 +3263,37 @@
     back.textContent = 'Zurück';
     back.addEventListener('click', () => {
       profileMode = 'home';
+      listKind = '';
       paintProfile();
     });
     root.append(back);
-    if (!names.length) {
+    const rows = names || [];
+    if (!rows.length) {
       root.append(el('p', 'profile-note', 'Noch niemand.'));
       return;
     }
-    names.forEach((name) => root.append(el('p', 'name', name)));
+    rows.forEach((person) => {
+      const line = el('div', 'name-line');
+      const open = el('button', 'text-line', person.name || person.username || 'Profil');
+      open.type = 'button';
+      if (person.id) open.addEventListener('click', () => showOther(person.id));
+      line.append(open);
+      if (kind === 'followers' && person.id) {
+        const remove = lineButton('Entfernen');
+        remove.addEventListener('click', () => changeFollow(person.id, 'remove'));
+        line.append(remove);
+      } else if (kind === 'following' && person.id) {
+        const remove = lineButton('Entfolgen');
+        remove.addEventListener('click', () => changeFollow(person.id, 'unfollow'));
+        line.append(remove);
+      }
+      root.append(line);
+    });
   }
 
-  function paintPeople(kind, title, map) {
-    const pins = pinsOf();
+  function paintPeople(kind, title, map, source) {
+    const pins = source && source.pins ? source.pins : pinsOf();
+    const readOnly = Boolean(source && source.readOnly);
     const shown = rankedPeople(map, pins[kind]);
     const block = document.createElement('section');
     block.append(el('h2', 'profile-kicker', title));
@@ -2445,12 +3303,15 @@
     }
     shown.forEach((person) => {
       const line = el('div', 'person-line');
-      const pin = document.createElement('button');
-      pin.type = 'button';
+      const pin = document.createElement(readOnly ? 'span' : 'button');
+      if (!readOnly) pin.type = 'button';
       pin.className = person.pinned ? 'pin is-on' : 'pin';
-      pin.setAttribute('aria-label', person.pinned ? `${person.name} lösen` : `${person.name} anpinnen`);
+      if (readOnly) pin.style.cursor = 'default';
+      else {
+        pin.setAttribute('aria-label', person.pinned ? `${person.name} lösen` : `${person.name} anpinnen`);
+        pin.addEventListener('click', () => togglePin(kind, person.name, person.pinned));
+      }
       pin.append(document.createElement('i'));
-      pin.addEventListener('click', () => togglePin(kind, person.name, person.pinned));
       const name = document.createElement('button');
       name.type = 'button';
       name.className = 'person-name';
@@ -2462,8 +3323,9 @@
       }));
       const meta = person.count
         ? `${scoreText(person.avg)} · ${person.count === 1 ? '1 Film' : `${person.count} Filme`}`
-        : '0 Filme';
-      line.append(pin, name, el('small', null, meta));
+        : (readOnly ? '' : '0 Filme');
+      line.append(pin, name);
+      if (meta) line.append(el('small', null, meta));
       block.append(line);
     });
     return block;
@@ -2904,13 +3766,15 @@
     root.replaceChildren();
     root.append(el('h1', null, name));
     root.append(el('p', 'handle', handle));
+    root.append(paintFinder());
     const stats = el('div', 'profile-stats');
     stats.append(
       statNode(films, 'Filme'),
-      statNode(followers, 'Follower', () => paintNames('Follower', profileLists.followers)),
-      statNode(following, 'Folgt', () => paintNames('Folgt', profileLists.following)),
+      statNode(followers, 'Follower', () => paintNames('Follower', profileLists.followers, 'followers')),
+      statNode(following, 'Folgt', () => paintNames('Folgt', profileLists.following, 'following')),
     );
     root.append(stats);
+    paintRequests(root);
     if (profileStatus) root.append(el('p', 'profile-status', profileStatus));
     paintTop(root);
     const people = personMaps();
@@ -2920,6 +3784,8 @@
   }
 
   function renderProfile() {
+    viewingId = null;
+    listKind = '';
     profileMode = 'home';
     profileToken += 1;
     paintProfile();
@@ -2935,7 +3801,12 @@
     }
     followChannel = null;
     profileStats = null;
-    profileLists = { followers: [], following: [] };
+    profileLists = { followers: [], following: [], requests: [] };
+    otherCache = new Map();
+    followedCache = null;
+    viewingId = null;
+    listKind = '';
+    stopCompare();
     profileMail = null;
     profileStatus = '';
     if (modeProfile) {
@@ -3060,6 +3931,7 @@
     if (registered) {
       unlockScreen();
       openSheet(gateView());
+      queueInvite();
       return;
     }
     if (cached) {
@@ -3096,6 +3968,8 @@
       } catch {
         unlockScreen();
         showSyncState(true);
+        if (!started) openSheet(gateView());
+        queueInvite();
       }
       return;
     }
@@ -3106,6 +3980,7 @@
     }
     if (empty === null) showSyncState(true);
     openSheet(gateView());
+    queueInvite();
   }
 
   function renderAuth(view, notice) {

@@ -34,6 +34,7 @@
     let maxScale = 4;
     let userMoved = false;
     let ratingOn = false;
+    let compareRatings = null;
     let level = 'far';
     let settleTimer = 0;
     const pointers = new Map();
@@ -223,6 +224,10 @@
     }
 
     function markColor(film) {
+      if (compareRatings) {
+        const score = compareRatings.has(film.id) ? compareRatings.get(film.id) : null;
+        return options.ratingColor(score);
+      }
       if (ratingOn) return options.ratingColor(options.entry(film.id).rating);
       const colors = (root.SimilarityConfig && root.SimilarityConfig.layout && root.SimilarityConfig.layout.genreColors) || {};
       return colors[genreOf(film)] || '#c8c8c8';
@@ -660,16 +665,20 @@
         const film = films.find((item) => item.id === id);
         if (!film) return;
         const row = options.entry(id);
+        const score = compareRatings
+          ? (compareRatings.has(id) ? compareRatings.get(id) : null)
+          : row.rating;
         button.classList.toggle('is-selected', id === options.selectedId());
         button.classList.toggle('is-lit', Boolean(focus.lit && focus.lit.has(id)));
         button.classList.toggle('is-favorite', Boolean(row.favorite));
-        button.classList.toggle('is-rated', row.rating != null);
+        button.classList.toggle('is-rated', score != null);
+        button.classList.toggle('is-dim', Boolean(compareRatings) && score == null);
         button.style.setProperty('--mark', markColor(film));
         const tint = button.querySelector('.tint');
-        tint.style.background = row.rating == null ? '' : options.ratingColor(row.rating);
-        button.querySelector('.net-score').textContent = row.rating == null
+        tint.style.background = score == null ? '' : options.ratingColor(score);
+        button.querySelector('.net-score').textContent = score == null
           ? ''
-          : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
+          : `★  ${score.toFixed(1).replace('.', ',')}`;
         const image = button.querySelector('img');
         if (focus.lit && focus.lit.has(id) && !image.getAttribute('src')) {
           const src = options.posterSrc(film);
@@ -902,7 +911,13 @@
       },
       setRating(on) {
         ratingOn = on;
-        stage.classList.toggle('is-net-rating', on);
+        stage.classList.toggle('is-net-rating', on && !compareRatings);
+        paint();
+      },
+      setCompare(map) {
+        compareRatings = map || null;
+        stage.classList.toggle('is-net-compare', Boolean(compareRatings));
+        stage.classList.toggle('is-net-rating', ratingOn && !compareRatings);
         paint();
       },
     };

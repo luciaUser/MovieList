@@ -163,16 +163,152 @@ async function start() {
         people = found.data || [];
       }
       const byId = new Map(people.map((person) => [person.id, person]));
-      const label = (id) => {
+      const personOf = (id) => {
         const person = byId.get(id);
-        if (!person) return 'Profil';
-        return person.display_name || person.username || 'Profil';
+        return {
+          id,
+          username: person && person.username ? person.username : '',
+          name: person ? (person.display_name || person.username || 'Profil') : 'Profil',
+        };
       };
+      const requests = rows
+        .filter((row) => row.followee === user.id && row.status === 'pending')
+        .map((row) => personOf(row.follower));
       return {
-        followers: rows.filter((row) => row.followee === user.id && row.status === 'accepted').map((row) => label(row.follower)),
-        following: rows.filter((row) => row.follower === user.id && row.status === 'accepted').map((row) => label(row.followee)),
-        pending: rows.filter((row) => row.followee === user.id && row.status === 'pending').length,
+        followers: rows.filter((row) => row.followee === user.id && row.status === 'accepted').map((row) => personOf(row.follower)),
+        following: rows.filter((row) => row.follower === user.id && row.status === 'accepted').map((row) => personOf(row.followee)),
+        requests,
+        pending: requests.length,
       };
+    },
+    async searchProfiles(query) {
+      const q = String(query || '').trim();
+      if (q.length < 2) return [];
+      const rpc = await client.rpc('search_profiles', { query: q });
+      if (!rpc.error) return rpc.data || [];
+      const missing = rpc.error.code === 'PGRST202'
+        || /search_profiles|schema cache/i.test(rpc.error.message || '');
+      if (!missing) throw rpc.error;
+      const user = await currentUser();
+      const safe = q.replace(/[%_,."()]/g, '');
+      if (safe.length < 2) return [];
+      const pattern = `"%${safe}%"`;
+      const found = await client.from('profiles')
+        .select('id, username, display_name, is_private')
+        .neq('id', user.id)
+        .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+        .limit(10);
+      if (found.error) throw found.error;
+      return (found.data || []).filter((row) => row.id !== user.id).slice(0, 10);
+    },
+    async profileByUsername(name) {
+      const clean = normalize(name);
+      if (!clean) return null;
+      const { data, error } = await client.from('profiles')
+        .select('id, username, display_name, is_private')
+        .eq('username', clean)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    async loadOther(target) {
+      const user = await currentUser();
+      const profileResult = await client.from('profiles')
+        .select('id, username, display_name, is_private')
+        .eq('id', target)
+        .maybeSingle();
+      if (profileResult.error) throw profileResult.error;
+      if (!profileResult.data) return null;
+      const [stats, sensitive, follow, view] = await Promise.all([
+        client.rpc('profile_stats', { target }),
+        client.rpc('profile_sensitive', { target }),
+        client.from('follows').select('status').eq('follower', user.id).eq('followee', target).maybeSingle(),
+        client.rpc('can_view', { viewer: user.id, owner: target }),
+      ]);
+      if (stats.error) throw stats.error;
+      if (sensitive.error) throw sensitive.error;
+      if (follow.error) throw follow.error;
+      if (view.error) throw view.error;
+      const canView = Boolean(view.data);
+      let entries = [];
+      let films = [];
+      let head = null;
+      let headFilms = [];
+      if (!canView && profileResult.data.is_private === false) {
+        const headResult = await client.rpc('profile_head', { target });
+        const missing = headResult.error && (
+          headResult.error.code === 'PGRST202'
+          || /profile_head|schema cache/i.test(headResult.error.message || '')
+        );
+        if (headResult.error && !missing) throw headResult.error;
+        if (!headResult.error) {
+          head = Array.isArray(headResult.data) ? headResult.data[0] : headResult.data;
+          const ids = head && Array.isArray(head.top_films) ? head.top_films.filter(Boolean) : [];
+          if (ids.length) {
+            const listed = await client.from('films')
+              .select('id, title, original_title, year, kind, poster, tmdb_rating, tmdb_votes, facets')
+              .in('id', ids);
+            if (listed.error) throw listed.error;
+            headFilms = listed.data || [];
+          }
+        }
+      }
+      if (canView) {
+        const entryResult = await client.from('entries')
+          .select('film_id, rating, watched, favorite, next, in_archive, hidden, facet_overrides, updated_at')
+          .eq('user_id', target);
+        if (entryResult.error) throw entryResult.error;
+        entries = entryResult.data || [];
+        const ids = [...new Set(entries.map((row) => row.film_id).filter(Boolean))];
+        if (ids.length) {
+          const filmResult = await client.from('films')
+            .select('id, title, original_title, year, kind, poster, tmdb_rating, tmdb_votes, facets')
+            .in('id', ids);
+          if (filmResult.error) throw filmResult.error;
+          films = filmResult.data || [];
+        }
+      }
+      const statRow = Array.isArray(stats.data) ? stats.data[0] : stats.data;
+      const extraRow = Array.isArray(sensitive.data) ? sensitive.data[0] : sensitive.data;
+      return {
+        profile: profileResult.data,
+        stats: statRow || { films: 0, followers: 0, following: 0 },
+        sensitive: extraRow || null,
+        canView,
+        follow: follow.data && follow.data.status ? follow.data.status : 'none',
+        entries,
+        films,
+        head,
+        headFilms,
+      };
+    },
+    async follow(target) {
+      const user = await currentUser();
+      const { error } = await client.from('follows').insert({ follower: user.id, followee: target });
+      if (error) throw error;
+    },
+    async unfollow(target) {
+      const user = await currentUser();
+      const { error } = await client.from('follows').delete().eq('follower', user.id).eq('followee', target);
+      if (error) throw error;
+    },
+    async removeFollower(target) {
+      const user = await currentUser();
+      const { error } = await client.from('follows').delete().eq('followee', user.id).eq('follower', target);
+      if (error) throw error;
+    },
+    async acceptFollow(target) {
+      const user = await currentUser();
+      const { error } = await client.from('follows')
+        .update({ status: 'accepted' })
+        .eq('followee', user.id)
+        .eq('follower', target);
+      if (error) throw error;
+    },
+    async declineFollow(target) {
+      const user = await currentUser();
+      const { error } = await client.from('follows').delete().eq('followee', user.id).eq('follower', target);
+      if (error) throw error;
     },
     async recoveryEmail() {
       const user = await currentUser();

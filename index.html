@@ -37,6 +37,8 @@
         <span class="profile-dot" hidden></span>
       </button>
       <button type="button" id="net-rating" aria-pressed="false">Wertung</button>
+      <button type="button" id="net-compare" aria-pressed="false" aria-expanded="false">Vergleichen</button>
+      <div id="compare-pop" hidden></div>
     </div>
     <form id="search-form" role="search">
       <div class="line-slot">
@@ -62,6 +64,7 @@
   <div id="network" hidden aria-label="Netzwerk. Ziehen verschiebt die Karte, Scrollen zoomt. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen.">
     <div class="net-world"></div>
     <div id="net-bar" hidden></div>
+    <div id="compare-bar" hidden><span></span><button type="button" aria-label="Vergleich beenden">×</button></div>
     <div id="empty-net" class="empty" hidden>
       <p>Dein Archiv ist noch leer.</p>
       <button type="button" data-empty="add">Film hinzufügen</button>

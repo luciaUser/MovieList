@@ -266,6 +266,74 @@ as $$
   where p.id = target and public.can_view(auth.uid(), p.id);
 $$;
 
+-- Kopf eines fremden Profils: Top 5 und angepinnte Personen.
+-- Öffentliche Profile sind ohne Folge lesbar. Private nur mit can_view.
+-- Gibt keine Wertungsliste und keine Notizen zurück.
+create or replace function public.profile_head(target uuid)
+returns table (top_films text[], pinned_people jsonb)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  allowed boolean;
+  custom text[];
+  pins jsonb;
+begin
+  select
+    (public.can_view(auth.uid(), p.id) or not p.is_private),
+    p.top_films,
+    p.pinned_people
+  into allowed, custom, pins
+  from public.profiles p
+  where p.id = target and auth.uid() is not null;
+  if not coalesce(allowed, false) then
+    return;
+  end if;
+  if custom is not null and cardinality(custom) > 0 then
+    top_films := custom;
+  else
+    select coalesce(array_agg(s.film_id order by s.rating desc, s.updated_at desc), '{}')
+    into top_films
+    from (
+      select e.film_id, e.rating, e.updated_at
+      from public.entries e
+      where e.user_id = target
+        and e.in_archive
+        and not e.hidden
+        and e.rating is not null
+        and e.rating > 0
+      order by e.rating desc, e.updated_at desc
+      limit 5
+    ) s;
+  end if;
+  pinned_people := coalesce(pins, '{"actors":[],"directors":[]}'::jsonb);
+  return next;
+end;
+$$;
+
+-- Sucht öffentliche Profilfelder. Schließt einen selbst aus, höchstens 10 Treffer.
+create or replace function public.search_profiles(query text)
+returns table (id uuid, username text, display_name text, is_private boolean)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.id, p.username, p.display_name, p.is_private
+  from public.profiles p
+  where auth.uid() is not null
+    and p.id <> auth.uid()
+    and char_length(btrim(coalesce(query, ''))) >= 2
+    and (
+      position(lower(btrim(query)) in p.username) > 0
+      or position(lower(btrim(query)) in lower(coalesce(p.display_name, ''))) > 0
+    )
+  order by (p.username = lower(btrim(query))) desc, p.username
+  limit 10;
+$$;
+
 create or replace function public.username_available(name text)
 returns boolean
 language sql
@@ -444,6 +512,8 @@ revoke all on function public.is_wishlist_member(uuid, uuid) from public;
 revoke all on function public.is_wishlist_owner(uuid, uuid) from public;
 revoke all on function public.profile_stats(uuid) from public;
 revoke all on function public.profile_sensitive(uuid) from public;
+revoke all on function public.profile_head(uuid) from public;
+revoke all on function public.search_profiles(text) from public;
 revoke all on function public.username_available(text) from public;
 revoke all on function public.delete_my_account() from public;
 
@@ -453,6 +523,8 @@ grant execute on function public.is_wishlist_member(uuid, uuid) to authenticated
 grant execute on function public.is_wishlist_owner(uuid, uuid) to authenticated;
 grant execute on function public.profile_stats(uuid) to authenticated;
 grant execute on function public.profile_sensitive(uuid) to authenticated;
+grant execute on function public.profile_head(uuid) to authenticated;
+grant execute on function public.search_profiles(text) to authenticated;
 grant execute on function public.username_available(text) to anon, authenticated;
 grant execute on function public.delete_my_account() to authenticated;
 

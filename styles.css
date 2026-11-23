@@ -170,6 +170,7 @@ header > * { pointer-events: auto; }
 }
 
 .modes {
+  position: relative;
   display: flex;
   align-items: center;
   flex: none;
@@ -506,6 +507,20 @@ body.is-network {
 
 .is-net-rating .net-film:not(.is-rated) { filter: grayscale(1); }
 
+.is-net-compare .z-mid .net-film.is-rated .tint,
+.is-net-compare .z-near .net-film.is-rated .tint,
+.is-net-compare .net-world.is-focus .net-film.is-lit.is-rated .tint { display: block; opacity: 0.86; }
+
+.is-net-compare .z-mid .net-film.is-selected .tint,
+.is-net-compare .z-near .net-film.is-selected .tint,
+.is-net-compare .net-world.is-focus .net-film.is-lit.is-selected .tint { opacity: 0; }
+
+.is-net-compare .z-mid .net-film.is-rated .net-score,
+.is-net-compare .z-near .net-film.is-rated .net-score,
+.is-net-compare .net-world.is-focus .net-film.is-lit.is-rated .net-score { display: block; }
+
+.is-net-compare .net-world:not(.is-focus) .net-film.is-dim { opacity: 0.15; }
+
 .net-world.is-focus .net-film {
   width: 28px;
   height: 28px;
@@ -709,9 +724,67 @@ body.is-network {
 
 .net-film.is-favorite { outline: 2px solid rgba(255, 255, 255, 0.9); outline-offset: 1px; }
 
-#net-rating { display: none; }
+#net-rating,
+#net-compare { display: none; }
 
-body.is-network #net-rating { display: inline; }
+body.is-network #net-rating,
+body.is-network #net-compare { display: inline; }
+
+#compare-pop {
+  position: absolute;
+  z-index: 9;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.92);
+  color: #fff;
+}
+
+#compare-pop[hidden] { display: none !important; }
+
+#compare-pop button,
+#compare-pop p {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+}
+
+#compare-bar {
+  position: absolute;
+  z-index: 6;
+  top: 96px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100% - 32px);
+  padding: 8px 10px 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.88);
+  color: #fff;
+  font-size: 14px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+#compare-bar[hidden] { display: none !important; }
+
+#compare-bar button {
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+}
 
 @media (min-width: 721px) {
   body.has-selection #wall { margin-right: min(360px, 100vw); }
@@ -1603,4 +1676,98 @@ button.profile-stat { cursor: pointer; }
   margin: 8px 0 0;
   color: rgba(255, 255, 255, 0.46);
   font-size: 13px;
+}
+
+#profile button.back {
+  display: block;
+  margin: 0 0 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  cursor: pointer;
+}
+
+.profile-find { margin-top: 18px; }
+
+.profile-hits { margin-top: 4px; }
+
+.name-line,
+.request-line {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.name-line .text-line,
+.request-line .text-line {
+  border-bottom: 0;
+  padding: 10px 0;
+}
+
+.compare-line {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.mini-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mini-card {
+  width: 72px;
+  padding: 0;
+  border: 0;
+  background: #000;
+}
+
+.mini-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+}
+
+.their-wall {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100vw;
+  margin-top: 28px;
+  margin-left: -28px;
+}
+
+body.is-profile .their-wall .poster.is-rated .tint { opacity: 0.86; }
+
+body.is-profile .their-wall .poster.is-rated .poster-score { display: block; }
+
+body.is-profile .their-wall .poster:not(.is-rated) { filter: grayscale(1); }
+
+body.is-profile .their-wall .poster.is-rated { filter: none; }
+
+.followed-row { margin: 18px 0 0; }
+
+.followed-row .profile-kicker { margin: 0 0 6px; }
+
+.followed-names { margin: 0; }
+
+.followed-names button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (min-width: 721px) {
+  body.has-selection .their-wall { width: calc(100vw - min(360px, 100vw)); }
+}
+
+@media (max-width: 720px) {
+  .their-wall { margin-left: -20px; }
+  #compare-bar { top: 78px; }
 }
