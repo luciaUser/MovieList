@@ -86,22 +86,29 @@ header > * { pointer-events: auto; }
   z-index: 2;
   left: 50%;
   top: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  max-width: min(280px, 52vw);
+  width: min(260px, 54vw);
+  height: 28px;
   margin: 0;
   padding: 0;
   overflow: hidden;
   color: #6a6a6a;
   font-size: 17px;
-  line-height: 1;
+  line-height: 28px;
   transform: translate(-50%, -50%);
   touch-action: pan-y;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 22%, #000 78%, transparent 100%);
 }
 
 #profile-switch[hidden] { display: none !important; }
+
+.switch-track {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  height: 100%;
+  gap: 28px;
+}
 
 #profile-switch button {
   width: auto;
@@ -1014,7 +1021,7 @@ body.is-network {
     transform: translateY(-50%) translateX(0);
   }
 
-  #profile-switch { max-width: min(220px, 58vw); }
+  #profile-switch { width: min(220px, 58vw); }
 
   #net-bar { top: 78px; }
 

@@ -1258,25 +1258,37 @@
       return;
     }
     const people = lensPeople();
+    const count = people.length;
     const index = Math.max(0, people.findIndex((person) => (lensId ? person.id === lensId : person.id === account.id)));
-    const current = people[index] || people[0];
-    host.replaceChildren();
-    const make = (person, currentOne) => {
+    const around = count < 2
+      ? [0]
+      : count === 2
+        ? [-1, 0, 1]
+        : [-2, -1, 0, 1, 2];
+    let track = host.querySelector('.switch-track');
+    if (!track) {
+      track = document.createElement('div');
+      track.className = 'switch-track';
+      host.replaceChildren(track);
+    }
+    track.replaceChildren();
+    track.style.transition = 'none';
+    around.forEach((offset) => {
+      const person = people[(index + offset + count) % count];
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = person.name || 'Profil';
-      if (currentOne) button.className = 'is-current';
-      button.addEventListener('click', () => setLens(person.id === account.id ? null : person.id));
-      return button;
-    };
-    const count = people.length;
-    if (count > 2) host.append(make(people[(index - 1 + count) % count], false));
-    host.append(make(current, true));
-    if (count > 1) {
-      const next = people[(index + 1) % count];
-      if (!host.querySelector('.is-current') || next.id !== current.id) host.append(make(next, false));
-    }
+      button.classList.toggle('is-current', offset === 0);
+      button.addEventListener('click', () => {
+        if (switchMoved || !offset) return;
+        shiftLens(offset > 0 ? 1 : -1);
+      });
+      track.append(button);
+    });
     host.hidden = false;
+    const focus = track.children[around.indexOf(0)];
+    const x = host.clientWidth / 2 - (focus.offsetLeft + focus.offsetWidth / 2);
+    track.style.transform = `translateX(${x}px)`;
   }
 
   async function setLens(id) {
@@ -1316,10 +1328,36 @@
 
   function shiftLens(dir) {
     const people = lensPeople();
-    if (people.length < 2 || !account) return;
+    const host = document.getElementById('profile-switch');
+    const track = host && host.querySelector('.switch-track');
+    if (people.length < 2 || !account || !track || track.dataset.busy === '1') return;
+    const step = dir > 0 ? 1 : -1;
     const index = Math.max(0, people.findIndex((person) => (lensId ? person.id === lensId : person.id === account.id)));
-    const person = people[(index + dir + people.length) % people.length];
-    setLens(person.id === account.id ? null : person.id);
+    const person = people[(index + step + people.length) % people.length];
+    const buttons = [...track.children];
+    const current = buttons.findIndex((button) => button.classList.contains('is-current'));
+    const target = buttons[current + step];
+    const finish = () => {
+      delete track.dataset.busy;
+      setLens(person.id === account.id ? null : person.id);
+    };
+    if (!target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      finish();
+      return;
+    }
+    track.dataset.busy = '1';
+    const x = host.clientWidth / 2 - (target.offsetLeft + target.offsetWidth / 2);
+    track.style.transition = 'transform 0.38s ease';
+    track.style.transform = `translateX(${x}px)`;
+    let settled = false;
+    const done = (event) => {
+      if (settled || (event && event.propertyName && event.propertyName !== 'transform')) return;
+      settled = true;
+      track.removeEventListener('transitionend', done);
+      finish();
+    };
+    track.addEventListener('transitionend', done);
+    window.setTimeout(done, 460);
   }
 
   async function showLensNetwork() {
@@ -1589,25 +1627,62 @@
   let swipeX = 0;
   let swipeY = 0;
   let didSwipe = false;
-  function watchSwipe(node) {
-    if (!node) return;
-    node.addEventListener('pointerdown', (event) => {
-      if (event.target.closest('#mode-director, #sort-pop, #search-open, #add-film')) return;
+  let dragBase = 0;
+  let draggingSwitch = false;
+  let switchMoved = false;
+  if (profileSwitch) {
+    profileSwitch.addEventListener('pointerdown', (event) => {
+      const track = profileSwitch.querySelector('.switch-track');
+      if (!track || event.button !== 0) return;
+      draggingSwitch = true;
+      switchMoved = false;
       swipeX = event.clientX;
       swipeY = event.clientY;
       didSwipe = false;
+      const matrix = new DOMMatrix(getComputedStyle(track).transform);
+      dragBase = matrix.m41;
+      track.style.transition = 'none';
+      if (profileSwitch.setPointerCapture) profileSwitch.setPointerCapture(event.pointerId);
     });
-    node.addEventListener('pointerup', (event) => {
+    profileSwitch.addEventListener('pointermove', (event) => {
+      if (!draggingSwitch) return;
+      const track = profileSwitch.querySelector('.switch-track');
+      if (!track) return;
       const dx = event.clientX - swipeX;
       const dy = event.clientY - swipeY;
-      if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
-      if (node === wall && mode === 'network') return;
-      didSwipe = true;
-      shiftLens(dx < 0 ? 1 : -1);
+      if (Math.abs(dx) > 8) switchMoved = true;
+      if (Math.abs(dy) > Math.abs(dx)) return;
+      track.style.transform = `translateX(${dragBase + dx}px)`;
+    });
+    profileSwitch.addEventListener('pointerup', (event) => {
+      if (!draggingSwitch) return;
+      draggingSwitch = false;
+      const dx = event.clientX - swipeX;
+      const dy = event.clientY - swipeY;
+      if (Math.abs(dx) >= 36 && Math.abs(dx) > Math.abs(dy)) {
+        didSwipe = true;
+        shiftLens(dx < 0 ? 1 : -1);
+        return;
+      }
+      paintProfileSwitch();
+    });
+    profileSwitch.addEventListener('pointercancel', () => {
+      draggingSwitch = false;
+      paintProfileSwitch();
     });
   }
-  watchSwipe(profileSwitch);
-  watchSwipe(wall);
+  wall.addEventListener('pointerdown', (event) => {
+    swipeX = event.clientX;
+    swipeY = event.clientY;
+    didSwipe = false;
+  });
+  wall.addEventListener('pointerup', (event) => {
+    const dx = event.clientX - swipeX;
+    const dy = event.clientY - swipeY;
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) || mode === 'network') return;
+    didSwipe = true;
+    shiftLens(dx < 0 ? 1 : -1);
+  });
   wall.addEventListener('click', (event) => {
     if (!didSwipe) return;
     didSwipe = false;
