@@ -62,6 +62,7 @@
     if (source.favorite) row.favorite = true;
     if (source.next) row.next = true;
     if (typeof source.memo === 'string' && source.memo) row.memo = source.memo;
+    if (typeof source.ratedAt === 'string' && source.ratedAt) row.ratedAt = source.ratedAt;
     return row;
   }
 
@@ -504,7 +505,10 @@
       if (row.facet_overrides && typeof row.facet_overrides === 'object') next.facetOverrides[id] = row.facet_overrides;
       const local = {};
       const rating = Number(row.rating);
-      if (Number.isFinite(rating) && rating > 0) local.rating = Math.round(rating * 10) / 10;
+      if (Number.isFinite(rating) && rating > 0) {
+        local.rating = Math.round(rating * 10) / 10;
+        if (row.updated_at) local.ratedAt = row.updated_at;
+      }
       if (row.watched) local.watched = true;
       if (row.favorite) local.favorite = true;
       if (row.next) local.next = true;

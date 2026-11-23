@@ -61,6 +61,14 @@
   let account = null;
   let recoveryOn = null;
   let leaving = false;
+  let profileToken = 0;
+  let profileMode = 'home';
+  let settingsOpen = false;
+  let profileStats = null;
+  let profileLists = { followers: [], following: [] };
+  let profileMail = null;
+  let profileStatus = '';
+  let followChannel = null;
   let selectedId = null;
   let links = [];
   let activeLinkId = null;
@@ -173,13 +181,15 @@
 
   function entry(id) {
     const row = state[id] || {};
-    return {
+    const result = {
       watched: !!row.watched,
       favorite: !!row.favorite,
       next: !!row.next,
       rating: typeof row.rating === 'number' && Number.isFinite(row.rating) && row.rating > 0 ? row.rating : null,
       memo: typeof row.memo === 'string' ? row.memo : '',
     };
+    if (typeof row.ratedAt === 'string' && row.ratedAt) result.ratedAt = row.ratedAt;
+    return result;
   }
 
   function removeFilm(id) {
@@ -209,7 +219,12 @@
   }
 
   function writeEntry(id, patch) {
-    state[id] = { ...entry(id), ...patch };
+    const next = { ...entry(id), ...patch };
+    if (Object.prototype.hasOwnProperty.call(patch, 'rating')) {
+      if (typeof next.rating === 'number' && next.rating > 0) next.ratedAt = new Date().toISOString();
+      else delete next.ratedAt;
+    }
+    state[id] = next;
     persist();
   }
 
@@ -2221,28 +2236,618 @@
     return recoveryOn;
   }
 
-  function renderProfile() {
-    const root = document.getElementById('profile');
+  function profileRoot() {
+    return document.getElementById('profile');
+  }
+
+  function scoreText(value) {
+    return (Math.round(value * 10) / 10).toFixed(1).replace('.', ',');
+  }
+
+  function profileFail(error) {
+    if (error && (error.name === 'TypeError' || /failed to fetch|network/i.test(String(error.message || '')))) {
+      return 'Keine Verbindung.';
+    }
+    return 'Das Profil konnte nicht gespeichert werden.';
+  }
+
+  function pinsOf() {
+    const raw = account && account.pinned_people;
+    return {
+      actors: raw && Array.isArray(raw.actors) ? raw.actors.filter((name) => typeof name === 'string').slice(0, 5) : [],
+      directors: raw && Array.isArray(raw.directors) ? raw.directors.filter((name) => typeof name === 'string').slice(0, 5) : [],
+    };
+  }
+
+  function defaultTopFilms() {
+    return FILMS.filter((film) => entry(film.id).rating != null).sort((a, b) => {
+      const diff = entry(b.id).rating - entry(a.id).rating;
+      if (diff) return diff;
+      return (Date.parse(entry(b.id).ratedAt) || 0) - (Date.parse(entry(a.id).ratedAt) || 0);
+    }).slice(0, 5);
+  }
+
+  function shownTopFilms() {
+    const custom = account && Array.isArray(account.top_films) ? account.top_films : [];
+    if (!custom.length) return { custom: false, films: defaultTopFilms() };
+    return { custom: true, films: custom.map((id) => byId.get(id)).filter(Boolean).slice(0, 5) };
+  }
+
+  function personMaps() {
+    const actors = new Map();
+    const directors = new Map();
+    const add = (map, name, rating) => {
+      const key = String(name || '').trim();
+      if (!key) return;
+      const row = map.get(key) || { name: key, sum: 0, count: 0 };
+      row.sum += rating;
+      row.count += 1;
+      map.set(key, row);
+    };
+    FILMS.forEach((film) => {
+      const row = entry(film.id);
+      if (row.rating == null) return;
+      const full = fullOf(film);
+      (full.cast || []).forEach((name) => add(actors, name, row.rating));
+      if (full.director) add(directors, full.director, row.rating);
+    });
+    return { actors, directors };
+  }
+
+  function rankedPeople(map, pinnedNames) {
+    const pins = (pinnedNames || []).filter((name) => typeof name === 'string' && name).slice(0, 5);
+    const ranked = [...map.values()]
+      .filter((person) => person.count >= 2)
+      .map((person) => ({ name: person.name, avg: person.sum / person.count, count: person.count }))
+      .sort((a, b) => b.avg - a.avg || b.count - a.count);
+    const shown = [];
+    pins.forEach((name) => {
+      if (shown.length >= 5) return;
+      const known = map.get(name);
+      shown.push({
+        name,
+        avg: known && known.count ? known.sum / known.count : 0,
+        count: known ? known.count : 0,
+        pinned: true,
+      });
+    });
+    ranked.forEach((person) => {
+      if (shown.length >= 5) return;
+      if (shown.some((item) => item.name === person.name)) return;
+      shown.push({ ...person, pinned: false });
+    });
+    return shown;
+  }
+
+  function statNode(value, label, onClick) {
+    const node = document.createElement(onClick ? 'button' : 'div');
+    if (onClick) node.type = 'button';
+    node.className = 'profile-stat';
+    const num = document.createElement('b');
+    num.textContent = value;
+    const caption = document.createElement('span');
+    caption.textContent = label;
+    node.append(num, caption);
+    if (onClick) node.addEventListener('click', onClick);
+    return node;
+  }
+
+  function lineButton(label) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'text-line';
+    button.textContent = label;
+    return button;
+  }
+
+  async function refreshProfileDot() {
+    const dot = modeProfile && modeProfile.querySelector('.profile-dot');
+    if (!dot || !globalThis.Cloud || !globalThis.Cloud.client) return;
+    try {
+      const session = await globalThis.Cloud.getSession();
+      const id = session && session.user && session.user.id;
+      if (!id) return;
+      const result = await globalThis.Cloud.client.from('follows')
+        .select('follower', { count: 'exact', head: true })
+        .eq('followee', id)
+        .eq('status', 'pending');
+      if (result.error) return;
+      dot.hidden = !result.count;
+    } catch {
+      /* der Punkt bleibt, wie er ist */
+    }
+  }
+
+  function watchFollows(userId) {
+    refreshProfileDot();
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.client || followChannel || !userId) return;
+    followChannel = cloud.client.channel(`profile-follows-${userId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'follows',
+        filter: `followee=eq.${userId}`,
+      }, () => { refreshProfileDot(); })
+      .subscribe();
+  }
+
+  async function loadProfileCloud(token) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.profileExtra) return;
+    const [extra, names, mail, enabled] = await Promise.all([
+      cloud.profileExtra().catch(() => null),
+      cloud.followNames().catch(() => null),
+      cloud.recoveryEmail().catch(() => null),
+      recoveryEnabled(),
+    ]);
+    if (token !== profileToken || !account) return;
+    if (extra) {
+      const stats = extra.stats || {};
+      profileStats = {
+        films: Number(stats.films) || 0,
+        followers: Number(stats.followers) || 0,
+        following: Number(stats.following) || 0,
+      };
+      const sensitive = extra.sensitive || {};
+      account.top_films = Array.isArray(sensitive.top_films)
+        ? sensitive.top_films.filter((id) => typeof id === 'string')
+        : [];
+      const pinned = sensitive.pinned_people || {};
+      account.pinned_people = {
+        actors: Array.isArray(pinned.actors) ? pinned.actors.filter((name) => typeof name === 'string').slice(0, 5) : [],
+        directors: Array.isArray(pinned.directors) ? pinned.directors.filter((name) => typeof name === 'string').slice(0, 5) : [],
+      };
+    }
+    if (names) {
+      profileLists = {
+        followers: names.followers || [],
+        following: names.following || [],
+      };
+      const dot = modeProfile && modeProfile.querySelector('.profile-dot');
+      if (dot) dot.hidden = !(names.pending > 0);
+    }
+    profileMail = mail;
+    if (profileMode === 'home') paintProfile();
+  }
+
+  function paintNames(title, names) {
+    const root = profileRoot();
     if (!root) return;
-    const name = (account && (account.display_name || account.username)) || 'Profil';
-    const handle = account && account.username ? `@${account.username}` : '';
+    profileMode = 'list';
+    root.classList.add('profile-list');
     root.replaceChildren();
-    root.append(el('h1', null, name));
-    root.append(el('p', 'handle', handle));
+    root.append(el('h1', null, title));
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'back';
+    back.textContent = 'Zurück';
+    back.addEventListener('click', () => {
+      profileMode = 'home';
+      paintProfile();
+    });
+    root.append(back);
+    if (!names.length) {
+      root.append(el('p', 'profile-note', 'Noch niemand.'));
+      return;
+    }
+    names.forEach((name) => root.append(el('p', 'name', name)));
+  }
+
+  function paintPeople(kind, title, map) {
+    const pins = pinsOf();
+    const shown = rankedPeople(map, pins[kind]);
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', title));
+    if (!shown.length) {
+      block.append(el('p', 'profile-note', 'Noch zu wenig Wertungen'));
+      return block;
+    }
+    shown.forEach((person) => {
+      const line = el('div', 'person-line');
+      const pin = document.createElement('button');
+      pin.type = 'button';
+      pin.className = person.pinned ? 'pin is-on' : 'pin';
+      pin.setAttribute('aria-label', person.pinned ? `${person.name} lösen` : `${person.name} anpinnen`);
+      pin.append(document.createElement('i'));
+      pin.addEventListener('click', () => togglePin(kind, person.name, person.pinned));
+      const name = document.createElement('button');
+      name.type = 'button';
+      name.className = 'person-name';
+      name.textContent = person.name;
+      name.addEventListener('click', () => highlight({
+        title: kind === 'directors' ? `Regie: ${person.name}` : `Mit: ${person.name}`,
+        style: kind === 'directors' ? 'director' : 'cast',
+        ids: filmsWith(kind === 'directors' ? 'director' : 'cast', person.name),
+      }));
+      const meta = person.count
+        ? `${scoreText(person.avg)} · ${person.count === 1 ? '1 Film' : `${person.count} Filme`}`
+        : '0 Filme';
+      line.append(pin, name, el('small', null, meta));
+      block.append(line);
+    });
+    return block;
+  }
+
+  async function togglePin(kind, name, pinned) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.updateProfile) return;
+    const current = pinsOf();
+    const list = current[kind].slice();
+    if (pinned) {
+      const index = list.indexOf(name);
+      if (index >= 0) list.splice(index, 1);
+    } else if (!list.includes(name) && list.length < 5) {
+      list.unshift(name);
+    } else return;
+    const next = { ...current, [kind]: list };
+    const previous = pinsOf();
+    account.pinned_people = next;
+    profileStatus = '';
+    paintProfile();
+    try {
+      await cloud.updateProfile({ pinned_people: next });
+    } catch (error) {
+      account.pinned_people = previous;
+      profileStatus = profileFail(error);
+      paintProfile();
+    }
+  }
+
+  function paintTop(root) {
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', 'Top 5'));
+    const chosen = shownTopFilms();
+    if (!chosen.films.length) {
+      const rated = FILMS.some((film) => entry(film.id).rating != null);
+      block.append(el('p', 'profile-note', !chosen.custom && !rated
+        ? 'Bewerte Filme, dann erscheinen hier deine Top 5'
+        : 'Die ausgewählten Filme sind nicht mehr im Archiv.'));
+    } else {
+      const row = el('div', 'top-row');
+      chosen.films.forEach((film, index) => {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'top-card';
+        card.setAttribute('aria-label', `${index + 1}. ${film.title}`);
+        const image = document.createElement('img');
+        image.alt = '';
+        image.src = posterSrc(film);
+        card.append(el('span', 'top-rank', String(index + 1)), image);
+        card.addEventListener('click', () => openFilm(film));
+        row.append(card);
+      });
+      block.append(row);
+    }
+    const edit = lineButton('Top 5 bearbeiten');
+    edit.addEventListener('click', () => paintTopEditor());
+    block.append(edit);
+    root.append(block);
+  }
+
+  function paintTopEditor() {
+    const root = profileRoot();
+    if (!root) return;
+    profileMode = 'edit';
+    root.classList.remove('profile-list');
+    const chosen = shownTopFilms();
+    const ids = chosen.films.map((film) => film.id);
+    const redraw = () => draw();
+    function draw() {
+      root.replaceChildren();
+      root.append(el('h1', null, 'Top 5'));
+      const row = el('div', 'top-row is-sorting');
+      ids.forEach((id, index) => {
+        const film = byId.get(id);
+        if (!film) return;
+        const card = el('div', 'top-card');
+        card.dataset.top = id;
+        const image = document.createElement('img');
+        image.alt = '';
+        image.src = posterSrc(film);
+        const tools = el('div', 'top-tools');
+        const left = lineButton('‹');
+        left.setAttribute('aria-label', 'Nach links');
+        left.disabled = index === 0;
+        left.addEventListener('click', () => shiftTop(ids, index, -1, redraw));
+        const right = lineButton('›');
+        right.setAttribute('aria-label', 'Nach rechts');
+        right.disabled = index === ids.length - 1;
+        right.addEventListener('click', () => shiftTop(ids, index, 1, redraw));
+        const remove = lineButton('×');
+        remove.setAttribute('aria-label', 'Entfernen');
+        remove.addEventListener('click', () => {
+          ids.splice(index, 1);
+          redraw();
+        });
+        tools.append(left, right, remove);
+        card.append(el('span', 'top-rank', String(index + 1)), image, tools);
+        row.append(card);
+      });
+      bindTopDrag(row, ids, redraw);
+      root.append(row);
+      const search = document.createElement('input');
+      search.type = 'text';
+      search.placeholder = 'Im Archiv suchen';
+      search.setAttribute('aria-label', 'Im Archiv suchen');
+      search.autocomplete = 'off';
+      const hits = document.createElement('div');
+      const status = el('p', 'profile-status', ids.length >= 5 ? 'Höchstens 5 Filme.' : '');
+      status.setAttribute('role', 'status');
+      search.addEventListener('input', () => {
+        const query = search.value.trim().toLocaleLowerCase('de');
+        hits.replaceChildren();
+        if (!query) return;
+        FILMS.filter((film) => (
+          !ids.includes(film.id)
+          && `${film.title || ''} ${film.original || ''}`.toLocaleLowerCase('de').includes(query)
+        )).slice(0, 8).forEach((film) => {
+          const hit = document.createElement('button');
+          hit.type = 'button';
+          hit.className = 'hit-row';
+          hit.textContent = film.year ? `${film.title} · ${film.year}` : film.title;
+          hit.addEventListener('click', () => {
+            if (ids.length >= 5) {
+              status.textContent = 'Höchstens 5 Filme.';
+              return;
+            }
+            ids.push(film.id);
+            redraw();
+          });
+          hits.append(hit);
+        });
+      });
+      const save = lineButton('Speichern');
+      save.addEventListener('click', async () => {
+        save.disabled = true;
+        try {
+          await globalThis.Cloud.updateProfile({ top_films: ids.slice(0, 5) });
+          account.top_films = ids.slice(0, 5);
+          profileStatus = '';
+          profileMode = 'home';
+          paintProfile();
+        } catch (error) {
+          status.textContent = profileFail(error);
+          save.disabled = false;
+        }
+      });
+      const reset = lineButton('Zurücksetzen');
+      reset.addEventListener('click', async () => {
+        reset.disabled = true;
+        try {
+          await globalThis.Cloud.updateProfile({ top_films: [] });
+          account.top_films = [];
+          profileStatus = '';
+          profileMode = 'home';
+          paintProfile();
+        } catch (error) {
+          status.textContent = profileFail(error);
+          reset.disabled = false;
+        }
+      });
+      const back = lineButton('Zurück');
+      back.addEventListener('click', () => {
+        profileMode = 'home';
+        paintProfile();
+      });
+      [save, reset, back].forEach((button) => button.classList.add('editor-action'));
+      root.append(search, hits, status, save, reset, back);
+    }
+    draw();
+  }
+
+  function shiftTop(ids, index, delta, redraw) {
+    const next = index + delta;
+    if (next < 0 || next >= ids.length) return;
+    const [item] = ids.splice(index, 1);
+    ids.splice(next, 0, item);
+    redraw();
+  }
+
+  function bindTopDrag(row, ids, redraw) {
+    let drag = null;
+    row.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
+      const card = event.target.closest('[data-top]');
+      if (!card) return;
+      drag = {
+        id: card.dataset.top,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+        pointer: event.pointerId,
+      };
+    });
+    row.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.pointer) return;
+      if (!drag.moved && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 6) return;
+      drag.moved = true;
+      if (!row.hasPointerCapture(event.pointerId)) row.setPointerCapture(event.pointerId);
+      const cards = [...row.querySelectorAll('[data-top]')];
+      const over = cards.find((card) => {
+        const box = card.getBoundingClientRect();
+        return event.clientX >= box.left && event.clientX <= box.right;
+      });
+      if (!over || over.dataset.top === drag.id) return;
+      const from = ids.indexOf(drag.id);
+      const to = ids.indexOf(over.dataset.top);
+      if (from < 0 || to < 0 || from === to) return;
+      const card = cards.find((item) => item.dataset.top === drag.id);
+      ids.splice(from, 1);
+      ids.splice(to, 0, drag.id);
+      if (card) {
+        if (from < to) over.after(card);
+        else over.before(card);
+      }
+      [...row.querySelectorAll('.top-rank')].forEach((node, index) => {
+        node.textContent = String(index + 1);
+      });
+    });
+    const end = (event) => {
+      if (!drag || (event && event.pointerId !== drag.pointer)) return;
+      const moved = drag.moved;
+      drag = null;
+      if (moved) redraw();
+    };
+    row.addEventListener('pointerup', end);
+    row.addEventListener('pointercancel', end);
+  }
+
+  function paintSettings() {
+    const details = document.createElement('details');
+    details.className = 'profile-settings';
+    details.open = settingsOpen;
+    details.addEventListener('toggle', () => { settingsOpen = details.open; });
+    const summary = document.createElement('summary');
+    summary.textContent = 'Einstellungen';
+    const stack = el('div', 'stack');
+    const nameLabel = el('label', null, 'Anzeigename');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = (account && account.display_name) || '';
+    nameInput.autocomplete = 'nickname';
+    nameInput.maxLength = 80;
+    nameLabel.append(nameInput);
+    const saveName = document.createElement('button');
+    saveName.type = 'button';
+    saveName.textContent = 'Speichern';
+    const nameStatus = el('p', 'profile-status', '');
+    nameStatus.setAttribute('role', 'status');
+    saveName.addEventListener('click', async () => {
+      const displayName = nameInput.value.trim();
+      if (!displayName) {
+        nameStatus.textContent = 'Bitte einen Anzeigenamen eintragen.';
+        return;
+      }
+      saveName.disabled = true;
+      try {
+        await globalThis.Cloud.updateProfile({ display_name: displayName });
+        account.display_name = displayName;
+        profileStatus = '';
+        paintProfile();
+      } catch (error) {
+        nameStatus.textContent = profileFail(error);
+        saveName.disabled = false;
+      }
+    });
+    const privacy = document.createElement('button');
+    privacy.type = 'button';
+    privacy.className = 'switch';
+    privacy.setAttribute('aria-pressed', account && account.is_private ? 'true' : 'false');
+    const mark = document.createElement('i');
+    privacy.append(mark, el('span', null, 'Privates Profil'));
+    privacy.addEventListener('click', async () => {
+      const next = privacy.getAttribute('aria-pressed') !== 'true';
+      privacy.disabled = true;
+      try {
+        await globalThis.Cloud.updateProfile({ is_private: next });
+        account.is_private = next;
+        privacy.setAttribute('aria-pressed', next ? 'true' : 'false');
+      } catch (error) {
+        nameStatus.textContent = profileFail(error);
+      } finally {
+        privacy.disabled = false;
+      }
+    });
+    stack.append(
+      nameLabel,
+      saveName,
+      nameStatus,
+      privacy,
+      el('p', 'profile-note', 'Folge-Anfragen müssen bestätigt werden. Ohne bestätigte Folge bleibt das Archiv unsichtbar.'),
+    );
+    if (recoveryOn) stack.append(paintRecovery());
+    stack.append(paintReset(), paintDelete());
+    const out = document.createElement('button');
+    out.type = 'button';
+    out.textContent = 'Abmelden';
+    out.addEventListener('click', () => { leave(); });
+    stack.append(out);
+    details.append(summary, stack);
+    return details;
+  }
+
+  function paintRecovery() {
+    const block = document.createElement('div');
+    block.append(el('h2', 'profile-kicker', 'Wiederherstellungs-E-Mail'));
+    if (profileMail && profileMail.email) {
+      block.append(el('p', null, profileMail.email));
+      block.append(el('p', 'profile-note', profileMail.verified ? 'bestätigt' : 'Bestätigung ausstehend'));
+    }
+    const input = document.createElement('input');
+    input.type = 'email';
+    input.autocomplete = 'email';
+    input.placeholder = 'E-Mail (freiwillig, nur zum Zurücksetzen)';
+    input.value = profileMail && profileMail.email ? profileMail.email : '';
+    input.setAttribute('aria-label', 'E-Mail (freiwillig, nur zum Zurücksetzen)');
+    const status = el('p', 'profile-status', '');
+    status.setAttribute('role', 'status');
+    const save = document.createElement('button');
+    save.type = 'button';
+    save.textContent = profileMail && profileMail.email ? 'Ändern' : 'Hinzufügen';
+    save.addEventListener('click', async () => {
+      const email = input.value.trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        status.textContent = 'Die E-Mail sieht ungültig aus.';
+        return;
+      }
+      save.disabled = true;
+      try {
+        const session = await globalThis.Cloud.getSession();
+        const response = await fetch('/api/recovery?action=verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session && session.access_token ? session.access_token : ''}`,
+          },
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok) throw new Error((data && data.error) || 'fail');
+        profileMail = { email, verified: false };
+        paintProfile();
+      } catch (error) {
+        status.textContent = profileFail(error);
+        save.disabled = false;
+      }
+    });
+    block.append(input, save, status);
+    if (profileMail && profileMail.email) {
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.textContent = 'Entfernen';
+      remove.addEventListener('click', async () => {
+        remove.disabled = true;
+        try {
+          await globalThis.Cloud.removeRecoveryEmail();
+          profileMail = null;
+          paintProfile();
+        } catch (error) {
+          status.textContent = profileFail(error);
+          remove.disabled = false;
+        }
+      });
+      block.append(remove);
+    }
+    return block;
+  }
+
+  function paintReset() {
+    const block = document.createElement('div');
     const input = document.createElement('input');
     input.type = 'text';
     input.autocomplete = 'off';
     input.placeholder = 'zurücksetzen';
     input.setAttribute('aria-label', 'zurücksetzen eingeben');
-    const reset = document.createElement('button');
-    reset.type = 'button';
-    reset.textContent = 'Archiv zurücksetzen';
-    reset.disabled = true;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Archiv zurücksetzen';
+    button.disabled = true;
     input.addEventListener('input', () => {
-      reset.disabled = input.value.trim().toLocaleLowerCase('de') !== 'zurücksetzen';
+      button.disabled = input.value.trim().toLocaleLowerCase('de') !== 'zurücksetzen';
     });
-    reset.addEventListener('click', async () => {
-      reset.disabled = true;
+    button.addEventListener('click', async () => {
+      button.disabled = true;
       const next = await globalThis.Store.reset();
       if (!next) return;
       adoptArchive(next);
@@ -2250,20 +2855,93 @@
         network.setFilms(FILMS);
         if (networkReady) network.reflow();
       }
-      input.value = '';
-      reset.disabled = true;
+      settingsOpen = true;
+      renderProfile();
     });
-    const out = document.createElement('button');
-    out.type = 'button';
-    out.textContent = 'Abmelden';
-    out.addEventListener('click', () => { leave(); });
-    root.append(input, reset, out);
+    block.append(input, button);
+    return block;
+  }
+
+  function paintDelete() {
+    const block = document.createElement('div');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.placeholder = 'löschen';
+    input.setAttribute('aria-label', 'löschen eingeben');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Konto löschen';
+    button.disabled = true;
+    const status = el('p', 'profile-status', '');
+    status.setAttribute('role', 'status');
+    input.addEventListener('input', () => {
+      button.disabled = input.value.trim().toLocaleLowerCase('de') !== 'löschen';
+    });
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        await globalThis.Cloud.deleteAccount();
+        await leave();
+      } catch (error) {
+        status.textContent = profileFail(error);
+        button.disabled = false;
+      }
+    });
+    block.append(input, button, status);
+    return block;
+  }
+
+  function paintProfile() {
+    const root = profileRoot();
+    if (!root) return;
+    root.classList.remove('profile-list');
+    const name = (account && (account.display_name || account.username)) || 'Profil';
+    const handle = account && account.username ? `@${account.username}` : '';
+    const films = profileStats ? String(profileStats.films) : String(FILMS.length);
+    const followers = profileStats ? String(profileStats.followers) : '–';
+    const following = profileStats ? String(profileStats.following) : '–';
+    root.replaceChildren();
+    root.append(el('h1', null, name));
+    root.append(el('p', 'handle', handle));
+    const stats = el('div', 'profile-stats');
+    stats.append(
+      statNode(films, 'Filme'),
+      statNode(followers, 'Follower', () => paintNames('Follower', profileLists.followers)),
+      statNode(following, 'Folgt', () => paintNames('Folgt', profileLists.following)),
+    );
+    root.append(stats);
+    if (profileStatus) root.append(el('p', 'profile-status', profileStatus));
+    paintTop(root);
+    const people = personMaps();
+    root.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors));
+    root.append(paintPeople('directors', 'Lieblingsregie', people.directors));
+    root.append(paintSettings());
+  }
+
+  function renderProfile() {
+    profileMode = 'home';
+    profileToken += 1;
+    paintProfile();
+    loadProfileCloud(profileToken);
   }
 
   async function leave() {
     if (leaving) return;
     leaving = true;
     relayoutJob += 1;
+    if (followChannel && globalThis.Cloud && globalThis.Cloud.client) {
+      globalThis.Cloud.client.removeChannel(followChannel);
+    }
+    followChannel = null;
+    profileStats = null;
+    profileLists = { followers: [], following: [] };
+    profileMail = null;
+    profileStatus = '';
+    if (modeProfile) {
+      const dot = modeProfile.querySelector('.profile-dot');
+      if (dot) dot.hidden = true;
+    }
     if (globalThis.Store && globalThis.Store.clearUser) globalThis.Store.clearUser();
     archive = null;
     FILMS = [];
@@ -2367,10 +3045,17 @@
     globalThis.Store.setSyncError(showSyncState);
     try {
       account = await globalThis.Cloud.profile();
+      if (account && !account.id) account.id = session.user.id;
     } catch {
       const meta = session.user.user_metadata || {};
-      account = { username: meta.username || '', display_name: meta.username || '' };
+      account = {
+        id: session.user.id,
+        username: meta.username || '',
+        display_name: meta.username || '',
+        is_private: false,
+      };
     }
+    watchFollows(session.user.id);
     const cached = globalThis.Store.load();
     if (registered) {
       unlockScreen();
