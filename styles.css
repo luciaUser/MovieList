@@ -182,7 +182,8 @@ header > * { pointer-events: auto; }
 }
 
 .add-film.is-open .line-slot,
-#search-form.is-open .line-slot { width: var(--line); }
+#search-form.is-open .line-slot,
+.friend-invite.is-open .line-slot { width: var(--line); }
 
 #search-form .line-slot {
   position: absolute;
@@ -241,6 +242,7 @@ header > * { pointer-events: auto; }
 @media (prefers-reduced-motion: reduce) {
   .line-slot,
   #add-film .plus-v,
+  .friend-plus .plus-v,
   .modes .icon-tab::before,
   .modes .icon-tab::after,
   .sort-wrap,
@@ -457,12 +459,19 @@ header > * { pointer-events: auto; }
   display: grid;
   grid-template-columns: 1fr 1.4fr 1fr;
   align-items: stretch;
+  width: 100%;
   min-height: 52px;
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+  border-right: 0;
   background: #000;
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   color: #fff;
+  font: inherit;
   font-size: 15px;
+  text-align: left;
 }
 
 .genre-score,
@@ -493,6 +502,30 @@ header > * { pointer-events: auto; }
 }
 
 .wish-by .avatar { width: 18px; height: 18px; flex: none; }
+
+.wish-by .is-invited { color: rgba(255, 255, 255, 0.42); }
+
+.wish-invite {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.wish-invite .avatar { width: 32px; height: 32px; flex: none; }
+
+.wish-invite p { margin: 0; flex: 1; min-width: 0; }
+
+.wish-invite .text-line {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
 
 .wish-person {
   display: inline-flex;
@@ -1964,22 +1997,143 @@ button.profile-stat { cursor: pointer; }
   color: #fff;
 }
 
-.friend-add {
+.friend-invite-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-top: 16px;
+  gap: 10px;
+  height: 28px;
 }
 
-.friend-add input {
-  width: min(220px, 100%);
-  padding: 6px 0;
+.friend-plus,
+.friend-send {
+  display: grid;
+  place-items: center;
+  padding: 0;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+  flex: none;
+}
+
+.friend-plus { width: 24px; height: 24px; }
+
+.friend-plus svg,
+.friend-send svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+
+.friend-send { width: 22px; height: 22px; }
+
+.friend-send svg { width: 22px; height: 22px; }
+
+.friend-plus .plus-v { transition: opacity 0.2s ease; }
+
+.friend-invite.is-open .friend-plus .plus-v { opacity: 0; }
+
+.friend-invite .line-slot {
+  --line: min(220px, 46vw);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#profile .friend-invite .line-slot input {
+  width: calc(var(--line) - 30px);
+  flex: none;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid #fff;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+}
+
+.friend-invite .line-slot input::placeholder { color: rgba(255, 255, 255, 0.35); }
+
+#profile .friend-invite.is-error .line-slot input { border-bottom-color: #e23d3d; }
+
+#profile .friend-invite.is-error .line-slot input::placeholder { color: #e23d3d; }
+
+.friend-back {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 0 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+
+.friend-back svg { display: block; width: 22px; height: 22px; }
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  transition: opacity 0.18s ease;
+}
+
+.friend-row + .friend-row { border-top: 1px solid rgba(255, 255, 255, 0.12); }
+
+.friend-row.is-gone { opacity: 0; }
+
+.friend-person {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
   background: transparent;
   color: #fff;
   font: inherit;
+  font-size: 16px;
+  text-align: left;
+}
+
+.friend-person .avatar { width: 40px; height: 40px; flex: none; }
+
+.friend-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex: none;
+}
+
+.friend-tools button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+}
+
+.friend-tools svg { display: block; width: 22px; height: 22px; }
+
+.friend-tools .friend-remove { color: #e23d3d; }
+
+.friend-remove.is-confirm {
+  width: auto;
+  padding: 0 2px;
+  color: #e23d3d;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .request-block { margin-top: 16px; }

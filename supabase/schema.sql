@@ -142,9 +142,18 @@ alter table public.entries drop constraint if exists entries_rating_range;
 alter table public.entries add constraint entries_rating_range
   check (rating is null or (rating >= 0 and rating <= 10));
 
+alter table public.wishlist_members add column if not exists status text;
+update public.wishlist_members set status = 'accepted' where status is null;
+alter table public.wishlist_members alter column status set default 'accepted';
+alter table public.wishlist_members alter column status set not null;
+
 alter table public.wishlist_members drop constraint if exists wishlist_members_role;
 alter table public.wishlist_members add constraint wishlist_members_role
   check (role in ('owner', 'editor'));
+
+alter table public.wishlist_members drop constraint if exists wishlist_members_status;
+alter table public.wishlist_members add constraint wishlist_members_status
+  check (status in ('invited', 'accepted'));
 
 alter table public.wishlist_items drop constraint if exists wishlist_items_status;
 alter table public.wishlist_items add constraint wishlist_items_status
@@ -216,7 +225,20 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.wishlist_members
-    where wishlist_id = wl and user_id = uid
+    where wishlist_id = wl and user_id = uid and status = 'accepted'
+  );
+$$;
+
+create or replace function public.is_wishlist_invited(wl uuid, uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.wishlist_members
+    where wishlist_id = wl and user_id = uid and status = 'invited'
   );
 $$;
 
@@ -229,8 +251,47 @@ set search_path = public
 as $$
   select exists (
     select 1 from public.wishlist_members
-    where wishlist_id = wl and user_id = uid and role = 'owner'
+    where wishlist_id = wl and user_id = uid and role = 'owner' and status = 'accepted'
   );
+$$;
+
+create or replace function public.wishlist_film_counts(ids uuid[])
+returns table (wishlist_id uuid, films integer)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select w.id, count(i.id)::integer
+  from public.wishlists w
+  left join public.wishlist_items i on i.wishlist_id = w.id
+  where w.id = any(coalesce(ids, array[]::uuid[]))
+    and (
+      public.is_wishlist_member(w.id, auth.uid())
+      or public.is_wishlist_invited(w.id, auth.uid())
+    )
+  group by w.id;
+$$;
+
+create or replace function public.accept_wishlist(list uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'not authenticated';
+  end if;
+  update public.wishlist_members
+  set status = 'accepted'
+  where wishlist_id = list
+    and user_id = auth.uid()
+    and status = 'invited';
+  if not found then
+    raise exception 'no invitation';
+  end if;
+end;
 $$;
 
 drop function if exists public.profile_stats(uuid);
@@ -433,12 +494,33 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.wishlist_members (wishlist_id, user_id, role)
-  values (new.id, new.created_by, 'owner')
+  insert into public.wishlist_members (wishlist_id, user_id, role, status)
+  values (new.id, new.created_by, 'owner', 'accepted')
   on conflict (wishlist_id, user_id) do nothing;
   return new;
 end;
 $$;
+
+create or replace function public.wishlist_member_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.role = 'owner' then
+    new.status := 'accepted';
+  else
+    new.status := 'invited';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists wishlist_members_status on public.wishlist_members;
+create trigger wishlist_members_status
+  before insert on public.wishlist_members
+  for each row execute function public.wishlist_member_status();
 
 create or replace function public.protect_recovery_email()
 returns trigger
@@ -578,6 +660,9 @@ revoke all on function public.username_available(text) from public;
 revoke all on function public.delete_my_account() from public;
 revoke all on function public.accept_friend(uuid) from public;
 revoke all on function public.remove_friend(uuid) from public;
+revoke all on function public.is_wishlist_invited(uuid, uuid) from public;
+revoke all on function public.wishlist_film_counts(uuid[]) from public;
+revoke all on function public.accept_wishlist(uuid) from public;
 
 grant execute on function public.can_view(uuid, uuid) to authenticated;
 grant execute on function public.mutual(uuid, uuid) to authenticated;
@@ -591,6 +676,9 @@ grant execute on function public.username_available(text) to anon, authenticated
 grant execute on function public.delete_my_account() to authenticated;
 grant execute on function public.accept_friend(uuid) to authenticated;
 grant execute on function public.remove_friend(uuid) to authenticated;
+grant execute on function public.is_wishlist_invited(uuid, uuid) to authenticated;
+grant execute on function public.wishlist_film_counts(uuid[]) to authenticated;
+grant execute on function public.accept_wishlist(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RLS
@@ -703,7 +791,10 @@ create policy films_update on public.films
 drop policy if exists wishlists_select on public.wishlists;
 create policy wishlists_select on public.wishlists
   for select to authenticated
-  using (public.is_wishlist_member(id, auth.uid()));
+  using (
+    public.is_wishlist_member(id, auth.uid())
+    or public.is_wishlist_invited(id, auth.uid())
+  );
 
 drop policy if exists wishlists_insert on public.wishlists;
 create policy wishlists_insert on public.wishlists
@@ -724,7 +815,10 @@ create policy wishlists_delete on public.wishlists
 drop policy if exists wishlist_members_select on public.wishlist_members;
 create policy wishlist_members_select on public.wishlist_members
   for select to authenticated
-  using (public.is_wishlist_member(wishlist_id, auth.uid()));
+  using (
+    user_id = auth.uid()
+    or public.is_wishlist_member(wishlist_id, auth.uid())
+  );
 
 drop policy if exists wishlist_members_insert on public.wishlist_members;
 create policy wishlist_members_insert on public.wishlist_members

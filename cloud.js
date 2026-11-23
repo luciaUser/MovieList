@@ -253,12 +253,18 @@ async function start() {
     async profileByUsername(name) {
       const clean = normalize(name);
       if (!clean) return null;
-      const { data, error } = await client.from('profiles')
+      let result = await client.from('profiles')
         .select('id, username, display_name, is_private, avatar')
         .eq('username', clean)
         .maybeSingle();
-      if (error) throw error;
-      return data;
+      if (result.error && /avatar/i.test(result.error.message || '')) {
+        result = await client.from('profiles')
+          .select('id, username, display_name, is_private')
+          .eq('username', clean)
+          .maybeSingle();
+      }
+      if (result.error) throw result.error;
+      return result.data;
     },
     async loadOther(target) {
       const user = await currentUser();
@@ -353,40 +359,64 @@ async function start() {
     },
     async wishOverview() {
       const user = await currentUser();
-      const members = await client.from('wishlist_members').select('wishlist_id, user_id, role');
+      let members = await client.from('wishlist_members').select('wishlist_id, user_id, role, status');
+      if (members.error && /status/i.test(members.error.message || '')) {
+        members = await client.from('wishlist_members').select('wishlist_id, user_id, role');
+      }
       if (members.error) throw members.error;
       const rows = members.data || [];
       if (!rows.length) return [];
       const listIds = [...new Set(rows.map((row) => row.wishlist_id))];
-      const peopleIds = [...new Set(rows.map((row) => row.user_id))];
       const [lists, items] = await Promise.all([
         client.from('wishlists').select('id, title, created_by').in('id', listIds),
         client.from('wishlist_items').select('id, wishlist_id, film_id, status, created_at, added_by').in('wishlist_id', listIds),
       ]);
+      if (lists.error) throw lists.error;
+      if (items.error) throw items.error;
+      const peopleIds = [...new Set(rows.map((row) => row.user_id).concat((lists.data || []).map((list) => list.created_by)).filter(Boolean))];
       let people = await client.from('profiles').select('id, username, avatar').in('id', peopleIds);
       if (people.error && /avatar/i.test(people.error.message || '')) {
         people = await client.from('profiles').select('id, username').in('id', peopleIds);
       }
-      if (lists.error) throw lists.error;
       if (people.error) throw people.error;
-      if (items.error) throw items.error;
+      const counted = listIds.length
+        ? await client.rpc('wishlist_film_counts', { ids: listIds })
+        : { data: [], error: null };
+      const counts = new Map();
+      if (!counted.error) {
+        (counted.data || []).forEach((row) => counts.set(row.wishlist_id, Number(row.films) || 0));
+      }
       const names = new Map((people.data || []).map((person) => [person.id, person.username || '']));
       const avatars = new Map((people.data || []).map((person) => [person.id, person.avatar || null]));
       return (lists.data || []).map((list) => {
         const group = rows.filter((row) => row.wishlist_id === list.id);
         const mine = group.find((row) => row.user_id === user.id);
         const listItems = (items.data || []).filter((item) => item.wishlist_id === list.id);
+        const memberList = group.map((row) => ({
+          id: row.user_id,
+          username: names.get(row.user_id) || 'Profil',
+          avatar: avatars.get(row.user_id) || null,
+          role: row.role,
+          status: row.status || 'accepted',
+        }));
+        if (list.created_by && !memberList.some((person) => person.id === list.created_by)) {
+          memberList.unshift({
+            id: list.created_by,
+            username: names.get(list.created_by) || 'Profil',
+            avatar: avatars.get(list.created_by) || null,
+            role: 'owner',
+            status: 'accepted',
+          });
+        }
+        memberList.sort((a, b) => (a.role === 'owner' ? -1 : 0) - (b.role === 'owner' ? -1 : 0) || a.username.localeCompare(b.username, 'de'));
         return {
           id: list.id,
           title: list.title,
           createdBy: list.created_by,
           role: mine ? mine.role : 'editor',
-          members: group.map((row) => ({
-            id: row.user_id,
-            username: names.get(row.user_id) || 'Profil',
-            avatar: avatars.get(row.user_id) || null,
-            role: row.role,
-          })).sort((a, b) => (a.role === 'owner' ? -1 : 0) - (b.role === 'owner' ? -1 : 0) || a.username.localeCompare(b.username, 'de')),
+          myStatus: mine && mine.status ? mine.status : 'accepted',
+          filmCount: counts.has(list.id) ? counts.get(list.id) : listItems.length,
+          members: memberList,
           openCount: listItems.filter((item) => item.status !== 'geschaut').length,
           stamps: listItems.map((item) => ({
             id: item.id,
@@ -520,6 +550,10 @@ async function start() {
     },
     async deleteWishlist(listId) {
       const { error } = await client.from('wishlists').delete().eq('id', listId);
+      if (error) throw error;
+    },
+    async acceptWishlist(listId) {
+      const { error } = await client.rpc('accept_wishlist', { list: listId });
       if (error) throw error;
     },
     async leaveWishlist(listId) {

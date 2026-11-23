@@ -104,6 +104,7 @@
   let wishReloadTimer = 0;
   let wishSearchList = null;
   let wishMarkedId = null;
+  let wishFocusId = null;
   let followDot = false;
   let wishDot = false;
   let selectedId = null;
@@ -1967,6 +1968,8 @@
       pop.hidden = true;
       if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
     }
+    const invite = document.querySelector('.friend-invite.is-open');
+    if (invite && !invite.contains(event.target)) closeFriendInvite();
     if (document.querySelector('header').contains(event.target)) return;
     if (addFilm.classList.contains('is-open')) closeAdd();
     if (searchForm.classList.contains('is-open')) closeSearch();
@@ -2019,6 +2022,11 @@
       }
       if (addFilm.classList.contains('is-open')) {
         closeAdd();
+        return;
+      }
+      if (closeFriendInvite()) return;
+      if (profileMode === 'list' && listKind === 'friends') {
+        closeFriends();
         return;
       }
       if (spotlight) {
@@ -2877,7 +2885,8 @@
   }
 
   function repaintList() {
-    if (listKind === 'followers') paintNames('Follower', profileLists.followers, 'followers');
+    if (listKind === 'friends') paintFriends();
+    else if (listKind === 'followers') paintNames('Follower', profileLists.followers, 'followers');
     else if (listKind === 'following') paintNames('Folgt', profileLists.following, 'following');
   }
 
@@ -3460,55 +3469,120 @@
     root.append(block);
   }
 
-  function paintAddFriend() {
-    const box = el('div', 'friend-add');
+  const friendArrow = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17.5 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M10 6.5h7.5V14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+  const friendCheck = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5 10.2 16.5 18 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+
+  function closeFriendInvite() {
+    const box = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
+    if (!box) return false;
+    box.classList.remove('is-open', 'is-error', 'is-ok');
+    const plus = box.querySelector('.friend-plus');
+    if (plus) plus.setAttribute('aria-expanded', 'false');
+    const input = box.querySelector('input');
+    if (input) {
+      input.value = '';
+      input.placeholder = '';
+    }
+    const send = box.querySelector('.friend-send');
+    if (send) send.innerHTML = friendArrow;
+    return true;
+  }
+
+  function friendInviteNode() {
+    const box = el('div', 'profile-stat friend-invite');
+    const row = el('div', 'friend-invite-row');
+    const plus = document.createElement('button');
+    plus.type = 'button';
+    plus.className = 'friend-plus';
+    plus.setAttribute('aria-label', 'Add Friend');
+    plus.setAttribute('aria-expanded', 'false');
+    const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    mark.setAttribute('viewBox', '0 0 24 24');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.innerHTML = '<path class="plus-v" d="M12 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
+    plus.append(mark);
+    const slot = el('div', 'line-slot');
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Benutzername';
     input.setAttribute('aria-label', 'Benutzername');
     input.autocomplete = 'off';
+    input.spellcheck = false;
     input.maxLength = 20;
-    const send = lineButton('Anfrage senden');
-    const status = el('p', 'profile-status', '');
-    status.setAttribute('role', 'status');
-    send.addEventListener('click', async () => {
+    const send = document.createElement('button');
+    send.type = 'button';
+    send.className = 'friend-send';
+    send.setAttribute('aria-label', 'Anfrage senden');
+    send.innerHTML = friendArrow;
+    slot.append(input, send);
+    row.append(plus, slot);
+    box.append(row, el('span', null, 'Add Friend'));
+    const open = () => {
+      box.classList.add('is-open');
+      box.classList.remove('is-error', 'is-ok');
+      plus.setAttribute('aria-expanded', 'true');
+      input.placeholder = '';
+      requestAnimationFrame(() => input.focus());
+    };
+    plus.addEventListener('click', () => {
+      if (box.classList.contains('is-open')) closeFriendInvite();
+      else open();
+    });
+    let busy = false;
+    const fail = (reason) => {
+      box.classList.add('is-error');
+      input.value = '';
+      input.placeholder = reason;
+      window.setTimeout(() => box.classList.remove('is-error'), 1400);
+    };
+    const succeed = () => {
+      box.classList.remove('is-error');
+      box.classList.add('is-ok');
+      send.innerHTML = friendCheck;
+      window.setTimeout(() => closeFriendInvite(), 700);
+    };
+    const submit = async () => {
+      if (busy || !box.classList.contains('is-open')) return;
       const name = input.value.trim().toLowerCase();
-      if (!/^[a-z0-9_]{3,20}$/.test(name)) {
-        status.textContent = 'So heisst niemand.';
+      if (!/^[a-z0-9_]{3,20}$/.test(name) || !globalThis.Cloud || !globalThis.Cloud.profileByUsername) {
+        fail('So heisst niemand.');
         return;
       }
       if (account && name === account.username) {
-        status.textContent = 'Das bist du selbst.';
+        fail('Das bist du selbst.');
         return;
       }
-      send.disabled = true;
+      busy = true;
       try {
         const person = await globalThis.Cloud.profileByUsername(name);
         if (!person) {
-          status.textContent = 'So heisst niemand.';
-          send.disabled = false;
+          fail('So heisst niemand.');
           return;
         }
-        await changeFollow(person.id, 'follow');
-        status.textContent = 'Anfrage gesendet.';
+        if (mutualPeople().some((friend) => friend.id === person.id)) {
+          fail('Schon befreundet.');
+          return;
+        }
+        if ((profileLists.requests || []).some((friend) => friend.id === person.id)) {
+          fail('Anfrage offen.');
+          return;
+        }
+        await globalThis.Cloud.follow(person.id);
+        await refreshFollowLists();
+        succeed();
       } catch (error) {
-        status.textContent = followFail(error);
-        send.disabled = false;
+        const duplicate = error && (error.code === '23505' || /duplicate/i.test(String(error.message || '')));
+        fail(duplicate ? 'Anfrage offen.' : followFail(error));
+      } finally {
+        busy = false;
       }
+    };
+    send.addEventListener('click', submit);
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      submit();
     });
-    const share = lineButton('Oder Link teilen');
-    share.addEventListener('click', async () => {
-      const username = account && account.username;
-      if (!username) return;
-      const url = `${location.origin}${location.pathname}?profil=${encodeURIComponent(username)}`;
-      try {
-        await navigator.clipboard.writeText(url);
-        status.textContent = 'Link kopiert.';
-      } catch {
-        status.textContent = url;
-      }
-    });
-    box.append(input, send, share, status);
+    input.addEventListener('input', () => box.classList.remove('is-error'));
     return box;
   }
 
@@ -3680,8 +3754,9 @@
       refreshProfileDot();
       refreshFollowLists().then(() => {
         const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
-        if (profileMode === 'home' && !typing) paintProfile();
-        else if (profileMode === 'list') repaintList();
+      const inviting = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
+      if (profileMode === 'home' && !typing && !inviting) paintProfile();
+      else if (profileMode === 'list' && !document.querySelector('.friend-row.is-gone')) repaintList();
         else if (profileMode === 'other' && viewingId && (!other || viewingId === other)) openOther(viewingId, true);
         if (compareId && (!other || compareId === other)) {
           const person = (profileLists.following || []).find((item) => item.id === compareId);
@@ -3737,6 +3812,115 @@
     if (names) applyFollowLists(names);
     profileMail = mail;
     if (profileMode === 'home') paintProfile();
+  }
+
+  function closeFriends() {
+    profileMode = 'home';
+    listKind = '';
+    paintProfile();
+  }
+
+  function friendGlyph(kind) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = kind === 'remove' ? 'friend-remove' : 'friend-wish';
+    if (kind === 'wish') {
+      button.setAttribute('aria-label', 'Wunschliste');
+      button.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+    } else {
+      button.setAttribute('aria-label', 'Freundschaft entfernen');
+      button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    }
+    return button;
+  }
+
+  function friendRow(person) {
+    const row = el('div', 'friend-row');
+    const open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'friend-person';
+    open.append(avatarNode(person.avatar, 40), el('span', null, person.name || person.username || 'Profil'));
+    if (person.id) open.addEventListener('click', () => showOther(person.id));
+    const wish = friendGlyph('wish');
+    const remove = friendGlyph('remove');
+    let timer = 0;
+    wish.addEventListener('click', async () => {
+      if (!person.id || !globalThis.Cloud || !globalThis.Cloud.createWishlist) return;
+      wish.disabled = true;
+      try {
+        const id = await globalThis.Cloud.createWishlist('', [person.id]);
+        wishFocusId = id;
+        await loadWishlists({ quiet: true });
+        setMode('wish');
+      } catch {
+        wish.disabled = false;
+      }
+    });
+    remove.addEventListener('click', async () => {
+      if (!remove.classList.contains('is-confirm')) {
+        remove.classList.add('is-confirm');
+        remove.textContent = 'Entfernen?';
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          remove.classList.remove('is-confirm');
+          remove.setAttribute('aria-label', 'Freundschaft entfernen');
+          remove.innerHTML = friendGlyph('remove').innerHTML;
+        }, 4000);
+        return;
+      }
+      window.clearTimeout(timer);
+      remove.disabled = true;
+      try {
+        await globalThis.Cloud.removeFriend(person.id);
+        otherCache.delete(person.id);
+        followedCache = null;
+        profileLists.following = (profileLists.following || []).filter((item) => item.id !== person.id);
+        profileLists.followers = (profileLists.followers || []).filter((item) => item.id !== person.id);
+        if (profileStats && profileStats.friends != null) profileStats.friends = Math.max(0, profileStats.friends - 1);
+        row.classList.add('is-gone');
+        window.setTimeout(() => {
+          row.remove();
+          const root = profileRoot();
+          if (root && listKind === 'friends' && !root.querySelector('.friend-row')) {
+            root.append(el('p', 'profile-note', 'Noch niemand.'));
+          }
+        }, 180);
+        refreshFollowLists();
+      } catch {
+        remove.disabled = false;
+        remove.classList.remove('is-confirm');
+        remove.textContent = '';
+        remove.innerHTML = friendGlyph('remove').innerHTML;
+        remove.setAttribute('aria-label', 'Freundschaft entfernen');
+      }
+    });
+    const tools = el('div', 'friend-tools');
+    tools.append(wish, remove);
+    row.append(open, tools);
+    return row;
+  }
+
+  function paintFriends() {
+    const root = profileRoot();
+    if (!root) return;
+    profileMode = 'list';
+    listKind = 'friends';
+    viewingId = null;
+    root.classList.add('profile-list');
+    root.replaceChildren();
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'friend-back';
+    back.setAttribute('aria-label', 'Zurück');
+    back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6.5 8.5 12 15 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+    back.addEventListener('click', closeFriends);
+    root.append(back);
+    const people = mutualPeople();
+    if (!people.length) {
+      root.append(el('p', 'profile-note', 'Noch niemand.'));
+      return;
+    }
+    people.forEach((person) => root.append(friendRow(person)));
   }
 
   function paintNames(title, names, kind) {
@@ -4417,7 +4601,7 @@
 
   function refreshWishDot() {
     const me = account && account.id;
-    wishDot = wishLists.some((list) => wishUnseen(list, me));
+    wishDot = wishLists.some((list) => list.myStatus === 'invited' || wishUnseen(list, me));
     applyProfileDot();
   }
 
@@ -4447,7 +4631,8 @@
       if (mode === 'wish' && !wishTyping) paintWishBoard();
       if (options && options.quiet) return;
       const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
-      if (profileMode === 'home' && !typing) paintProfile();
+      const inviting = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
+      if (profileMode === 'home' && !typing && !inviting) paintProfile();
       else if (profileMode === 'wish' && wishOpenId) {
         if (!wishLists.some((list) => list.id === wishOpenId)) renderProfile();
         else paintWishlist();
@@ -4548,8 +4733,60 @@
   function wishCreatorName(list) {
     const owner = (list.members || []).find((person) => person.role === 'owner') || (list.members || [])[0];
     if (!owner) return '';
-    if (account && owner.id === account.id) return account.display_name || account.username || owner.username || '';
+    if (account && owner.id === account.id) return account.username || owner.username || '';
     return owner.username || 'Profil';
+  }
+
+  function paintWishBy(list) {
+    const by = el('span', 'genre-count wish-by');
+    const owner = (list.members || []).find((person) => person.role === 'owner');
+    by.append(document.createTextNode(wishCreatorName(list)));
+    (list.members || []).forEach((person) => {
+      if (owner && person.id === owner.id) return;
+      by.append(document.createTextNode(' / '));
+      const invited = person.status === 'invited';
+      const label = invited ? `${person.username || 'Profil'} (eingeladen)` : (person.username || 'Profil');
+      by.append(el('span', invited ? 'is-invited' : '', label));
+    });
+    return by;
+  }
+
+  function paintWishInvites(board) {
+    wishLists.filter((list) => list.myStatus === 'invited').forEach((list) => {
+      const owner = (list.members || []).find((person) => person.role === 'owner') || {};
+      const row = el('div', 'wish-invite');
+      const text = el('p', null, `${owner.username || 'Jemand'} lädt dich zu «${list.title || 'Liste'}» ein`);
+      const yes = lineButton('Ja');
+      const no = lineButton('Nein');
+      const lock = () => {
+        yes.disabled = true;
+        no.disabled = true;
+      };
+      const unlock = () => {
+        yes.disabled = false;
+        no.disabled = false;
+      };
+      yes.addEventListener('click', async () => {
+        lock();
+        try {
+          await globalThis.Cloud.acceptWishlist(list.id);
+          await loadWishlists();
+        } catch {
+          unlock();
+        }
+      });
+      no.addEventListener('click', async () => {
+        lock();
+        try {
+          await globalThis.Cloud.leaveWishlist(list.id);
+          await loadWishlists();
+        } catch {
+          unlock();
+        }
+      });
+      row.append(avatarNode(owner.avatar, 32), text, yes, no);
+      board.append(row);
+    });
   }
 
   function paintWishDraft(board) {
@@ -4897,25 +5134,57 @@
   }
 
   async function paintWishGroup(board, list, token) {
-    const bar = document.createElement('button');
-    bar.type = 'button';
+    const invited = list.myStatus === 'invited';
+    const editable = wishFocusId === list.id && !invited;
+    const bar = document.createElement(editable || invited ? 'div' : 'button');
+    if (!editable && !invited) bar.type = 'button';
     bar.className = 'genre-bar';
-    const title = el('span', 'genre-name', list.title);
-    const by = el('span', 'genre-count wish-by');
-    const owner = (list.members || []).find((person) => person.role === 'owner');
-    by.append(document.createTextNode(wishCreatorName(list)));
-    list.members.forEach((person) => {
-      if (owner && person.id === owner.id) return;
-      const personNode = el('span', 'wish-person');
-      personNode.append(avatarNode(person.avatar, 18));
-      by.append(personNode);
-    });
-    const side = el('span', 'genre-score', wishCountLabel(0));
-    bar.append(title, by, side);
+    let title;
+    if (editable) {
+      title = el('label', 'genre-name');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'wish-name';
+      input.value = list.title || '';
+      input.placeholder = 'Name :';
+      input.setAttribute('aria-label', 'Name');
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.addEventListener('click', (event) => event.stopPropagation());
+      input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        input.blur();
+      });
+      let saving = false;
+      input.addEventListener('blur', async () => {
+        const next = input.value.trim();
+        if (!next || next === (list.title || '') || saving) return;
+        saving = true;
+        try {
+          await globalThis.Cloud.renameWishlist(list.id, next);
+          list.title = next;
+        } catch {
+          input.value = list.title || '';
+        } finally {
+          saving = false;
+        }
+      });
+      title.append(input);
+    } else {
+      title = el('span', 'genre-name', list.title || (invited ? 'Liste' : ''));
+    }
+    const side = el('span', 'genre-score', wishCountLabel(list.filmCount || 0));
+    bar.append(title, paintWishBy(list), side);
+    if (invited) {
+      board.append(bar);
+      return;
+    }
     const menu = wishMenu(list);
     const open = !wishCollapsed.has(list.id);
     menu.hidden = !open;
-    bar.addEventListener('click', () => {
+    bar.addEventListener('click', (event) => {
+      if (event.target.closest && event.target.closest('input')) return;
       if (wishCollapsed.has(list.id)) wishCollapsed.delete(list.id);
       else wishCollapsed.add(list.id);
       const shown = !wishCollapsed.has(list.id);
@@ -4924,6 +5193,13 @@
       if (gridNode) gridNode.hidden = !shown;
     });
     board.append(bar, menu);
+    if (editable) {
+      const input = bar.querySelector('.wish-name');
+      if (input) {
+        input.focus();
+        wishFocusId = null;
+      }
+    }
     let items = [];
     try {
       items = await globalThis.Cloud.wishDetail(list.id);
@@ -4981,6 +5257,7 @@
     if (!board) return;
     const token = ++wishBoardToken;
     board.replaceChildren();
+    paintWishInvites(board);
     paintWishDraft(board);
     if (options && options.focusDraft) {
       const input = board.querySelector('.wish-name');
@@ -5652,27 +5929,10 @@
     head.append(avatarNode(account && account.avatar, 56), el('h1', null, name));
     root.append(head);
     const stats = el('div', 'profile-stats');
-    const add = document.createElement('button');
-    add.type = 'button';
-    add.className = 'profile-stat';
-    add.setAttribute('aria-label', 'Add Friend');
-    const plus = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    plus.setAttribute('viewBox', '0 0 24 24');
-    plus.setAttribute('aria-hidden', 'true');
-    plus.innerHTML = '<path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
-    add.append(plus, el('span', null, 'Add Friend'));
-    add.addEventListener('click', () => {
-      const open = root.querySelector('.friend-add');
-      if (open) {
-        open.remove();
-        return;
-      }
-      stats.after(paintAddFriend());
-    });
     stats.append(
       statNode(films, 'Filme'),
-      statNode(friends, 'Friends', () => paintNames('Freunde', mutualPeople(), 'friends')),
-      add,
+      statNode(friends, 'Friends', paintFriends),
+      friendInviteNode(),
     );
     root.append(stats);
     paintRequests(root);
