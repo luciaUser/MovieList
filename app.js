@@ -25,6 +25,7 @@
   const netRating = document.getElementById('net-rating');
   const netCompare = document.getElementById('net-compare');
   const MODE_KEY = 'moviebylucia-view-v1';
+  const SORT_KEY = 'moviebylucia-wall-sort-v1';
   const recoveryLink = /(?:^|[#&])type=recovery(?:&|$)/.test(location.hash);
 
   let archive = null;
@@ -44,6 +45,7 @@
   let editDraft = null;
 
   let mode = 'network';
+  let wallSort = 'director';
   let ratingView = false;
   let network = null;
   let networkReady = false;
@@ -372,9 +374,11 @@
     }
     const groups = new Map();
     FILMS.forEach((film) => {
-      const key = mode === 'director' ? (film.director || 'Ohne Regie') : (film.cluster || 'Andere');
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(film);
+      const keys = wallKeys(film);
+      keys.forEach((key) => {
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(film);
+      });
     });
     return [...groups.entries()]
       .sort((a, b) => {
@@ -390,6 +394,17 @@
           (b.imdb ?? -1) - (a.imdb ?? -1) || a.title.localeCompare(b.title, 'de')
         )),
       }));
+  }
+
+  function wallKeys(film) {
+    if (wallSort === 'genre') return [film.cluster || 'Andere'];
+    if (wallSort === 'cast') {
+      const facets = (globalThis.FILM_FACETS || {})[film.id];
+      const names = (Array.isArray(film.cast) && film.cast.length ? film.cast : (facets && facets.cast) || [])
+        .filter((name) => typeof name === 'string' && name.trim());
+      return names.length ? [names[0]] : ['Ohne Besetzung'];
+    }
+    return [film.director || 'Ohne Regie'];
   }
 
   function watchedCount(list) {
@@ -1147,12 +1162,46 @@
     return 'network';
   }
 
+  function savedWallSort() {
+    try {
+      const raw = localStorage.getItem(SORT_KEY);
+      if (raw === 'director' || raw === 'genre' || raw === 'cast') return raw;
+    } catch {
+      /* private mode can refuse storage */
+    }
+    return 'director';
+  }
+
   function rememberMode(next) {
     try {
       localStorage.setItem(MODE_KEY, next);
     } catch {
       /* private mode can refuse storage; the session still works */
     }
+  }
+
+  function rememberWallSort(next) {
+    try {
+      localStorage.setItem(SORT_KEY, next);
+    } catch {
+      /* private mode can refuse storage; the session still works */
+    }
+  }
+
+  function closeSortMenu() {
+    const modes = modeDirector && modeDirector.closest('.modes');
+    const pop = document.getElementById('sort-pop');
+    if (modes) modes.classList.remove('is-sort-open');
+    if (pop) pop.setAttribute('aria-hidden', 'true');
+    if (modeDirector) modeDirector.setAttribute('aria-expanded', 'false');
+  }
+
+  function paintSortMenu() {
+    const pop = document.getElementById('sort-pop');
+    if (!pop) return;
+    pop.querySelectorAll('button').forEach((button) => {
+      button.setAttribute('aria-pressed', button.dataset.sort === wallSort ? 'true' : 'false');
+    });
   }
 
   function ensureNetwork() {
@@ -1223,6 +1272,7 @@
     mode = next;
     ratingView = next === 'rating';
     rememberMode(next);
+    if (next !== 'director') closeSortMenu();
     modeNetwork.setAttribute('aria-selected', next === 'network' ? 'true' : 'false');
     modeDirector.setAttribute('aria-selected', next === 'director' ? 'true' : 'false');
     modeRating.setAttribute('aria-selected', next === 'rating' ? 'true' : 'false');
@@ -1363,7 +1413,39 @@
   });
 
   modeNetwork.addEventListener('click', () => setMode('network'));
-  modeDirector.addEventListener('click', () => setMode('director'));
+  modeDirector.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const modes = modeDirector.closest('.modes');
+    const pop = document.getElementById('sort-pop');
+    if (!modes || !pop) return;
+    const willOpen = !modes.classList.contains('is-sort-open');
+    if (!willOpen) {
+      closeSortMenu();
+      return;
+    }
+    const compare = document.getElementById('compare-pop');
+    if (compare) compare.hidden = true;
+    if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
+    paintSortMenu();
+    modes.classList.add('is-sort-open');
+    pop.setAttribute('aria-hidden', 'false');
+    modeDirector.setAttribute('aria-expanded', 'true');
+  });
+  document.getElementById('sort-pop').addEventListener('click', (event) => {
+    const button = event.target.closest('button');
+    if (!button || !button.dataset.sort) return;
+    event.stopPropagation();
+    wallSort = button.dataset.sort;
+    rememberWallSort(wallSort);
+    paintSortMenu();
+    closeSortMenu();
+    if (mode === 'director') showWall();
+    else setMode('director');
+  });
+  document.addEventListener('click', (event) => {
+    if (event.target.closest('#mode-director') || event.target.closest('#sort-pop button')) return;
+    closeSortMenu();
+  });
   modeRating.addEventListener('click', () => setMode('rating'));
   if (modeProfile) modeProfile.addEventListener('click', () => setMode('profile'));
   netRating.addEventListener('click', () => {
@@ -1750,6 +1832,8 @@
       });
     }
     started = true;
+    wallSort = savedWallSort();
+    paintSortMenu();
     const ready = setMode(savedMode());
     loadPosters();
     loadStoredFacets();
