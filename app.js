@@ -81,6 +81,20 @@
   let compareName = '';
   let pendingInvite = new URLSearchParams(location.search).get('profil') || '';
   let searchTimer = 0;
+  let wishLists = [];
+  let wishOpenId = null;
+  let wishItems = [];
+  let wishSort = 'votes';
+  let wishChannel = null;
+  let wishChannelKey = '';
+  let wishFresh = new Set();
+  let wishSeen = { lists: {}, hints: [] };
+  let wishBoot = 0;
+  let wishViewToken = 0;
+  let wishReloadTimer = 0;
+  let followedFilmCache = null;
+  let followDot = false;
+  let wishDot = false;
   let selectedId = null;
   let links = [];
   let activeLinkId = null;
@@ -750,6 +764,9 @@
     followed.hidden = true;
     panel.append(followed);
     fillFollowed(film.id, followed);
+    const wishSlot = el('div', 'wish-slot');
+    panel.append(wishSlot);
+    paintWishSlot(wishSlot, film);
     if (!mine) {
       const addMine = el('button', 'text-line', 'Zu meinem Archiv hinzufügen');
       addMine.type = 'button';
@@ -1724,7 +1741,14 @@
   }
 
   function startApp() {
-    if (started) return Promise.resolve(showRoster()).then((value) => { queueInvite(); return value; });
+    if (started) {
+      return Promise.resolve(showRoster()).then((value) => {
+        queueInvite();
+        loadWishlists();
+        showWishHints();
+        return value;
+      });
+    }
     started = true;
     const ready = setMode(savedMode());
     loadPosters();
@@ -1732,7 +1756,12 @@
     ensureVocab().catch(() => {
       /* Bearbeiten holt das Vokabular erneut */
     });
-    return Promise.resolve(ready).then((value) => { queueInvite(); return value; });
+    return Promise.resolve(ready).then((value) => {
+      queueInvite();
+      loadWishlists();
+      showWishHints();
+      return value;
+    });
   }
 
   function gateView() {
@@ -2410,7 +2439,8 @@
         .eq('followee', id)
         .eq('status', 'pending');
       if (result.error) return;
-      dot.hidden = !result.count;
+      followDot = Boolean(result.count);
+      applyProfileDot();
     } catch {
       /* der Punkt bleibt, wie er ist */
     }
@@ -2423,8 +2453,13 @@
       following: names.following || [],
       requests: names.requests || [],
     };
+    followDot = (names.pending || 0) > 0;
+    applyProfileDot();
+  }
+
+  function applyProfileDot() {
     const dot = modeProfile && modeProfile.querySelector('.profile-dot');
-    if (dot) dot.hidden = !(names.pending > 0);
+    if (dot) dot.hidden = !(followDot || wishDot);
   }
 
   async function refreshFollowLists() {
@@ -2922,6 +2957,7 @@
       if (!row || !row.id || (account && row.id === account.id)) return;
       closeSheet();
       showOther(row.id);
+      showWishHints();
     }).catch(() => {});
   }
 
@@ -3185,6 +3221,7 @@
       const other = row && (row.follower === userId ? row.followee : row.follower);
       if (other) otherCache.delete(other);
       followedCache = null;
+      followedFilmCache = null;
       refreshProfileDot();
       refreshFollowLists().then(() => {
         const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
@@ -3754,6 +3791,752 @@
     return block;
   }
 
+  function readWishSeen() {
+    wishSeen = { lists: {}, hints: [] };
+    if (!account) return;
+    try {
+      const raw = JSON.parse(localStorage.getItem(`moviebylucia-wish-seen-${account.id}`) || '{}');
+      wishSeen = {
+        lists: raw && raw.lists && typeof raw.lists === 'object' ? raw.lists : {},
+        hints: raw && Array.isArray(raw.hints) ? raw.hints.filter((id) => typeof id === 'string') : [],
+      };
+    } catch {
+      wishSeen = { lists: {}, hints: [] };
+    }
+  }
+
+  function writeWishSeen() {
+    if (!account) return;
+    try {
+      localStorage.setItem(`moviebylucia-wish-seen-${account.id}`, JSON.stringify(wishSeen));
+    } catch {
+      /* der Merkzettel bleibt in dieser Sitzung */
+    }
+  }
+
+  function wishFail(error, mutual) {
+    const message = String(error && error.message || '');
+    if (error && (error.name === 'TypeError' || /failed to fetch|network/i.test(message))) return 'Keine Verbindung.';
+    if (mutual && (error.code === '42501' || /row-level security|permission/i.test(message))) {
+      return 'Das geht nur bei gegenseitigem Folgen.';
+    }
+    return 'Das hat nicht geklappt.';
+  }
+
+  function isWishDuplicate(error) {
+    const message = String(error && error.message || '');
+    return Boolean(error && (error.code === '23505' || /duplicate|wishlist_items_film_key/i.test(message)));
+  }
+
+  function mutualPeople() {
+    const followers = new Set((profileLists.followers || []).map((person) => person.id));
+    return (profileLists.following || []).filter((person) => person.id && followers.has(person.id));
+  }
+
+  function facetsOf(film) {
+    const stored = (globalThis.FILM_FACETS || {})[film && film.id];
+    if (stored && typeof stored === 'object') return stored;
+    if (film && film.facets && typeof film.facets === 'object') return film.facets;
+    return null;
+  }
+
+  function filmCatalogPayload(film, facets) {
+    const base = facets && typeof facets === 'object' ? facets : null;
+    const score = base && typeof base.tmdbRating === 'number'
+      ? base.tmdbRating
+      : (typeof film.imdb === 'number' ? film.imdb : null);
+    const votes = base && typeof base.tmdbVotes === 'number' ? base.tmdbVotes : null;
+    return {
+      id: film.id,
+      imdb_id: base && base.imdbId ? base.imdbId : null,
+      title: film.title || 'Film',
+      original_title: film.original || null,
+      year: film.year ? String(film.year) : null,
+      kind: /^tmdb:tv:/.test(film.id) || film.kind === 'serie' ? 'tv' : 'movie',
+      poster: (base && base.poster) || film.poster || null,
+      tmdb_rating: score,
+      tmdb_votes: Number.isFinite(votes) ? votes : null,
+      facets: base,
+    };
+  }
+
+  function wishFilmObject(item) {
+    const local = byId.get(item.filmId);
+    if (local) return local;
+    if (item.film) return filmFromCatalog(item.film);
+    return {
+      id: item.filmId,
+      title: 'Film',
+      year: '',
+      genres: [],
+      cast: [],
+      director: '',
+      imdbLabel: '–',
+    };
+  }
+
+  function wishUnseen(list, me) {
+    const seenAt = Date.parse(wishSeen.lists[list.id] || '') || 0;
+    return (list.stamps || []).some((item) => (
+      item.addedBy && item.addedBy !== me && Date.parse(item.createdAt) > seenAt
+    ));
+  }
+
+  function refreshWishDot() {
+    const me = account && account.id;
+    wishDot = wishLists.some((list) => wishUnseen(list, me));
+    applyProfileDot();
+  }
+
+  function markListSeen(id) {
+    wishSeen.lists[id] = new Date().toISOString();
+    writeWishSeen();
+    refreshWishDot();
+  }
+
+  function setWishStatus(text) {
+    const node = document.getElementById('wish-status');
+    if (node) node.textContent = text || '';
+  }
+
+  async function loadWishlists(options) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.wishOverview || !account) return;
+    const token = wishBoot + 1;
+    wishBoot = token;
+    try {
+      const lists = await cloud.wishOverview();
+      if (token !== wishBoot || !account) return;
+      wishLists = lists || [];
+      refreshWishDot();
+      bindWishRealtime();
+      if (options && options.quiet) return;
+      const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
+      if (profileMode === 'home' && !typing) paintProfile();
+      else if (profileMode === 'wish' && wishOpenId) {
+        if (!wishLists.some((list) => list.id === wishOpenId)) renderProfile();
+        else paintWishlist();
+      }
+    } catch {
+      /* die Übersicht bleibt, wie sie ist */
+    }
+  }
+
+  function bindWishRealtime() {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.client || !account) return;
+    const key = `${account.id}:${wishLists.map((list) => list.id).sort().join(',')}`;
+    if (wishChannel && wishChannelKey === key) return;
+    if (wishChannel) cloud.client.removeChannel(wishChannel);
+    const channel = cloud.client.channel(`wishlists-${account.id}-${wishBoot}`);
+    const listen = (table, filter) => {
+      const spec = { event: '*', schema: 'public', table };
+      if (filter) spec.filter = filter;
+      channel.on('postgres_changes', spec, (payload) => onWishEvent(table, payload));
+    };
+    listen('wishlist_members', `user_id=eq.${account.id}`);
+    wishLists.forEach((list) => {
+      listen('wishlist_items', `wishlist_id=eq.${list.id}`);
+      listen('wishlist_members', `wishlist_id=eq.${list.id}`);
+    });
+    listen('wishlist_votes');
+    channel.subscribe();
+    wishChannel = channel;
+    wishChannelKey = key;
+  }
+
+  function onWishEvent(table, payload) {
+    const eventName = payload && (payload.eventType || payload.event);
+    const row = payload && payload.new && payload.new.id ? payload.new : null;
+    if (table === 'wishlist_items' && eventName === 'INSERT' && row && row.added_by !== (account && account.id)) {
+      wishFresh.add(row.id);
+      window.setTimeout(() => {
+        wishFresh.delete(row.id);
+        const node = document.querySelector(`[data-wish-item="${row.id}"]`);
+        if (node) node.classList.remove('is-fresh');
+      }, 2600);
+    }
+    window.clearTimeout(wishReloadTimer);
+    wishReloadTimer = window.setTimeout(() => loadWishlists(), 200);
+  }
+
+  function paintWishHome() {
+    const block = document.createElement('section');
+    block.append(el('h2', 'profile-kicker', 'Wunschlisten'));
+    if (!wishLists.length) block.append(el('p', 'profile-note', 'Noch keine Liste.'));
+    wishLists.forEach((list) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'hit-row';
+      const names = list.members.map((person) => person.username).filter(Boolean).join(' · ');
+      const count = list.openCount === 1 ? '1 offen' : `${list.openCount} offen`;
+      button.append(document.createTextNode(list.title), el('small', null, `${names} · ${count}`));
+      button.addEventListener('click', () => openWishlist(list.id));
+      block.append(button);
+    });
+    const add = lineButton('Neue Wunschliste');
+    add.addEventListener('click', () => openNewWishlist());
+    block.append(add);
+    return block;
+  }
+
+  function openWishlist(id) {
+    wishOpenId = id;
+    profileMode = 'wish';
+    wishItems = [];
+    paintWishlist();
+  }
+
+  function sortedWishItems(items) {
+    const rows = items.slice();
+    if (wishSort === 'new') {
+      rows.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    } else {
+      rows.sort((a, b) => b.votes.length - a.votes.length || Date.parse(b.createdAt) - Date.parse(a.createdAt));
+    }
+    return rows;
+  }
+
+  function wishFilmRow(item, list) {
+    const film = wishFilmObject(item);
+    const article = el('article', 'wish-film');
+    article.dataset.wishItem = item.id;
+    if (wishFresh.has(item.id)) article.classList.add('is-fresh');
+    const poster = document.createElement('button');
+    poster.type = 'button';
+    poster.className = 'wish-poster';
+    poster.setAttribute('aria-label', film.title || 'Film');
+    const image = document.createElement('img');
+    image.alt = '';
+    image.src = posterSrc(film);
+    poster.append(image);
+    poster.addEventListener('click', () => openFilm(film));
+    const body = el('div', 'wish-copy');
+    const title = el('button', 'wish-title', film.title || 'Film');
+    title.type = 'button';
+    title.addEventListener('click', () => openFilm(film));
+    const year = film.year ? `${film.year} · ` : '';
+    body.append(title, el('p', 'wish-meta', `${year}hinzugefügt von ${item.addedName}`));
+    const vote = el('button', 'wish-vote', `Will ich · ${item.votes.length}`);
+    vote.type = 'button';
+    vote.setAttribute('aria-pressed', item.mine ? 'true' : 'false');
+    vote.addEventListener('click', () => changeWishVote(item));
+    body.append(vote);
+    if (item.votes.length) body.append(el('p', 'wish-voters', item.votes.map((row) => row.username).join(' · ')));
+    const tools = el('div', 'wish-tools');
+    const status = el('button', 'wish-status', item.status === 'geschaut' ? 'Wieder öffnen' : 'Zusammen geschaut');
+    status.type = 'button';
+    status.addEventListener('click', () => changeWishStatus(item));
+    tools.append(status);
+    const me = account && account.id;
+    if (list.role === 'owner' || item.addedBy === me) {
+      const remove = el('button', 'wish-remove', 'Entfernen');
+      remove.type = 'button';
+      remove.addEventListener('click', () => removeWishItem(item));
+      tools.append(remove);
+    }
+    body.append(tools);
+    article.append(poster, body);
+    return article;
+  }
+
+  function fillWishItems(list) {
+    const openHost = document.getElementById('wish-items');
+    const doneHost = document.getElementById('wish-done');
+    if (!openHost || !doneHost || !list) return;
+    const open = sortedWishItems(wishItems.filter((item) => item.status !== 'geschaut'));
+    const done = sortedWishItems(wishItems.filter((item) => item.status === 'geschaut'));
+    openHost.replaceChildren();
+    if (!open.length) {
+      openHost.append(el('p', 'profile-note', wishItems.length ? 'Keine offenen Filme.' : 'Noch keine Filme.'));
+    } else {
+      open.forEach((item) => openHost.append(wishFilmRow(item, list)));
+    }
+    doneHost.replaceChildren();
+    if (!done.length) return;
+    const details = document.createElement('details');
+    details.className = 'wish-done';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Zusammen geschaut';
+    details.append(summary);
+    done.forEach((item) => details.append(wishFilmRow(item, list)));
+    doneHost.append(details);
+  }
+
+  function paintWishlist() {
+    const list = wishLists.find((item) => item.id === wishOpenId);
+    const root = profileRoot();
+    if (!list || !root) {
+      renderProfile();
+      return;
+    }
+    profileMode = 'wish';
+    markListSeen(list.id);
+    const searching = document.activeElement && document.activeElement.id === 'wish-search';
+    if (!(searching && document.getElementById('wish-items'))) {
+      root.classList.remove('profile-list');
+      root.replaceChildren();
+      const back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'back';
+      back.textContent = 'Zurück';
+      back.addEventListener('click', () => renderProfile());
+      root.append(back, el('h1', null, list.title));
+      root.append(el('p', 'handle', list.members.map((person) => person.username).filter(Boolean).join(' · ')));
+      root.append(paintWishManage(list));
+      const sort = el('div', 'wish-sort');
+      const byVotes = el('button', null, 'Stimmen');
+      byVotes.type = 'button';
+      byVotes.setAttribute('aria-pressed', wishSort === 'votes' ? 'true' : 'false');
+      byVotes.addEventListener('click', () => {
+        wishSort = 'votes';
+        paintWishlist();
+      });
+      const byNew = el('button', null, 'Neueste');
+      byNew.type = 'button';
+      byNew.setAttribute('aria-pressed', wishSort === 'new' ? 'true' : 'false');
+      byNew.addEventListener('click', () => {
+        wishSort = 'new';
+        paintWishlist();
+      });
+      sort.append(byVotes, byNew);
+      root.append(sort);
+      const add = lineButton('Film hinzufügen');
+      const search = document.createElement('input');
+      search.id = 'wish-search';
+      search.type = 'search';
+      search.placeholder = 'Film suchen';
+      search.setAttribute('aria-label', 'Film suchen');
+      search.autocomplete = 'off';
+      search.hidden = true;
+      const hits = el('div', 'profile-hits');
+      let token = 0;
+      add.addEventListener('click', () => {
+        search.hidden = false;
+        search.focus();
+      });
+      search.addEventListener('input', () => {
+        const query = search.value.trim();
+        window.clearTimeout(searchTimer);
+        if (query.length < 2) {
+          hits.replaceChildren();
+          return;
+        }
+        searchTimer = window.setTimeout(async () => {
+          const mine = token + 1;
+          token = mine;
+          try {
+            const found = await wishSearch(query);
+            if (mine !== token) return;
+            hits.replaceChildren();
+            if (!found.length) {
+              hits.append(el('p', 'profile-note', 'Nichts gefunden.'));
+              return;
+            }
+            found.forEach((hit) => {
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'hit-row';
+              const label = hit.film.year ? `${hit.sources.join(' · ')} · ${hit.film.year}` : hit.sources.join(' · ');
+              button.append(document.createTextNode(hit.film.title || 'Film'), el('small', null, label));
+              button.addEventListener('click', async () => {
+                button.disabled = true;
+                const message = await addFilmToList(list.id, hit.film, hit.facets);
+                setWishStatus(message || 'Hinzugefügt.');
+                if (!message) {
+                  search.value = '';
+                  hits.replaceChildren();
+                } else button.disabled = false;
+              });
+              hits.append(button);
+            });
+          } catch {
+            if (mine === token) hits.replaceChildren(el('p', 'profile-note', 'Keine Verbindung.'));
+          }
+        }, 250);
+      });
+      root.append(add, search, hits);
+      const status = el('p', 'profile-status', '');
+      status.id = 'wish-status';
+      status.setAttribute('role', 'status');
+      root.append(status);
+      const items = el('div');
+      items.id = 'wish-items';
+      const done = el('div');
+      done.id = 'wish-done';
+      root.append(items, done);
+    }
+    const token = wishViewToken + 1;
+    wishViewToken = token;
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.wishDetail) return;
+    cloud.wishDetail(list.id).then((items) => {
+      if (token !== wishViewToken || profileMode !== 'wish' || wishOpenId !== list.id) return;
+      wishItems = items || [];
+      fillWishItems(list);
+    }).catch(() => {
+      if (token === wishViewToken) setWishStatus('Keine Verbindung.');
+    });
+  }
+
+  function paintWishManage(list) {
+    const details = document.createElement('details');
+    details.className = 'wish-manage';
+    const summary = document.createElement('summary');
+    summary.textContent = 'Verwalten';
+    details.append(summary);
+    const me = account && account.id;
+    if (list.role === 'owner') {
+      const name = document.createElement('input');
+      name.type = 'text';
+      name.value = list.title;
+      name.setAttribute('aria-label', 'Titel');
+      const rename = lineButton('Umbenennen');
+      rename.addEventListener('click', async () => {
+        const title = name.value.trim();
+        if (!title) return;
+        try {
+          await globalThis.Cloud.renameWishlist(list.id, title);
+          await loadWishlists();
+        } catch (error) {
+          setWishStatus(wishFail(error));
+        }
+      });
+      details.append(name, rename);
+      const add = lineButton('Mitglied hinzufügen');
+      const box = el('div', 'wish-chips');
+      box.hidden = true;
+      add.addEventListener('click', () => {
+        box.hidden = false;
+        box.replaceChildren();
+        const have = new Set(list.members.map((person) => person.id));
+        const people = mutualPeople().filter((person) => !have.has(person.id));
+        if (!people.length) {
+          box.append(el('p', 'profile-note', 'Keine weiteren gegenseitigen Folgen.'));
+          return;
+        }
+        people.forEach((person) => {
+          const chip = el('button', 'wish-chip', person.username || person.name);
+          chip.type = 'button';
+          chip.addEventListener('click', async () => {
+            chip.disabled = true;
+            try {
+              await globalThis.Cloud.addWishlistMember(list.id, person.id);
+              await loadWishlists();
+            } catch (error) {
+              chip.disabled = false;
+              setWishStatus(wishFail(error, true));
+            }
+          });
+          box.append(chip);
+        });
+      });
+      details.append(add, box);
+      list.members.forEach((person) => {
+        if (person.id === me) return;
+        const line = el('div', 'name-line');
+        line.append(el('span', null, person.username));
+        const remove = lineButton('Entfernen');
+        remove.addEventListener('click', async () => {
+          try {
+            await globalThis.Cloud.removeWishlistMember(list.id, person.id);
+            await loadWishlists();
+          } catch (error) {
+            setWishStatus(wishFail(error));
+          }
+        });
+        line.append(remove);
+        details.append(line);
+      });
+      const wipe = document.createElement('input');
+      wipe.type = 'text';
+      wipe.placeholder = 'löschen';
+      wipe.setAttribute('aria-label', 'löschen eingeben');
+      const destroy = lineButton('Liste löschen');
+      destroy.disabled = true;
+      wipe.addEventListener('input', () => {
+        destroy.disabled = wipe.value.trim().toLocaleLowerCase('de') !== 'löschen';
+      });
+      destroy.addEventListener('click', async () => {
+        try {
+          await globalThis.Cloud.deleteWishlist(list.id);
+          wishOpenId = null;
+          await loadWishlists();
+          renderProfile();
+        } catch (error) {
+          setWishStatus(wishFail(error));
+        }
+      });
+      details.append(wipe, destroy);
+    } else {
+      const leave = lineButton('Liste verlassen');
+      leave.addEventListener('click', async () => {
+        try {
+          await globalThis.Cloud.leaveWishlist(list.id);
+          wishOpenId = null;
+          await loadWishlists();
+          renderProfile();
+        } catch (error) {
+          setWishStatus(wishFail(error));
+        }
+      });
+      details.append(leave);
+    }
+    return details;
+  }
+
+  async function changeWishVote(item) {
+    try {
+      await globalThis.Cloud.voteWishlist(item.id, !item.mine);
+      await loadWishlists();
+    } catch (error) {
+      setWishStatus(wishFail(error));
+    }
+  }
+
+  async function changeWishStatus(item) {
+    try {
+      await globalThis.Cloud.setWishlistStatus(item.id, item.status === 'geschaut' ? 'offen' : 'geschaut');
+      await loadWishlists();
+    } catch (error) {
+      setWishStatus(wishFail(error));
+    }
+  }
+
+  async function removeWishItem(item) {
+    try {
+      await globalThis.Cloud.removeWishlistItem(item.id);
+      await loadWishlists();
+    } catch (error) {
+      setWishStatus(wishFail(error));
+    }
+  }
+
+  async function addFilmToList(listId, film, facets) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.addWishlistItem || !film) return 'Keine Verbindung.';
+    let next = film;
+    const base = facets || facetsOf(film);
+    if (!film.fromCatalog) {
+      next = withCanonicalId({ ...film, genres: film.genres || [] }, base || {});
+      try {
+        await cloud.upsertFilm(filmCatalogPayload(next, base));
+      } catch (error) {
+        return wishFail(error);
+      }
+    }
+    if (wishOpenId === listId && wishItems.some((item) => item.filmId === next.id)) return 'Schon auf der Liste';
+    try {
+      await cloud.addWishlistItem(listId, next.id);
+    } catch (error) {
+      if (isWishDuplicate(error)) return 'Schon auf der Liste';
+      if (film.fromCatalog) {
+        try {
+          await cloud.upsertFilm(filmCatalogPayload(next, base));
+          await cloud.addWishlistItem(listId, next.id);
+        } catch (again) {
+          if (isWishDuplicate(again)) return 'Schon auf der Liste';
+          return wishFail(again);
+        }
+      } else return wishFail(error);
+    }
+    loadWishlists();
+    return '';
+  }
+
+  async function followedFilmPool() {
+    if (followedFilmCache) return followedFilmCache;
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.followedFilms) return [];
+    if (!(profileLists.following || []).length && cloud.followNames) {
+      const names = await cloud.followNames().catch(() => null);
+      if (names) applyFollowLists(names);
+    }
+    const ids = (profileLists.following || []).map((person) => person.id);
+    followedFilmCache = await cloud.followedFilms(ids);
+    return followedFilmCache;
+  }
+
+  async function wishSearch(query) {
+    const q = query.trim().toLocaleLowerCase('de');
+    if (q.length < 2) return [];
+    const hits = new Map();
+    const add = (film, source, filmFacets, fromCatalog) => {
+      if (!film || !film.id) return;
+      const current = hits.get(film.id) || { film, sources: [], facets: filmFacets || null, fromCatalog: true };
+      if (source && !current.sources.includes(source)) current.sources.push(source);
+      if (filmFacets && !current.facets) current.facets = filmFacets;
+      if (!fromCatalog) current.fromCatalog = false;
+      current.film = { ...film, fromCatalog: current.fromCatalog };
+      hits.set(film.id, current);
+    };
+    FILMS.forEach((film) => {
+      const blob = `${film.title || ''} ${film.original || ''}`.toLocaleLowerCase('de');
+      if (blob.includes(q)) add(film, 'Archiv', facetsOf(film), false);
+    });
+    const followed = await followedFilmPool();
+    followed.forEach((row) => {
+      const blob = `${row.film.title || ''} ${row.film.original_title || ''}`.toLocaleLowerCase('de');
+      if (!blob.includes(q)) return;
+      add({
+        id: row.film.id,
+        title: row.film.title,
+        original: row.film.original_title,
+        year: row.film.year || '',
+        poster: row.film.poster || '',
+        facets: row.film.facets,
+        fromCatalog: true,
+      }, (row.names || []).join(' · ') || 'Gefolgt', row.film.facets, true);
+    });
+    try {
+      const response = await fetch(`/api/film?q=${encodeURIComponent(query.trim())}`);
+      const data = await response.json().catch(() => null);
+      if (response.ok && data && data.film) {
+        const film = withCanonicalId(data.film, data.facets || {});
+        if (!hits.has(film.id)) add({ ...film, fromCatalog: false }, 'TMDB', data.facets, false);
+      }
+    } catch {
+      /* TMDB bleibt aus */
+    }
+    return [...hits.values()].slice(0, 12);
+  }
+
+  async function openNewWishlist() {
+    clearSelection();
+    if (mode !== 'profile') {
+      skipProfileHome = true;
+      setMode('profile');
+    }
+    if (globalThis.Cloud && globalThis.Cloud.followNames) {
+      const names = await globalThis.Cloud.followNames().catch(() => null);
+      if (names) applyFollowLists(names);
+    }
+    paintWishCreate();
+  }
+
+  function paintWishCreate() {
+    const root = profileRoot();
+    if (!root) return;
+    profileMode = 'wish-new';
+    wishOpenId = null;
+    root.classList.remove('profile-list');
+    root.replaceChildren();
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'back';
+    back.textContent = 'Zurück';
+    back.addEventListener('click', () => renderProfile());
+    root.append(back, el('h1', null, 'Neue Wunschliste'));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Titel';
+    input.setAttribute('aria-label', 'Titel');
+    root.append(input, el('h2', 'profile-kicker', 'Mitglieder'));
+    const picked = new Set();
+    const people = mutualPeople();
+    if (!people.length) root.append(el('p', 'profile-note', 'Noch keine gegenseitigen Folgen.'));
+    const chips = el('div', 'wish-chips');
+    people.forEach((person) => {
+      const chip = el('button', 'wish-chip', person.username || person.name);
+      chip.type = 'button';
+      chip.setAttribute('aria-pressed', 'false');
+      chip.addEventListener('click', () => {
+        if (picked.has(person.id)) picked.delete(person.id);
+        else picked.add(person.id);
+        chip.setAttribute('aria-pressed', picked.has(person.id) ? 'true' : 'false');
+      });
+      chips.append(chip);
+    });
+    const save = lineButton('Anlegen');
+    const status = el('p', 'profile-status', '');
+    status.setAttribute('role', 'status');
+    save.addEventListener('click', async () => {
+      const title = input.value.trim();
+      if (!title) {
+        status.textContent = 'Titel eintragen.';
+        return;
+      }
+      save.disabled = true;
+      try {
+        const id = await globalThis.Cloud.createWishlist(title, [...picked]);
+        await loadWishlists({ quiet: true });
+        openWishlist(id);
+      } catch (error) {
+        save.disabled = false;
+        status.textContent = wishFail(error, true);
+      }
+    });
+    root.append(chips, save, status);
+  }
+
+  function paintWishSlot(slot, film) {
+    const button = lineButton('Zu Wunschliste hinzufügen');
+    const box = el('div', 'wish-choices');
+    button.addEventListener('click', async () => {
+      box.replaceChildren();
+      if (!wishLists.length) await loadWishlists({ quiet: true });
+      if (!wishLists.length) {
+        const link = lineButton('Neue Wunschliste');
+        link.addEventListener('click', () => openNewWishlist());
+        box.append(el('p', 'profile-note', 'Noch keine Wunschliste.'), link);
+        return;
+      }
+      wishLists.forEach((list) => {
+        const choice = lineButton(list.title);
+        choice.addEventListener('click', async () => {
+          choice.disabled = true;
+          const message = await addFilmToList(list.id, film, facetsOf(film));
+          box.replaceChildren(el('p', 'profile-status', message || 'Hinzugefügt.'));
+        });
+        box.append(choice);
+      });
+    });
+    slot.append(button, box);
+  }
+
+  async function showWishHints() {
+    const cloud = globalThis.Cloud;
+    const host = document.getElementById('wish-hint');
+    if (!cloud || !cloud.watchedWishItems || !host || !account) return;
+    readWishSeen();
+    let rows = [];
+    try {
+      rows = await cloud.watchedWishItems();
+    } catch {
+      return;
+    }
+    const pending = rows.filter((row) => row.id && !wishSeen.hints.includes(row.id));
+    if (!pending.length) return;
+    pending.forEach((row) => wishSeen.hints.push(row.id));
+    writeWishSeen();
+    host.replaceChildren();
+    pending.forEach((row) => {
+      const made = row.film ? filmFromCatalog(row.film) : null;
+      const film = (made && byId.get(made.id)) || made || {
+        id: row.filmId,
+        title: 'diesen Film',
+        year: '',
+        genres: [],
+        cast: [],
+        director: '',
+        imdbLabel: '–',
+      };
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = `Ihr habt ${film.title} zusammen geschaut – jetzt bewerten`;
+      button.addEventListener('click', () => {
+        host.hidden = true;
+        openFilm(film);
+        requestAnimationFrame(() => {
+          const slider = document.getElementById('own-rate');
+          if (slider) slider.focus();
+        });
+      });
+      host.append(button);
+    });
+    host.hidden = false;
+  }
+
   function paintProfile() {
     const root = profileRoot();
     if (!root) return;
@@ -3780,12 +4563,14 @@
     const people = personMaps();
     root.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors));
     root.append(paintPeople('directors', 'Lieblingsregie', people.directors));
+    root.append(paintWishHome());
     root.append(paintSettings());
   }
 
   function renderProfile() {
     viewingId = null;
     listKind = '';
+    wishOpenId = null;
     profileMode = 'home';
     profileToken += 1;
     paintProfile();
@@ -3807,6 +4592,24 @@
     viewingId = null;
     listKind = '';
     stopCompare();
+    wishLists = [];
+    wishOpenId = null;
+    wishItems = [];
+    wishFresh = new Set();
+    followedFilmCache = null;
+    followDot = false;
+    wishDot = false;
+    if (wishReloadTimer) window.clearTimeout(wishReloadTimer);
+    if (wishChannel && globalThis.Cloud && globalThis.Cloud.client) {
+      globalThis.Cloud.client.removeChannel(wishChannel);
+    }
+    wishChannel = null;
+    wishChannelKey = '';
+    const hint = document.getElementById('wish-hint');
+    if (hint) {
+      hint.hidden = true;
+      hint.replaceChildren();
+    }
     profileMail = null;
     profileStatus = '';
     if (modeProfile) {
@@ -3927,6 +4730,8 @@
       };
     }
     watchFollows(session.user.id);
+    readWishSeen();
+    loadWishlists();
     const cached = globalThis.Store.load();
     if (registered) {
       unlockScreen();

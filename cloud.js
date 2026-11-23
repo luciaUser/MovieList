@@ -310,6 +310,204 @@ async function start() {
       const { error } = await client.from('follows').delete().eq('followee', user.id).eq('follower', target);
       if (error) throw error;
     },
+    async wishOverview() {
+      const user = await currentUser();
+      const members = await client.from('wishlist_members').select('wishlist_id, user_id, role');
+      if (members.error) throw members.error;
+      const rows = members.data || [];
+      if (!rows.length) return [];
+      const listIds = [...new Set(rows.map((row) => row.wishlist_id))];
+      const peopleIds = [...new Set(rows.map((row) => row.user_id))];
+      const [lists, people, items] = await Promise.all([
+        client.from('wishlists').select('id, title, created_by').in('id', listIds),
+        client.from('profiles').select('id, username').in('id', peopleIds),
+        client.from('wishlist_items').select('id, wishlist_id, status, created_at, added_by').in('wishlist_id', listIds),
+      ]);
+      if (lists.error) throw lists.error;
+      if (people.error) throw people.error;
+      if (items.error) throw items.error;
+      const names = new Map((people.data || []).map((person) => [person.id, person.username || '']));
+      return (lists.data || []).map((list) => {
+        const group = rows.filter((row) => row.wishlist_id === list.id);
+        const mine = group.find((row) => row.user_id === user.id);
+        const listItems = (items.data || []).filter((item) => item.wishlist_id === list.id);
+        return {
+          id: list.id,
+          title: list.title,
+          createdBy: list.created_by,
+          role: mine ? mine.role : 'editor',
+          members: group.map((row) => ({
+            id: row.user_id,
+            username: names.get(row.user_id) || 'Profil',
+            role: row.role,
+          })).sort((a, b) => (a.role === 'owner' ? -1 : 0) - (b.role === 'owner' ? -1 : 0) || a.username.localeCompare(b.username, 'de')),
+          openCount: listItems.filter((item) => item.status !== 'geschaut').length,
+          stamps: listItems.map((item) => ({
+            id: item.id,
+            createdAt: item.created_at,
+            addedBy: item.added_by,
+          })),
+        };
+      }).sort((a, b) => a.title.localeCompare(b.title, 'de'));
+    },
+    async wishDetail(listId) {
+      const user = await currentUser();
+      const items = await client.from('wishlist_items')
+        .select('id, wishlist_id, film_id, added_by, status, created_at')
+        .eq('wishlist_id', listId);
+      if (items.error) throw items.error;
+      const rows = items.data || [];
+      const filmIds = [...new Set(rows.map((row) => row.film_id))];
+      const itemIds = rows.map((row) => row.id);
+      const [films, votes] = await Promise.all([
+        filmIds.length
+          ? client.from('films').select('id, title, original_title, year, poster, kind, facets').in('id', filmIds)
+          : Promise.resolve({ data: [], error: null }),
+        itemIds.length
+          ? client.from('wishlist_votes').select('item_id, user_id').in('item_id', itemIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (films.error) throw films.error;
+      if (votes.error) throw votes.error;
+      const peopleIds = [...new Set(rows.map((row) => row.added_by).concat((votes.data || []).map((row) => row.user_id)).filter(Boolean))];
+      let names = new Map();
+      if (peopleIds.length) {
+        const people = await client.from('profiles').select('id, username').in('id', peopleIds);
+        if (people.error) throw people.error;
+        names = new Map((people.data || []).map((person) => [person.id, person.username || 'Profil']));
+      }
+      const filmById = new Map((films.data || []).map((row) => [row.id, row]));
+      return rows.map((row) => ({
+        id: row.id,
+        filmId: row.film_id,
+        film: filmById.get(row.film_id) || null,
+        addedBy: row.added_by,
+        addedName: names.get(row.added_by) || 'Profil',
+        status: row.status,
+        createdAt: row.created_at,
+        votes: (votes.data || []).filter((vote) => vote.item_id === row.id).map((vote) => ({
+          id: vote.user_id,
+          username: names.get(vote.user_id) || 'Profil',
+        })),
+        mine: (votes.data || []).some((vote) => vote.item_id === row.id && vote.user_id === user.id),
+      }));
+    },
+    async followedFilms(userIds) {
+      const ids = [...new Set((userIds || []).filter(Boolean))];
+      if (!ids.length) return [];
+      const entries = await client.from('entries')
+        .select('user_id, film_id')
+        .in('user_id', ids)
+        .eq('in_archive', true)
+        .eq('hidden', false);
+      if (entries.error) throw entries.error;
+      const filmIds = [...new Set((entries.data || []).map((row) => row.film_id))];
+      if (!filmIds.length) return [];
+      const [films, people] = await Promise.all([
+        client.from('films').select('id, title, original_title, year, poster, kind, facets').in('id', filmIds),
+        client.from('profiles').select('id, username').in('id', ids),
+      ]);
+      if (films.error) throw films.error;
+      if (people.error) throw people.error;
+      const names = new Map((people.data || []).map((person) => [person.id, person.username || '']));
+      const byFilm = new Map((films.data || []).map((row) => [row.id, row]));
+      const grouped = new Map();
+      (entries.data || []).forEach((row) => {
+        const film = byFilm.get(row.film_id);
+        if (!film) return;
+        const current = grouped.get(film.id) || { film, names: [] };
+        const name = names.get(row.user_id);
+        if (name && !current.names.includes(name)) current.names.push(name);
+        grouped.set(film.id, current);
+      });
+      return [...grouped.values()];
+    },
+    async watchedWishItems() {
+      const items = await client.from('wishlist_items').select('id, film_id').eq('status', 'geschaut');
+      if (items.error) throw items.error;
+      const rows = items.data || [];
+      const filmIds = [...new Set(rows.map((row) => row.film_id))];
+      let films = [];
+      if (filmIds.length) {
+        const found = await client.from('films').select('id, title, original_title, year, poster, kind, facets').in('id', filmIds);
+        if (found.error) throw found.error;
+        films = found.data || [];
+      }
+      const byId = new Map(films.map((film) => [film.id, film]));
+      return rows.map((row) => ({ id: row.id, filmId: row.film_id, film: byId.get(row.film_id) || null }));
+    },
+    async upsertFilm(row) {
+      const { error } = await client.from('films').upsert(row, { onConflict: 'id' });
+      if (error) throw error;
+    },
+    async createWishlist(title, memberIds) {
+      const user = await currentUser();
+      const created = await client.from('wishlists').insert({ title, created_by: user.id }).select('id').single();
+      if (created.error) throw created.error;
+      const others = [...new Set((memberIds || []).filter((id) => id && id !== user.id))];
+      if (others.length) {
+        const inserted = await client.from('wishlist_members').insert(others.map((id) => ({
+          wishlist_id: created.data.id,
+          user_id: id,
+          role: 'editor',
+        })));
+        if (inserted.error) throw inserted.error;
+      }
+      return created.data.id;
+    },
+    async renameWishlist(listId, title) {
+      const { error } = await client.from('wishlists').update({ title }).eq('id', listId);
+      if (error) throw error;
+    },
+    async deleteWishlist(listId) {
+      const { error } = await client.from('wishlists').delete().eq('id', listId);
+      if (error) throw error;
+    },
+    async leaveWishlist(listId) {
+      const user = await currentUser();
+      const { error } = await client.from('wishlist_members').delete().eq('wishlist_id', listId).eq('user_id', user.id);
+      if (error) throw error;
+    },
+    async addWishlistMember(listId, userId) {
+      const { error } = await client.from('wishlist_members').insert({
+        wishlist_id: listId,
+        user_id: userId,
+        role: 'editor',
+      });
+      if (error) throw error;
+    },
+    async removeWishlistMember(listId, userId) {
+      const { error } = await client.from('wishlist_members').delete().eq('wishlist_id', listId).eq('user_id', userId);
+      if (error) throw error;
+    },
+    async addWishlistItem(listId, filmId) {
+      const user = await currentUser();
+      const { error } = await client.from('wishlist_items').insert({
+        wishlist_id: listId,
+        film_id: filmId,
+        added_by: user.id,
+        status: 'offen',
+      });
+      if (error) throw error;
+    },
+    async removeWishlistItem(itemId) {
+      const { error } = await client.from('wishlist_items').delete().eq('id', itemId);
+      if (error) throw error;
+    },
+    async setWishlistStatus(itemId, status) {
+      const { error } = await client.from('wishlist_items').update({ status }).eq('id', itemId);
+      if (error) throw error;
+    },
+    async voteWishlist(itemId, on) {
+      const user = await currentUser();
+      if (on) {
+        const { error } = await client.from('wishlist_votes').insert({ item_id: itemId, user_id: user.id });
+        if (error && error.code !== '23505') throw error;
+        return;
+      }
+      const { error } = await client.from('wishlist_votes').delete().eq('item_id', itemId).eq('user_id', user.id);
+      if (error) throw error;
+    },
     async recoveryEmail() {
       const user = await currentUser();
       const { data, error } = await client.from('recovery_emails').select('email, verified').eq('user_id', user.id).maybeSingle();

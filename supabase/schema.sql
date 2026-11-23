@@ -649,8 +649,8 @@ create policy wishlists_insert on public.wishlists
 drop policy if exists wishlists_update on public.wishlists;
 create policy wishlists_update on public.wishlists
   for update to authenticated
-  using (public.is_wishlist_member(id, auth.uid()))
-  with check (public.is_wishlist_member(id, auth.uid()));
+  using (public.is_wishlist_owner(id, auth.uid()))
+  with check (public.is_wishlist_owner(id, auth.uid()));
 
 drop policy if exists wishlists_delete on public.wishlists;
 create policy wishlists_delete on public.wishlists
@@ -700,7 +700,10 @@ create policy wishlist_items_update on public.wishlist_items
 drop policy if exists wishlist_items_delete on public.wishlist_items;
 create policy wishlist_items_delete on public.wishlist_items
   for delete to authenticated
-  using (public.is_wishlist_member(wishlist_id, auth.uid()));
+  using (
+    public.is_wishlist_owner(wishlist_id, auth.uid())
+    or added_by = auth.uid()
+  );
 
 drop policy if exists wishlist_votes_select on public.wishlist_votes;
 create policy wishlist_votes_select on public.wishlist_votes
