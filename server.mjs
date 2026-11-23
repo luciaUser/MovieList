@@ -123,7 +123,9 @@ async function handle(req, res) {
     const url = new URL(raw, 'http://127.0.0.1');
     if (url.pathname === '/api/recovery') return recovery(req, res);
     if (url.pathname === '/api/film') {
-      const result = await filmResponse(url.searchParams.get('q') || '');
+      const result = await filmResponse(url.searchParams.get('q') || '', {
+        list: url.searchParams.get('list') === '1',
+      });
       return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);
     }
     if (url.pathname === '/api/posters') {

@@ -53,6 +53,12 @@ function pick(results, year) {
   return { match, yearMatch: Boolean(yearHit) };
 }
 
+function mediaHits(results) {
+  return (Array.isArray(results) ? results : []).filter((item) => (
+    item && (item.media_type === 'movie' || item.media_type === 'tv') && (item.title || item.name)
+  ));
+}
+
 export async function search(query, year, options = {}) {
   const text = String(query || '').trim();
   if (!text) return null;
@@ -66,6 +72,31 @@ export async function search(query, year, options = {}) {
   }
   const any = pick(results, year);
   return shape(any.match, any.yearMatch);
+}
+
+export async function searchHits(query, year, limit = 8) {
+  const text = String(query || '').trim();
+  if (!text) return [];
+  const data = await get(`/search/multi?query=${encodeURIComponent(text)}&language=de-DE`);
+  const yearText = year == null || year === '' ? '' : String(year);
+  const ranked = mediaHits(data?.results).slice().sort((a, b) => (
+    yearText ? Number(yearOf(b) === yearText) - Number(yearOf(a) === yearText) : 0
+  ));
+  return ranked.slice(0, limit).map((item) => shape(item, Boolean(yearText) && yearOf(item) === yearText));
+}
+
+export async function directorName(type, id) {
+  const kind = type === 'tv' ? 'tv' : 'movie';
+  if (!id) return '';
+  if (kind === 'tv') {
+    const payload = await get(`/tv/${id}?language=de-DE`);
+    const created = payload && Array.isArray(payload.created_by) ? payload.created_by[0] : null;
+    if (created && created.name) return created.name;
+  }
+  const credits = await get(`/${kind}/${id}/credits?language=en-US`);
+  const crew = credits && Array.isArray(credits.crew) ? credits.crew : [];
+  const director = crew.find((person) => person.job === 'Director');
+  return director && director.name ? director.name : '';
 }
 
 export async function findByImdb(imdbId) {

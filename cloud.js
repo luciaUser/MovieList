@@ -359,11 +359,14 @@ async function start() {
       if (!rows.length) return [];
       const listIds = [...new Set(rows.map((row) => row.wishlist_id))];
       const peopleIds = [...new Set(rows.map((row) => row.user_id))];
-      const [lists, people, items] = await Promise.all([
+      const [lists, items] = await Promise.all([
         client.from('wishlists').select('id, title, created_by').in('id', listIds),
-        client.from('profiles').select('id, username, avatar').in('id', peopleIds),
         client.from('wishlist_items').select('id, wishlist_id, film_id, status, created_at, added_by').in('wishlist_id', listIds),
       ]);
+      let people = await client.from('profiles').select('id, username, avatar').in('id', peopleIds);
+      if (people.error && /avatar/i.test(people.error.message || '')) {
+        people = await client.from('profiles').select('id, username').in('id', peopleIds);
+      }
       if (lists.error) throw lists.error;
       if (people.error) throw people.error;
       if (items.error) throw items.error;
@@ -497,18 +500,19 @@ async function start() {
     },
     async createWishlist(title, memberIds) {
       const user = await currentUser();
-      const created = await client.from('wishlists').insert({ title, created_by: user.id }).select('id').single();
+      const id = crypto.randomUUID();
+      const created = await client.from('wishlists').insert({ id, title, created_by: user.id });
       if (created.error) throw created.error;
-      const others = [...new Set((memberIds || []).filter((id) => id && id !== user.id))];
+      const others = [...new Set((memberIds || []).filter((memberId) => memberId && memberId !== user.id))];
       if (others.length) {
-        const inserted = await client.from('wishlist_members').insert(others.map((id) => ({
-          wishlist_id: created.data.id,
-          user_id: id,
+        const inserted = await client.from('wishlist_members').insert(others.map((memberId) => ({
+          wishlist_id: id,
+          user_id: memberId,
           role: 'editor',
         })));
         if (inserted.error) throw inserted.error;
       }
-      return created.data.id;
+      return id;
     },
     async renameWishlist(listId, title) {
       const { error } = await client.from('wishlists').update({ title }).eq('id', listId);

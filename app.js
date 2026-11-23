@@ -102,7 +102,8 @@
   let wishBoot = 0;
   let wishViewToken = 0;
   let wishReloadTimer = 0;
-  let followedFilmCache = null;
+  let wishSearchList = null;
+  let wishMarkedId = null;
   let followDot = false;
   let wishDot = false;
   let selectedId = null;
@@ -674,7 +675,13 @@
     if (mode === 'network') applyNetworkFocus();
   }
 
+  function closeWishSearch() {
+    wishSearchList = null;
+    document.body.classList.remove('is-wish-search');
+  }
+
   function clearSelection() {
+    closeWishSearch();
     panelFilm = null;
     selectedId = null;
     links = [];
@@ -922,6 +929,7 @@
   }
 
   function renderPanel(film) {
+    closeWishSearch();
     panelFilm = film;
     const row = entry(film.id);
     const mine = byId.has(film.id);
@@ -942,7 +950,7 @@
     wish.type = 'button';
     wish.setAttribute('aria-label', 'Wunschliste');
     wish.setAttribute('aria-expanded', 'false');
-    wish.innerHTML = `<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+    wish.innerHTML = `<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
     const pick = el('div', 'wish-pick');
     pick.hidden = true;
     wish.addEventListener('click', (event) => {
@@ -952,14 +960,11 @@
       wish.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
       if (willOpen) fillWishPick(pick, film);
     });
-    const tools = el('div', 'panel-tools');
-    tools.append(closeIcon, wish, pick);
-    if (mine) tools.append(remove);
-    panel.append(tools);
-
     const full = fullOf(film);
     const head = el('div', 'panel-head');
-    head.append(el('h1', null, film.title));
+    const titleRow = el('div', 'panel-title');
+    titleRow.append(el('h1', null, film.title), closeIcon);
+    head.append(titleRow);
     if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
       head.append(el('p', 'unsynced', 'nicht synchronisiert'));
     }
@@ -990,7 +995,9 @@
       head.append(row);
     }
     const imdb = el('p', 'imdb-line');
-    imdb.append(el('span', 'star', '★'), el('span', null, film.imdbLabel));
+    const wishWrap = el('div', 'panel-wish-wrap');
+    wishWrap.append(wish, pick);
+    imdb.append(el('span', 'star', '★'), el('span', null, film.imdbLabel), wishWrap);
     head.append(imdb);
     const genreRow = el('div', 'genre-row');
     if ((film.genres || []).length) {
@@ -998,6 +1005,7 @@
       film.genres.forEach((genre) => pills.append(el('li', null, genre)));
       genreRow.append(pills);
     }
+    if (mine) genreRow.append(remove);
     head.append(genreRow);
     panel.append(head);
     const followed = el('div', 'followed-row');
@@ -1534,6 +1542,13 @@
       if (pop) pop.hidden = true;
       if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
     }
+    if (next !== 'wish' && wishSearchList) {
+      closeWishSearch();
+      if (!selectedId) {
+        panel.hidden = true;
+        panel.replaceChildren();
+      }
+    }
     mode = next;
     ratingView = next === 'rating';
     rememberMode(next);
@@ -1724,7 +1739,7 @@
     if (event.target.closest('#mode-director') || event.target.closest('#sort-pop button')) return;
     closeSortMenu();
     const pick = document.querySelector('#panel .wish-pick');
-    if (pick && !pick.hidden && !event.target.closest('.panel-tools')) pick.hidden = true;
+    if (pick && !pick.hidden && !event.target.closest('.panel-wish-wrap')) pick.hidden = true;
   });
   modeRating.addEventListener('click', () => setMode('rating'));
   if (modeWish) modeWish.addEventListener('click', () => setMode('wish'));
@@ -4511,62 +4526,279 @@
     openFilm(film);
   }
 
-  function wishPlusTile(list) {
+  function wishPlusTile(onClick) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'poster wish-plus';
     button.setAttribute('aria-label', 'Film hinzufügen');
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path></svg>';
-    button.addEventListener('click', () => openWishSearch(list));
+    button.addEventListener('click', onClick);
     return button;
   }
 
+  function focusWishName(input) {
+    if (!input) return;
+    input.focus();
+    const cell = input.closest('.genre-name');
+    if (!cell) return;
+    cell.classList.add('is-hot');
+    window.setTimeout(() => cell.classList.remove('is-hot'), 700);
+  }
+
+  function wishCreatorName(list) {
+    const owner = (list.members || []).find((person) => person.role === 'owner') || (list.members || [])[0];
+    if (!owner) return '';
+    if (account && owner.id === account.id) return account.display_name || account.username || owner.username || '';
+    return owner.username || 'Profil';
+  }
+
+  function paintWishDraft(board) {
+    const bar = el('div', 'genre-bar wish-draft');
+    const nameCell = el('label', 'genre-name');
+    const name = document.createElement('input');
+    name.type = 'text';
+    name.className = 'wish-name';
+    name.placeholder = 'Name :';
+    name.setAttribute('aria-label', 'Name');
+    name.autocomplete = 'off';
+    name.spellcheck = false;
+    nameCell.append(name);
+    bar.append(nameCell, el('span', 'genre-count', 'creator :'), el('span', 'genre-score', 'Movies :'));
+    const grid = el('div', 'wish-grid');
+    grid.dataset.list = 'draft';
+    let pending = null;
+    const commit = () => {
+      const title = name.value.trim();
+      if (!title) return Promise.resolve(null);
+      if (pending) return pending;
+      pending = (async () => {
+        try {
+          const id = await globalThis.Cloud.createWishlist(title, []);
+          await loadWishlists({ quiet: true });
+          return id;
+        } catch (error) {
+          name.disabled = false;
+          pending = null;
+          const note = bar.querySelector('.genre-count');
+          if (note) note.textContent = wishFail(error);
+          return null;
+        }
+      })();
+      name.disabled = true;
+      return pending;
+    };
+    let commitTimer = 0;
+    name.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      window.clearTimeout(commitTimer);
+      commit().then((id) => {
+        if (!id || mode !== 'wish') return;
+        paintWishBoard({ focusDraft: true });
+      });
+    });
+    name.addEventListener('blur', () => {
+      if (pending || !name.value.trim()) return;
+      commitTimer = window.setTimeout(() => {
+        commit().then((id) => {
+          if (!id || mode !== 'wish') return;
+          paintWishBoard();
+        });
+      }, 180);
+    });
+    const plus = wishPlusTile(() => {
+      window.clearTimeout(commitTimer);
+      if (!name.value.trim()) {
+        focusWishName(name);
+        return;
+      }
+      commit().then(async (id) => {
+        if (!id) return;
+        if (mode === 'wish') await paintWishBoard();
+        const list = wishLists.find((item) => item.id === id);
+        if (list) openWishSearch(list);
+      });
+    });
+    grid.append(plus);
+    board.append(bar, grid);
+  }
+
   function openWishSearch(list) {
-    const box = el('div');
-    box.append(el('h2', null, list.title || 'Film hinzufügen'));
+    if (!list || !list.id) return;
+    wishSearchList = list;
+    panelFilm = null;
+    selectedId = null;
+    links = [];
+    activeLinkId = null;
+    document.body.classList.remove('has-selection');
+    document.body.classList.add('is-wish-search');
+    renderWishSearch();
+    paint();
+  }
+
+  function currentWishSearchList() {
+    if (!wishSearchList) return null;
+    return wishLists.find((list) => list.id === wishSearchList.id) || wishSearchList;
+  }
+
+  function wishOnList(list, filmId) {
+    return Boolean(list && (list.stamps || []).some((stamp) => stamp.filmId === filmId));
+  }
+
+  function markWishFilm(id) {
+    wishMarkedId = id;
+    window.setTimeout(() => {
+      if (wishMarkedId === id) wishMarkedId = null;
+      const node = document.querySelector(`#wish-board [data-id="${CSS.escape(id)}"]`);
+      if (node) node.classList.remove('is-fresh');
+    }, 1600);
+  }
+
+  function showWishPosterNow(list, film) {
+    const grid = document.querySelector(`#wish-board .wish-grid[data-list="${CSS.escape(list.id)}"]`);
+    if (!grid || grid.querySelector(`[data-id="${CSS.escape(film.id)}"]`)) return false;
+    const poster = wishPoster(film, null);
+    poster.classList.add('is-fresh');
+    poster.classList.remove('is-rated');
+    poster.addEventListener('click', () => openListedFilm(film, list));
+    const plus = grid.querySelector('.wish-plus');
+    if (plus) plus.after(poster);
+    else grid.append(poster);
+    return true;
+  }
+
+  async function completeWishHit(row) {
+    if (!row || row.source !== 'tmdb') return row;
+    const facets = row.facets || {};
+    const kind = facets.tmdbType === 'tv' ? 'tv' : 'movie';
+    const id = facets.tmdbId;
+    if (!id) return row;
+    try {
+      const response = await fetch(`/api/film?q=${encodeURIComponent(`https://www.themoviedb.org/${kind}/${id}`)}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.film) return row;
+      const film = withCanonicalId(data.film, data.facets || {});
+      return { ...row, film: { ...film, fromCatalog: false }, facets: data.facets || null, fromCatalog: false };
+    } catch {
+      return row;
+    }
+  }
+
+  function renderWishSearch() {
+    const list = currentWishSearchList();
+    if (!list) return;
+    panel.replaceChildren();
+    panel.hidden = false;
+    const box = el('div', 'wish-find');
+    const head = el('div', 'wish-find-head');
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Titel suchen';
     input.setAttribute('aria-label', 'Film suchen');
-    const hits = el('div', 'profile-hits');
-    const note = el('p', 'profile-status', '');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    const closeIcon = el('button', 'panel-close');
+    closeIcon.type = 'button';
+    closeIcon.setAttribute('aria-label', 'Schließen');
+    closeIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    closeIcon.addEventListener('click', clearSelection);
+    head.append(input, closeIcon);
+    const note = el('p', 'wish-find-note', 'Titel eingeben');
+    const hits = el('div', 'wish-hits');
+    box.append(head, note, hits);
+    panel.append(box);
     let token = 0;
+    let cursor = 0;
+    let rows = [];
+    const paintHits = () => {
+      hits.replaceChildren();
+      rows.forEach((row, index) => {
+        const film = row.film;
+        const have = wishOnList(currentWishSearchList(), film.id);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wish-hit';
+        if (index === cursor) button.classList.add('is-current');
+        if (have) button.classList.add('is-have');
+        button.disabled = have;
+        const image = document.createElement('img');
+        image.alt = '';
+        image.src = posterSrc(film);
+        const copy = el('span', 'wish-hit-copy');
+        copy.append(el('span', 'wish-hit-title', film.title || 'Film'));
+        const meta = [film.year, film.director].filter(Boolean).join(' · ');
+        if (meta) copy.append(el('span', 'wish-hit-meta', meta));
+        button.append(image, copy);
+        if (have) button.append(el('span', 'wish-hit-check', '✓'));
+        button.addEventListener('click', () => chooseHit(row));
+        hits.append(button);
+      });
+      const current = hits.querySelector('.wish-hit.is-current');
+      if (current) current.scrollIntoView({ block: 'nearest' });
+    };
+    const chooseHit = async (row) => {
+      const live = currentWishSearchList();
+      if (!live || !row || wishOnList(live, row.film.id)) return;
+      const shown = withCanonicalId({ ...row.film }, row.facets || {});
+      input.value = '';
+      rows = [];
+      cursor = 0;
+      hits.replaceChildren();
+      note.textContent = 'Titel eingeben';
+      markWishFilm(shown.id);
+      const placed = showWishPosterNow(live, shown);
+      const resolved = await completeWishHit({ ...row, film: shown });
+      const film = resolved.film || shown;
+      const message = await addFilmToList(live.id, film, resolved.facets);
+      if (message) {
+        note.textContent = message;
+        if (placed) {
+          const stray = document.querySelector(`#wish-board .wish-grid[data-list="${CSS.escape(live.id)}"] [data-id="${CSS.escape(film.id)}"]`);
+          if (stray) stray.remove();
+        }
+        return;
+      }
+      markWishFilm(film.id);
+    };
     input.addEventListener('input', () => {
       const query = input.value.trim();
       window.clearTimeout(input._timer);
+      rows = [];
+      cursor = 0;
       if (query.length < 2) {
         hits.replaceChildren();
+        note.textContent = 'Titel eingeben';
         return;
       }
+      note.textContent = '';
       input._timer = window.setTimeout(async () => {
         const mine = ++token;
-        const rows = await wishSearch(query).catch(() => []);
-        if (mine !== token) return;
-        hits.replaceChildren();
+        const found = await wishSearch(query).catch(() => []);
+        if (mine !== token || !wishSearchList) return;
+        rows = found;
+        cursor = 0;
         if (!rows.length) {
-          hits.append(el('p', 'profile-note', 'Keine Treffer.'));
+          hits.replaceChildren();
+          note.textContent = 'Nichts gefunden – mit Jahr versuchen, z. B. The Invisible Man (2020)';
           return;
         }
-        rows.forEach((row) => {
-          const hit = document.createElement('button');
-          hit.type = 'button';
-          hit.className = 'hit-row';
-          hit.textContent = row.film.title || 'Film';
-          hit.addEventListener('click', async () => {
-            hit.disabled = true;
-            const result = await addFilmToList(list.id, row.film, row.facets);
-            note.textContent = result || '';
-            if (!result) {
-              closeSheet();
-              await loadWishlists();
-            } else hit.disabled = false;
-          });
-          hits.append(hit);
-        });
+        note.textContent = '';
+        paintHits();
       }, 250);
     });
-    box.append(input, hits, note);
-    openSheet(box);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!rows.length) return;
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        cursor = Math.max(0, Math.min(rows.length - 1, cursor + step));
+        paintHits();
+        return;
+      }
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const row = rows[cursor];
+      if (row) chooseHit(row);
+    });
     input.focus();
   }
 
@@ -4670,10 +4902,12 @@
     bar.className = 'genre-bar';
     const title = el('span', 'genre-name', list.title);
     const by = el('span', 'genre-count wish-by');
-    by.append(document.createTextNode('By:'));
+    const owner = (list.members || []).find((person) => person.role === 'owner');
+    by.append(document.createTextNode(wishCreatorName(list)));
     list.members.forEach((person) => {
+      if (owner && person.id === owner.id) return;
       const personNode = el('span', 'wish-person');
-      personNode.append(avatarNode(person.avatar, 18), document.createTextNode(person.username || 'Profil'));
+      personNode.append(avatarNode(person.avatar, 18));
       by.append(personNode);
     });
     const side = el('span', 'genre-score', wishCountLabel(0));
@@ -4686,9 +4920,8 @@
       else wishCollapsed.add(list.id);
       const shown = !wishCollapsed.has(list.id);
       menu.hidden = !shown;
-      board.querySelectorAll(`[data-list="${list.id}"]`).forEach((node) => {
-        node.hidden = !shown;
-      });
+      const gridNode = board.querySelector(`.wish-grid[data-list="${list.id}"]`);
+      if (gridNode) gridNode.hidden = !shown;
     });
     board.append(bar, menu);
     let items = [];
@@ -4714,10 +4947,11 @@
       byFilm.set(row.film_id, bucket);
     });
     const averages = [];
-    const plus = wishPlusTile(list);
-    plus.dataset.list = list.id;
-    plus.hidden = !open;
-    board.append(plus);
+    const grid = el('div', 'wish-grid');
+    grid.dataset.list = list.id;
+    grid.hidden = wishCollapsed.has(list.id);
+    const plus = wishPlusTile(() => openWishSearch(list));
+    grid.append(plus);
     items.forEach((item) => {
       const film = wishFilmObject(item);
       const bucket = byFilm.get(item.filmId) || [];
@@ -4731,34 +4965,31 @@
       if (average != null) averages.push(average);
       const poster = wishPoster(film, list.members.length > 1 || average != null ? average : null);
       if (list.members.length < 2 && average == null) poster.classList.remove('is-rated');
-      poster.dataset.list = list.id;
-      poster.hidden = !open;
+      if (wishMarkedId && film.id === wishMarkedId) poster.classList.add('is-fresh');
       poster.addEventListener('click', () => openListedFilm(film, list));
-      board.append(poster);
+      grid.append(poster);
     });
+    board.append(grid);
     if (list.members.length > 1 && averages.length) {
       const avg = averages.reduce((sum, value) => sum + value, 0) / averages.length;
       side.append(document.createTextNode(`  ★ ${avg.toFixed(1).replace('.', ',')}`));
     }
   }
 
-  async function paintWishBoard() {
+  async function paintWishBoard(options) {
     const board = document.getElementById('wish-board');
     if (!board) return;
     const token = ++wishBoardToken;
     board.replaceChildren();
-    if (!wishLists.length) board.append(el('p', 'empty', 'Noch keine Liste.'));
+    paintWishDraft(board);
+    if (options && options.focusDraft) {
+      const input = board.querySelector('.wish-name');
+      if (input) input.focus();
+    }
     for (const list of wishLists) {
       await paintWishGroup(board, list, token);
       if (token !== wishBoardToken) return;
     }
-    if (token !== wishBoardToken) return;
-    const create = document.createElement('button');
-    create.type = 'button';
-    create.className = 'genre-bar wish-create';
-    create.append(el('span', 'genre-name', 'Neue Wunschliste'));
-    create.addEventListener('click', () => openNewWishlist());
-    board.append(create);
   }
 
   function paintWishHome() {
@@ -4926,7 +5157,8 @@
               const button = document.createElement('button');
               button.type = 'button';
               button.className = 'hit-row';
-              const label = hit.film.year ? `${hit.sources.join(' · ')} · ${hit.film.year}` : hit.sources.join(' · ');
+              const origin = (hit.sources || []).join(' · ');
+              const label = [origin, hit.film.year].filter(Boolean).join(' · ');
               button.append(document.createTextNode(hit.film.title || 'Film'), el('small', null, label));
               button.addEventListener('click', async () => {
                 button.disabled = true;
@@ -5134,60 +5366,101 @@
   }
 
   async function followedFilmPool() {
-    if (followedFilmCache) return followedFilmCache;
     const cloud = globalThis.Cloud;
     if (!cloud || !cloud.followedFilms) return [];
     if (!(profileLists.following || []).length && cloud.followNames) {
       const names = await cloud.followNames().catch(() => null);
       if (names) applyFollowLists(names);
     }
-    const ids = (profileLists.following || []).map((person) => person.id);
-    followedFilmCache = await cloud.followedFilms(ids);
-    return followedFilmCache;
+    const ids = mutualPeople().map((person) => person.id);
+    if (!ids.length) return [];
+    return cloud.followedFilms(ids);
+  }
+
+  function wishMatchScore(film, query) {
+    const raw = String(query || '').trim().toLocaleLowerCase('de');
+    const yearHit = raw.match(/\b(?:19|20)\d{2}\b/);
+    const year = yearHit ? yearHit[0] : '';
+    const needle = (year ? raw.replace(year, '') : raw).replace(/[()]/g, ' ').replace(/\s+/g, ' ').trim();
+    const text = needle || raw;
+    const title = String(film.title || '').toLocaleLowerCase('de');
+    const original = String(film.original || '').toLocaleLowerCase('de');
+    const filmYear = String(film.year || '').slice(0, 4);
+    let score = 0;
+    if (title === text) score = 100;
+    else if (title.startsWith(text)) score = 82;
+    else if (text && title.includes(text)) score = 64;
+    else if (original && original === text) score = 74;
+    else if (original && original.startsWith(text)) score = 56;
+    else if (original && text && original.includes(text)) score = 44;
+    if (!score) return 0;
+    if (year && filmYear === year) score += 20;
+    else if (year && filmYear) score -= 24;
+    return score;
   }
 
   async function wishSearch(query) {
-    const q = query.trim().toLocaleLowerCase('de');
+    const q = query.trim();
     if (q.length < 2) return [];
-    const hits = new Map();
-    const add = (film, source, filmFacets, fromCatalog) => {
-      if (!film || !film.id) return;
-      const current = hits.get(film.id) || { film, sources: [], facets: filmFacets || null, fromCatalog: true };
-      if (source && !current.sources.includes(source)) current.sources.push(source);
-      if (filmFacets && !current.facets) current.facets = filmFacets;
-      if (!fromCatalog) current.fromCatalog = false;
-      current.film = { ...film, fromCatalog: current.fromCatalog };
-      hits.set(film.id, current);
+    const rows = [];
+    const index = new Map();
+    const add = (film, source, filmFacets, fromCatalog, bonus, floor) => {
+      if (!film) return;
+      const next = withCanonicalId({ ...film }, filmFacets || {});
+      if (!next || !next.id) return;
+      let score = wishMatchScore(next, q);
+      if (!score && floor) score = floor;
+      if (!score) return;
+      const have = index.get(next.id);
+      if (have) {
+        if (filmFacets && !have.facets) have.facets = filmFacets;
+        if (!have.film.director && next.director) have.film.director = next.director;
+        if (score + bonus > have.score + have.bonus && source !== 'tmdb') {
+          have.score = score;
+          have.bonus = bonus;
+          have.source = source;
+        }
+        return;
+      }
+      const row = {
+        film: { ...next, fromCatalog },
+        source,
+        facets: filmFacets || null,
+        fromCatalog,
+        bonus,
+        score,
+        order: rows.length,
+      };
+      index.set(next.id, row);
+      rows.push(row);
     };
-    FILMS.forEach((film) => {
-      const blob = `${film.title || ''} ${film.original || ''}`.toLocaleLowerCase('de');
-      if (blob.includes(q)) add(film, 'Archiv', facetsOf(film), false);
-    });
+    FILMS.forEach((film) => add(film, 'archiv', facetsOf(film), false, 12, 0));
     const followed = await followedFilmPool();
     followed.forEach((row) => {
-      const blob = `${row.film.title || ''} ${row.film.original_title || ''}`.toLocaleLowerCase('de');
-      if (!blob.includes(q)) return;
+      const facets = row.film.facets || null;
       add({
         id: row.film.id,
         title: row.film.title,
         original: row.film.original_title,
         year: row.film.year || '',
         poster: row.film.poster || '',
-        facets: row.film.facets,
+        director: (facets && facets.director) || '',
         fromCatalog: true,
-      }, (row.names || []).join(' · ') || 'Gefolgt', row.film.facets, true);
+      }, 'freund', facets, true, 8, 0);
     });
     try {
-      const response = await fetch(`/api/film?q=${encodeURIComponent(query.trim())}`);
+      const response = await fetch(`/api/film?q=${encodeURIComponent(q)}&list=1`);
       const data = await response.json().catch(() => null);
-      if (response.ok && data && data.film) {
-        const film = withCanonicalId(data.film, data.facets || {});
-        if (!hits.has(film.id)) add({ ...film, fromCatalog: false }, 'TMDB', data.facets, false);
-      }
+      const films = response.ok && data && Array.isArray(data.films) ? data.films : [];
+      films.forEach((item, order) => {
+        if (!item || !item.film) return;
+        add({ ...item.film, fromCatalog: false }, 'tmdb', item.facets || null, false, 0, Math.max(48 - order * 3, 12));
+      });
     } catch {
       /* TMDB bleibt aus */
     }
-    return [...hits.values()].slice(0, 12);
+    rows.sort((a, b) => (b.score + b.bonus) - (a.score + a.bonus) || a.order - b.order);
+    return rows.slice(0, 12);
   }
 
   async function openNewWishlist() {
@@ -5476,8 +5749,9 @@
     wall.replaceChildren();
     wall.hidden = true;
     networkEl.hidden = true;
+    wishSearchList = null;
     panel.hidden = true;
-    document.body.classList.remove('has-selection', 'is-network', 'is-rating', 'is-profile', 'is-wish');
+    document.body.classList.remove('has-selection', 'is-network', 'is-rating', 'is-profile', 'is-wish', 'is-wish-search');
     const wishBoard = document.getElementById('wish-board');
     if (wishBoard) {
       wishBoard.hidden = true;

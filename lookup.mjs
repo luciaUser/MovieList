@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { search, findByImdb, details } from './tmdb.mjs';
+import { search, searchHits, directorName, findByImdb, details } from './tmdb.mjs';
 import { enrichFilm } from './enrich.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -115,8 +115,68 @@ export async function lookupFilm(raw) {
   return { film: filmRecord(hit, facets), facets };
 }
 
-export async function filmResponse(raw) {
+function lightFilm(hit, director) {
+  const kind = hit.mediaType === 'tv' ? 'tv' : 'movie';
+  const poster = hit.posterPath ? `https://image.tmdb.org/t/p/w342${hit.posterPath}` : null;
+  return {
+    film: {
+      id: `tmdb:${kind}:${hit.id}`,
+      tmdbId: hit.id,
+      tmdbType: kind,
+      title: hit.title,
+      original: hit.originalTitle && hit.originalTitle !== hit.title ? hit.originalTitle : null,
+      year: hit.year || '',
+      poster,
+      director: director || '',
+      genres: [],
+      kind: kind === 'tv' ? 'serie' : 'film',
+      imdb: null,
+      imdbLabel: '',
+    },
+    facets: {
+      tmdbId: hit.id,
+      tmdbType: kind,
+      poster,
+      director: director || null,
+    },
+  };
+}
+
+export async function lookupFilms(raw) {
+  const parsed = parseQuery(raw);
+  if (!parsed || !configured()) return [];
+  if (parsed.kind !== 'text') {
+    const one = await lookupFilm(raw);
+    return one ? [one] : [];
+  }
+  let hits = [];
   try {
+    hits = await searchHits(parsed.text, parsed.year, 8);
+  } catch {
+    return [];
+  }
+  const films = await Promise.all(hits.map(async (hit) => {
+    let director = '';
+    try {
+      director = await directorName(hit.mediaType, hit.id);
+    } catch {
+      director = '';
+    }
+    return lightFilm(hit, director);
+  }));
+  return films.filter((row) => row.film && row.film.title);
+}
+
+export async function filmResponse(raw, options) {
+  try {
+    if (options && options.list) {
+      const films = await lookupFilms(raw);
+      return {
+        status: 200,
+        body: JSON.stringify({ films }),
+        cache: films.length ? 's-maxage=3600' : 'no-store',
+      };
+    }
     const result = await lookupFilm(raw);
     return {
       status: 200,
