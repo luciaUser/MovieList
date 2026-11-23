@@ -230,6 +230,68 @@ header > * { pointer-events: auto; }
   text-align: left;
 }
 
+.add-hits {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 8px);
+  left: 34px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.add-hits[hidden] { display: none !important; }
+
+.add-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(88px, 26vw);
+  padding: 3px;
+  border: 1px solid transparent;
+  background: #000;
+  color: #fff;
+  font: inherit;
+  text-align: center;
+}
+
+.add-hit.is-current {
+  border-color: #fff;
+  transform: scale(1.06);
+}
+
+.add-hit-poster { position: relative; display: block; }
+
+.add-hit-poster img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  background: #111;
+}
+
+.add-hit-check {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  text-shadow: 0 0 4px #000;
+}
+
+.add-hit-title,
+.add-hit-year {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.add-hit-year { color: rgba(255, 255, 255, 0.55); }
+
 .modes {
   --mode-gap: 28px;
   position: relative;
@@ -494,12 +556,130 @@ header > * { pointer-events: auto; }
 .genre-score { justify-content: flex-end; gap: 12px; }
 
 .wish-by {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
 }
+
+.wish-by-names {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#wish-board .wish-bar {
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.45fr) minmax(0, 0.9fr);
+}
+
+#wish-board .wish-bar.has-x {
+  --x: 52px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.45fr) minmax(0, 0.85fr) auto var(--x);
+}
+
+#wish-board .wish-bar .genre-name,
+#wish-board .wish-bar .genre-count,
+#wish-board .wish-bar .genre-score {
+  white-space: nowrap;
+}
+
+#wish-board .wish-bar.has-x .genre-name { cursor: text; }
+
+.wish-add-member {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  flex: none;
+}
+
+.wish-add-member svg { display: block; width: 18px; height: 18px; }
+
+.wish-member-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #fff;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.wish-by.is-inviting .wish-by-names { display: none; }
+
+.wish-member-hits {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: min(240px, 70vw);
+  background: #000;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.wish-member-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+}
+
+.wish-member-hit.is-current { background: rgba(255, 255, 255, 0.08); }
+
+.wish-member-hit .avatar { width: 28px; height: 28px; flex: none; }
+
+.wish-sure {
+  display: grid;
+  place-items: center;
+  width: 0;
+  max-width: 0;
+  overflow: hidden;
+  opacity: 0;
+  color: #e23d3d;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: max-width 0.2s ease, opacity 0.2s ease;
+}
+
+.wish-bar.is-sure .wish-sure {
+  width: 72px;
+  max-width: 72px;
+  opacity: 1;
+}
+
+.wish-x {
+  display: grid;
+  place-items: center;
+  width: var(--x, 52px);
+  height: 100%;
+  min-height: 52px;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #e23d3d;
+}
+
+.wish-x svg { display: block; width: 22px; height: 22px; }
 
 .wish-by .avatar { width: 18px; height: 18px; flex: none; }
 
@@ -1138,6 +1318,14 @@ body.is-network {
   .sort-wrap { order: 4; }
 
   .line-slot { --line: min(112px, 22vw); }
+
+  #wish-board .wish-bar.has-x { --x: 44px; }
+
+  #wish-board .wish-bar .genre-name,
+  #wish-board .wish-bar .genre-count,
+  #wish-board .wish-bar .genre-score { padding: 0 8px; }
+
+  .wish-x { width: 44px; min-height: 44px; }
 
   .modes {
     position: fixed;

@@ -401,6 +401,13 @@
     });
     return [...groups.entries()]
       .sort((a, b) => {
+        if (wallSort === 'director') {
+          if (a[0] === 'Ohne Regie') return 1;
+          if (b[0] === 'Ohne Regie') return -1;
+          const size = b[1].length - a[1].length;
+          if (size) return size;
+          return a[0].localeCompare(b[0], 'de');
+        }
         const watched = watchedCount(b[1]) - watchedCount(a[1]);
         if (watched) return watched;
         const size = b[1].length - a[1].length;
@@ -1807,6 +1814,16 @@
   const addForm = document.getElementById('add-form');
   const addQuery = document.getElementById('add-query');
   const addStatus = document.getElementById('add-status');
+  const addHits = el('div', 'add-hits');
+  addHits.hidden = true;
+  addFilm.append(addHits);
+  let addRows = [];
+  let addCursor = 0;
+  let addShownFor = '';
+  let addTimer = 0;
+  let addToken = 0;
+  let addPicking = false;
+  let addBusy = false;
   const searchForm = document.getElementById('search-form');
   const searchOpen = document.getElementById('search-open');
 
@@ -1815,6 +1832,129 @@
     addButton.setAttribute('aria-expanded', 'false');
     addQuery.disabled = true;
     addStatus.textContent = '';
+    window.clearTimeout(addTimer);
+    addRows = [];
+    addCursor = 0;
+    addShownFor = '';
+    addHits.replaceChildren();
+    addHits.hidden = true;
+  }
+
+  function addQueryIsLink(query) {
+    return /^https?:\/\//i.test(query) || /themoviedb\.org|imdb\.com/i.test(query) || /^tt\d{5,}$/i.test(query);
+  }
+
+  function paintAddHits() {
+    addHits.replaceChildren();
+    addHits.hidden = !addRows.length;
+    addRows.forEach((row, index) => {
+      const film = row.film;
+      const owned = row.source === 'archiv' || byId.has(film.id);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'add-hit';
+      if (index === addCursor) button.classList.add('is-current');
+      if (owned) button.classList.add('is-owned');
+      button.setAttribute('aria-label', [film.title, film.year].filter(Boolean).join(' '));
+      const frame = el('span', 'add-hit-poster');
+      const image = document.createElement('img');
+      image.alt = '';
+      image.draggable = false;
+      image.src = posterSrc(film);
+      frame.append(image);
+      if (owned) frame.append(el('span', 'add-hit-check', '✓'));
+      button.append(
+        frame,
+        el('span', 'add-hit-title', film.title || 'Film'),
+        el('span', 'add-hit-year', film.year ? String(film.year).slice(0, 4) : ''),
+      );
+      button.addEventListener('click', () => chooseAddHit(row));
+      addHits.append(button);
+    });
+  }
+
+  async function refreshAddHits(query) {
+    const mine = ++addToken;
+    addShownFor = query;
+    if (query.length < 2 || addQueryIsLink(query)) {
+      addRows = [];
+      addCursor = 0;
+      paintAddHits();
+      return;
+    }
+    const found = await wishSearch(query).catch(() => []);
+    if (mine !== addToken || addQuery.value.trim() !== query) return;
+    addRows = found.slice(0, 3);
+    addCursor = Math.max(0, Math.min(addCursor, Math.max(addRows.length - 1, 0)));
+    if (!addRows.length) addCursor = 0;
+    paintAddHits();
+  }
+
+  async function chooseAddHit(row) {
+    if (!row || addPicking) return;
+    addPicking = true;
+    try {
+      const shown = withCanonicalId({ ...row.film }, row.facets || {});
+      const owned = row.source === 'archiv' || byId.has(shown.id) || findExisting(shown, row.facets || {});
+      if (owned) {
+        const existing = byId.get(shown.id) || findExisting(shown, row.facets || {}) || shown;
+        closeAdd();
+        revealFilm(adopt(existing));
+        return;
+      }
+      addStatus.textContent = row.source === 'tmdb' ? 'Ich hole Daten von TMDB …' : '';
+      const resolved = row.source === 'tmdb' ? await completeWishHit({ ...row, film: shown }) : { ...row, film: shown };
+      const film = resolved.film || shown;
+      const facets = resolved.facets || {};
+      const already = byId.get(film.id) || findExisting(film, facets);
+      if (already) {
+        closeAdd();
+        revealFilm(adopt(already));
+        return;
+      }
+      addRows = [];
+      paintAddHits();
+      placeFilm(film, facets);
+    } finally {
+      addPicking = false;
+    }
+  }
+
+  async function commitAdd() {
+    if (addBusy) return;
+    addBusy = true;
+    try {
+      const query = addQuery.value.trim();
+      if (!query) {
+        addStatus.textContent = 'Titel oder Link eintragen.';
+        return;
+      }
+      if (!addQueryIsLink(query) && query.length >= 2) {
+        window.clearTimeout(addTimer);
+        if (addShownFor !== query) await refreshAddHits(query);
+        if (addRows.length) {
+          await chooseAddHit(addRows[addCursor] || addRows[0]);
+          return;
+        }
+      }
+      addStatus.textContent = 'Ich hole Daten von TMDB …';
+      addForm.querySelector('button[type=submit]').disabled = true;
+      try {
+        const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.film || !data?.facets) {
+          addStatus.textContent = (data && data.error) || 'Dazu finde ich keinen Film.';
+          return;
+        }
+        placeFilm(data.film, data.facets);
+      } catch {
+        addStatus.textContent = 'Der Abruf ist gerade nicht möglich.';
+      } finally {
+        addForm.querySelector('button[type=submit]').disabled = false;
+      }
+    } finally {
+      addBusy = false;
+    }
   }
 
   function openAdd() {
@@ -1823,6 +1963,8 @@
     addFilm.classList.add('is-open');
     addButton.setAttribute('aria-expanded', 'true');
     addQuery.focus();
+    const query = addQuery.value.trim();
+    if (query.length >= 2 && !addQueryIsLink(query)) refreshAddHits(query);
   }
 
   function closeSearch() {
@@ -1970,33 +2112,42 @@
     }
     const invite = document.querySelector('.friend-invite.is-open');
     if (invite && !invite.contains(event.target)) closeFriendInvite();
+    const memberLine = document.querySelector('.wish-by.is-inviting');
+    if (memberLine && !memberLine.contains(event.target)) closeWishMemberLine(memberLine);
     if (document.querySelector('header').contains(event.target)) return;
     if (addFilm.classList.contains('is-open')) closeAdd();
     if (searchForm.classList.contains('is-open')) closeSearch();
   }, true);
 
-  addForm.addEventListener('submit', async (event) => {
-    event.preventDefault();
+  addQuery.addEventListener('input', () => {
     const query = addQuery.value.trim();
-    if (!query) {
-      addStatus.textContent = 'Titel oder Link eintragen.';
+    window.clearTimeout(addTimer);
+    addShownFor = '';
+    if (query.length < 2 || addQueryIsLink(query)) {
+      addRows = [];
+      addCursor = 0;
+      paintAddHits();
       return;
     }
-    addStatus.textContent = 'Ich hole Daten von TMDB …';
-    addForm.querySelector('button[type=submit]').disabled = true;
-    try {
-      const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data?.film || !data?.facets) {
-        addStatus.textContent = (data && data.error) || 'Dazu finde ich keinen Film.';
-        return;
-      }
-      placeFilm(data.film, data.facets);
-    } catch {
-      addStatus.textContent = 'Der Abruf ist gerade nicht möglich.';
-    } finally {
-      addForm.querySelector('button[type=submit]').disabled = false;
+    addTimer = window.setTimeout(() => refreshAddHits(query), 250);
+  });
+
+  addQuery.addEventListener('keydown', (event) => {
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && addRows.length) {
+      event.preventDefault();
+      const step = event.key === 'ArrowRight' ? 1 : -1;
+      addCursor = Math.max(0, Math.min(addRows.length - 1, addCursor + step));
+      paintAddHits();
+      return;
     }
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    commitAdd();
+  });
+
+  addForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    commitAdd();
   });
 
   document.addEventListener('keydown', (event) => {
@@ -2008,6 +2159,12 @@
         }
         if (!archive) return;
         closeSheet();
+        return;
+      }
+      if (closeWishMemberLine()) return;
+      const sureBar = document.querySelector('.wish-bar.is-sure');
+      if (sureBar) {
+        sureBar.classList.remove('is-sure');
         return;
       }
       if (searchForm.classList.contains('is-open')) {
@@ -4681,7 +4838,9 @@
   }
 
   function wishCountLabel(count) {
-    return count === 1 ? '1 Movie' : `${count} Movies`;
+    const n = Number(count) || 0;
+    if (window.matchMedia('(max-width: 720px)').matches) return String(n);
+    return n === 1 ? '1 Movie' : `${n} Movies`;
   }
 
   function wishPoster(film, rating) {
@@ -4737,18 +4896,206 @@
     return owner.username || 'Profil';
   }
 
-  function paintWishBy(list) {
-    const by = el('span', 'genre-count wish-by');
+  function fillWishNames(host, list) {
+    host.replaceChildren();
     const owner = (list.members || []).find((person) => person.role === 'owner');
-    by.append(document.createTextNode(wishCreatorName(list)));
+    host.append(document.createTextNode(wishCreatorName(list)));
     (list.members || []).forEach((person) => {
       if (owner && person.id === owner.id) return;
-      by.append(document.createTextNode(' / '));
+      host.append(document.createTextNode(' / '));
       const invited = person.status === 'invited';
       const label = invited ? `${person.username || 'Profil'} (eingeladen)` : (person.username || 'Profil');
-      by.append(el('span', invited ? 'is-invited' : '', label));
+      host.append(el('span', invited ? 'is-invited' : '', label));
     });
-    return by;
+  }
+
+  function beginWishRename(cell, list) {
+    if (!list || list.myStatus !== 'accepted' || cell.querySelector('input')) return;
+    const current = list.title || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'wish-name';
+    input.value = current;
+    input.placeholder = 'Name :';
+    input.setAttribute('aria-label', 'Name');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    cell.replaceChildren(input);
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+    let closed = false;
+    const restore = (text) => {
+      if (closed) return;
+      closed = true;
+      cell.replaceChildren(document.createTextNode(text));
+    };
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        restore(current);
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        input.blur();
+      }
+    });
+    input.addEventListener('blur', async () => {
+      if (closed) return;
+      const next = input.value.trim();
+      if (!next || next === current) {
+        restore(current);
+        return;
+      }
+      closed = true;
+      cell.replaceChildren(document.createTextNode(next));
+      try {
+        await globalThis.Cloud.renameWishlist(list.id, next);
+        list.title = next;
+      } catch {
+        list.title = current;
+        if (cell.isConnected) cell.replaceChildren(document.createTextNode(current));
+      }
+    });
+  }
+
+  function closeWishMemberLine(cell) {
+    const host = cell || document.querySelector('.wish-by.is-inviting');
+    if (!host) return false;
+    host.classList.remove('is-inviting');
+    const input = host.querySelector('.wish-member-input');
+    const pop = host.querySelector('.wish-member-hits');
+    if (input) input.remove();
+    if (pop) pop.remove();
+    const names = host.querySelector('.wish-by-names');
+    if (names) names.hidden = false;
+    return true;
+  }
+
+  function wishFriendChoices(list, query) {
+    const have = new Set((list.members || []).map((person) => person.id));
+    const needle = String(query || '').trim().toLocaleLowerCase('de');
+    return mutualPeople().filter((person) => {
+      if (!person.id || have.has(person.id)) return false;
+      if (!needle) return true;
+      const username = String(person.username || '').toLocaleLowerCase('de');
+      const name = String(person.name || '').toLocaleLowerCase('de');
+      return username.includes(needle) || name.includes(needle);
+    }).slice(0, 6);
+  }
+
+  function openWishMemberLine(cell, list) {
+    if (cell.classList.contains('is-inviting')) return;
+    cell.classList.add('is-inviting');
+    const names = cell.querySelector('.wish-by-names');
+    if (names) names.hidden = true;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'wish-member-input';
+    input.setAttribute('aria-label', 'Freund einladen');
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    const pop = el('div', 'wish-member-hits');
+    let cursor = 0;
+    let choices = [];
+    const paintChoices = () => {
+      choices = wishFriendChoices(list, input.value);
+      cursor = Math.max(0, Math.min(cursor, Math.max(choices.length - 1, 0)));
+      pop.replaceChildren();
+      choices.forEach((person, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wish-member-hit';
+        if (index === cursor) button.classList.add('is-current');
+        button.append(avatarNode(person.avatar, 28), el('span', null, person.name || person.username || 'Profil'));
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          sendWishInvite(person);
+        });
+        pop.append(button);
+      });
+    };
+    const sendWishInvite = async (person) => {
+      if (!person || !person.id) return;
+      input.disabled = true;
+      try {
+        await globalThis.Cloud.addWishlistMember(list.id, person.id);
+        closeWishMemberLine(cell);
+        await loadWishlists();
+      } catch {
+        input.disabled = false;
+      }
+    };
+    input.addEventListener('input', () => {
+      cursor = 0;
+      paintChoices();
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!choices.length) return;
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        cursor = Math.max(0, Math.min(choices.length - 1, cursor + step));
+        paintChoices();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeWishMemberLine(cell);
+        return;
+      }
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (choices[cursor]) sendWishInvite(choices[cursor]);
+    });
+    cell.append(input, pop);
+    paintChoices();
+    input.focus();
+  }
+
+  function wishMemberPlus(list, cell) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'wish-add-member';
+    button.setAttribute('aria-label', 'Mitglied einladen');
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (cell.classList.contains('is-inviting')) closeWishMemberLine(cell);
+      else openWishMemberLine(cell, list);
+    });
+    return button;
+  }
+
+  function wishRemoveButton(list, bar) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'wish-x';
+    button.setAttribute('aria-label', 'Liste entfernen');
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    let timer = 0;
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      if (!bar.classList.contains('is-sure')) {
+        bar.classList.add('is-sure');
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => bar.classList.remove('is-sure'), 4000);
+        return;
+      }
+      window.clearTimeout(timer);
+      button.disabled = true;
+      try {
+        await globalThis.Cloud.leaveOrDeleteWishlist(list.id);
+        await loadWishlists();
+      } catch {
+        button.disabled = false;
+        bar.classList.remove('is-sure');
+      }
+    });
+    return button;
   }
 
   function paintWishInvites(board) {
@@ -5039,166 +5386,41 @@
     input.focus();
   }
 
-  function wishMenu(list) {
-    const menu = el('div', 'wish-menu');
-    const owner = list.role === 'owner';
-    const renameInput = document.createElement('input');
-    renameInput.type = 'text';
-    renameInput.value = list.title;
-    renameInput.setAttribute('aria-label', 'Listenname');
-    const rename = el('button', null, 'Umbenennen');
-    rename.type = 'button';
-    rename.disabled = !owner;
-    rename.addEventListener('click', async () => {
-      const title = renameInput.value.trim();
-      if (!title || !owner) return;
-      try {
-        await globalThis.Cloud.renameWishlist(list.id, title);
-        await loadWishlists();
-      } catch (error) {
-        rename.textContent = wishFail(error);
-      }
-    });
-    const members = el('button', null, 'Mitglieder');
-    members.type = 'button';
-    members.disabled = !owner;
-    const memberBox = el('div', 'wish-chips');
-    memberBox.hidden = true;
-    members.addEventListener('click', () => {
-      memberBox.hidden = !memberBox.hidden;
-      if (memberBox.hidden) return;
-      memberBox.replaceChildren();
-      const have = new Set(list.members.map((person) => person.id));
-      mutualPeople().filter((person) => !have.has(person.id)).forEach((person) => {
-        const chip = el('button', 'wish-chip', person.username || person.name);
-        chip.type = 'button';
-        chip.addEventListener('click', async () => {
-          chip.disabled = true;
-          try {
-            await globalThis.Cloud.addWishlistMember(list.id, person.id);
-            await loadWishlists();
-          } catch (error) {
-            chip.disabled = false;
-            chip.textContent = wishFail(error, true);
-          }
-        });
-        memberBox.append(chip);
-      });
-      list.members.forEach((person) => {
-        if (account && person.id === account.id) return;
-        const remove = el('button', 'wish-chip', `${person.username} entfernen`);
-        remove.type = 'button';
-        remove.addEventListener('click', async () => {
-          try {
-            await globalThis.Cloud.removeWishlistMember(list.id, person.id);
-            await loadWishlists();
-          } catch (error) {
-            remove.textContent = wishFail(error);
-          }
-        });
-        memberBox.append(remove);
-      });
-    });
-    const leave = el('button', null, 'Verlassen');
-    leave.type = 'button';
-    leave.addEventListener('click', async () => {
-      try {
-        await globalThis.Cloud.leaveWishlist(list.id);
-        await loadWishlists();
-      } catch (error) {
-        leave.textContent = wishFail(error);
-      }
-    });
-    const wipe = document.createElement('input');
-    wipe.type = 'text';
-    wipe.placeholder = 'löschen';
-    wipe.setAttribute('aria-label', 'löschen eingeben');
-    wipe.hidden = !owner;
-    const destroy = el('button', null, 'Löschen');
-    destroy.type = 'button';
-    destroy.disabled = true;
-    destroy.hidden = !owner;
-    wipe.addEventListener('input', () => {
-      destroy.disabled = wipe.value.trim().toLocaleLowerCase('de') !== 'löschen';
-    });
-    destroy.addEventListener('click', async () => {
-      try {
-        await globalThis.Cloud.deleteWishlist(list.id);
-        await loadWishlists();
-      } catch (error) {
-        destroy.textContent = wishFail(error);
-      }
-    });
-    menu.append(renameInput, rename, members, memberBox, leave, wipe, destroy);
-    return menu;
-  }
-
   async function paintWishGroup(board, list, token) {
     const invited = list.myStatus === 'invited';
-    const editable = wishFocusId === list.id && !invited;
-    const bar = document.createElement(editable || invited ? 'div' : 'button');
-    if (!editable && !invited) bar.type = 'button';
-    bar.className = 'genre-bar';
-    let title;
-    if (editable) {
-      title = el('label', 'genre-name');
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.className = 'wish-name';
-      input.value = list.title || '';
-      input.placeholder = 'Name :';
-      input.setAttribute('aria-label', 'Name');
-      input.autocomplete = 'off';
-      input.spellcheck = false;
-      input.addEventListener('click', (event) => event.stopPropagation());
-      input.addEventListener('keydown', (event) => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        input.blur();
+    const accepted = list.myStatus === 'accepted';
+    const bar = el('div', invited ? 'genre-bar wish-bar' : 'genre-bar wish-bar has-x');
+    const title = el('div', 'genre-name', list.title || (invited ? 'Liste' : ''));
+    if (accepted) {
+      title.addEventListener('click', (event) => {
+        event.stopPropagation();
+        beginWishRename(title, list);
       });
-      let saving = false;
-      input.addEventListener('blur', async () => {
-        const next = input.value.trim();
-        if (!next || next === (list.title || '') || saving) return;
-        saving = true;
-        try {
-          await globalThis.Cloud.renameWishlist(list.id, next);
-          list.title = next;
-        } catch {
-          input.value = list.title || '';
-        } finally {
-          saving = false;
-        }
-      });
-      title.append(input);
-    } else {
-      title = el('span', 'genre-name', list.title || (invited ? 'Liste' : ''));
     }
+    const by = el('div', 'genre-count wish-by');
+    if (accepted && list.role === 'owner') by.append(wishMemberPlus(list, by));
+    const names = el('span', 'wish-by-names');
+    fillWishNames(names, list);
+    by.append(names);
     const side = el('span', 'genre-score', wishCountLabel(list.filmCount || 0));
-    bar.append(title, paintWishBy(list), side);
+    bar.append(title, by, side);
     if (invited) {
       board.append(bar);
       return;
     }
-    const menu = wishMenu(list);
-    const open = !wishCollapsed.has(list.id);
-    menu.hidden = !open;
-    bar.addEventListener('click', (event) => {
-      if (event.target.closest && event.target.closest('input')) return;
+    side.addEventListener('click', () => {
       if (wishCollapsed.has(list.id)) wishCollapsed.delete(list.id);
       else wishCollapsed.add(list.id);
       const shown = !wishCollapsed.has(list.id);
-      menu.hidden = !shown;
       const gridNode = board.querySelector(`.wish-grid[data-list="${list.id}"]`);
       if (gridNode) gridNode.hidden = !shown;
     });
-    board.append(bar, menu);
-    if (editable) {
-      const input = bar.querySelector('.wish-name');
-      if (input) {
-        input.focus();
-        wishFocusId = null;
-      }
+    const sure = el('span', 'wish-sure', 'sure?');
+    bar.append(sure, wishRemoveButton(list, bar));
+    board.append(bar);
+    if (wishFocusId === list.id) {
+      beginWishRename(title, list);
+      wishFocusId = null;
     }
     let items = [];
     try {

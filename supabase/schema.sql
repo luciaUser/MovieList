@@ -294,6 +294,56 @@ begin
 end;
 $$;
 
+create or replace function public.leave_or_delete_wishlist(list uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+  accepted_count integer;
+  my_role text;
+  next_owner uuid;
+begin
+  if me is null then
+    raise exception 'not authenticated';
+  end if;
+  if not public.is_wishlist_member(list, me) then
+    raise exception 'not a member';
+  end if;
+  select count(*) into accepted_count
+  from public.wishlist_members
+  where wishlist_id = list and status = 'accepted';
+  if accepted_count <= 1 then
+    delete from public.wishlists where id = list;
+    return;
+  end if;
+  select role into my_role
+  from public.wishlist_members
+  where wishlist_id = list and user_id = me;
+  if my_role = 'owner' then
+    select user_id into next_owner
+    from public.wishlist_members
+    where wishlist_id = list
+      and status = 'accepted'
+      and user_id <> me
+    order by added_at asc, user_id asc
+    limit 1;
+    if next_owner is not null then
+      update public.wishlist_members
+      set role = 'owner'
+      where wishlist_id = list and user_id = next_owner;
+      update public.wishlists
+      set created_by = next_owner
+      where id = list;
+    end if;
+  end if;
+  delete from public.wishlist_members
+  where wishlist_id = list and user_id = me;
+end;
+$$;
+
 drop function if exists public.profile_stats(uuid);
 create function public.profile_stats(target uuid)
 returns table (films integer, friends integer)
@@ -643,6 +693,8 @@ grant select, insert, update on public.films to authenticated;
 grant select, insert, update, delete on public.entries to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.wishlists to authenticated;
+revoke update on public.wishlists from authenticated;
+grant update (title) on public.wishlists to authenticated;
 grant select, insert, update, delete on public.wishlist_members to authenticated;
 grant select, insert, update, delete on public.wishlist_items to authenticated;
 grant select, insert, delete on public.wishlist_votes to authenticated;
@@ -663,6 +715,7 @@ revoke all on function public.remove_friend(uuid) from public;
 revoke all on function public.is_wishlist_invited(uuid, uuid) from public;
 revoke all on function public.wishlist_film_counts(uuid[]) from public;
 revoke all on function public.accept_wishlist(uuid) from public;
+revoke all on function public.leave_or_delete_wishlist(uuid) from public;
 
 grant execute on function public.can_view(uuid, uuid) to authenticated;
 grant execute on function public.mutual(uuid, uuid) to authenticated;
@@ -679,6 +732,7 @@ grant execute on function public.remove_friend(uuid) to authenticated;
 grant execute on function public.is_wishlist_invited(uuid, uuid) to authenticated;
 grant execute on function public.wishlist_film_counts(uuid[]) to authenticated;
 grant execute on function public.accept_wishlist(uuid) to authenticated;
+grant execute on function public.leave_or_delete_wishlist(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RLS
@@ -804,8 +858,8 @@ create policy wishlists_insert on public.wishlists
 drop policy if exists wishlists_update on public.wishlists;
 create policy wishlists_update on public.wishlists
   for update to authenticated
-  using (public.is_wishlist_owner(id, auth.uid()))
-  with check (public.is_wishlist_owner(id, auth.uid()));
+  using (public.is_wishlist_member(id, auth.uid()))
+  with check (public.is_wishlist_member(id, auth.uid()));
 
 drop policy if exists wishlists_delete on public.wishlists;
 create policy wishlists_delete on public.wishlists

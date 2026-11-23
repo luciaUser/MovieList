@@ -552,6 +552,10 @@ async function start() {
       const { error } = await client.from('wishlists').delete().eq('id', listId);
       if (error) throw error;
     },
+    async leaveOrDeleteWishlist(listId) {
+      const { error } = await client.rpc('leave_or_delete_wishlist', { list: listId });
+      if (error) throw error;
+    },
     async acceptWishlist(listId) {
       const { error } = await client.rpc('accept_wishlist', { list: listId });
       if (error) throw error;
