@@ -1,10 +1,18 @@
+@font-face {
+  font-family: "Kurdis Test";
+  src: url("fonts/KurdisTestChanged-Regular.otf") format("opentype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --ink: rgba(255, 255, 255, 0.86);
   --dim: rgba(255, 255, 255, 0.46);
   --line: rgba(255, 255, 255, 0.16);
   --yellow: #f2d65a;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Kurdis Test", sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -402,7 +410,7 @@ body.is-network {
 
 .net-genre,
 .net-sub {
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: "Kurdis Test", sans-serif;
   text-anchor: middle;
   dominant-baseline: middle;
 }
