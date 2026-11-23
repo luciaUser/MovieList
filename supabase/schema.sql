@@ -233,8 +233,9 @@ as $$
   );
 $$;
 
-create or replace function public.profile_stats(target uuid)
-returns table (films integer, followers integer, following integer)
+drop function if exists public.profile_stats(uuid);
+create function public.profile_stats(target uuid)
+returns table (films integer, friends integer)
 language sql
 stable
 security definer
@@ -246,12 +247,16 @@ as $$
       where user_id = target and in_archive and not hidden
     ),
     (
-      select count(*)::integer from public.follows
-      where followee = target and status = 'accepted'
-    ),
-    (
-      select count(*)::integer from public.follows
-      where follower = target and status = 'accepted'
+      select count(*)::integer
+      from public.follows f
+      where f.follower = target
+        and f.status = 'accepted'
+        and exists (
+          select 1 from public.follows b
+          where b.follower = f.followee
+            and b.followee = f.follower
+            and b.status = 'accepted'
+        )
     );
 $$;
 
@@ -269,8 +274,7 @@ as $$
   where p.id = target and public.can_view(auth.uid(), p.id);
 $$;
 
--- Kopf eines fremden Profils: Top 5 und angepinnte Personen.
--- Öffentliche Profile sind ohne Folge lesbar. Private nur mit can_view.
+-- Kopf eines fremden Profils: Top 5 aus den Wertungen, nur für Freunde.
 -- Gibt keine Wertungsliste und keine Notizen zurück.
 create or replace function public.profile_head(target uuid)
 returns table (top_films text[], pinned_people jsonb)
@@ -280,39 +284,80 @@ security definer
 set search_path = public
 as $$
 declare
-  allowed boolean;
-  custom text[];
   pins jsonb;
 begin
-  select
-    (public.can_view(auth.uid(), p.id) or not p.is_private),
-    p.top_films,
-    p.pinned_people
-  into allowed, custom, pins
+  select p.pinned_people
+  into pins
   from public.profiles p
-  where p.id = target and auth.uid() is not null;
-  if not coalesce(allowed, false) then
+  where p.id = target
+    and auth.uid() is not null
+    and public.can_view(auth.uid(), p.id);
+  if not found then
     return;
   end if;
-  if custom is not null and cardinality(custom) > 0 then
-    top_films := custom;
-  else
-    select coalesce(array_agg(s.film_id order by s.rating desc, s.updated_at desc), '{}')
-    into top_films
-    from (
-      select e.film_id, e.rating, e.updated_at
-      from public.entries e
-      where e.user_id = target
-        and e.in_archive
-        and not e.hidden
-        and e.rating is not null
-        and e.rating > 0
-      order by e.rating desc, e.updated_at desc
-      limit 5
-    ) s;
-  end if;
+  select coalesce(array_agg(s.film_id order by s.rating desc, s.updated_at desc), '{}')
+  into top_films
+  from (
+    select e.film_id, e.rating, e.updated_at
+    from public.entries e
+    where e.user_id = target
+      and e.in_archive
+      and not e.hidden
+      and e.rating is not null
+      and e.rating > 0
+    order by e.rating desc, e.updated_at desc
+    limit 5
+  ) s;
   pinned_people := coalesce(pins, '{"actors":[],"directors":[]}'::jsonb);
   return next;
+end;
+$$;
+
+create or replace function public.accept_friend(requester uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  if me is null or requester is null or requester = me then
+    raise exception 'ungueltig';
+  end if;
+  if not exists (
+    select 1 from public.follows
+    where follower = requester and followee = me and status = 'pending'
+  ) then
+    raise exception 'keine anfrage';
+  end if;
+  update public.follows
+  set status = 'accepted'
+  where follower = requester and followee = me;
+  insert into public.follows (follower, followee, status)
+  values (me, requester, 'pending')
+  on conflict (follower, followee) do nothing;
+  update public.follows
+  set status = 'accepted'
+  where follower = me and followee = requester;
+end;
+$$;
+
+create or replace function public.remove_friend(other uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me uuid := auth.uid();
+begin
+  if me is null or other is null or other = me then
+    raise exception 'ungueltig';
+  end if;
+  delete from public.follows
+  where (follower = me and followee = other)
+     or (follower = other and followee = me);
 end;
 $$;
 
@@ -375,15 +420,8 @@ language plpgsql
 security definer
 set search_path = public
 as $$
-declare
-  private boolean;
 begin
-  select is_private into private from public.profiles where id = new.followee;
-  if coalesce(private, true) then
-    new.status := 'pending';
-  else
-    new.status := 'accepted';
-  end if;
+  new.status := 'pending';
   return new;
 end;
 $$;
@@ -449,6 +487,24 @@ drop trigger if exists follows_set_status on public.follows;
 create trigger follows_set_status
   before insert on public.follows
   for each row execute function public.set_follow_status();
+
+-- Einseitige akzeptierte Folgen werden zu Freundschaften. Offene Anfragen bleiben.
+insert into public.follows (follower, followee, status)
+select f.followee, f.follower, 'pending'
+from public.follows f
+where f.status = 'accepted'
+  and not exists (
+    select 1 from public.follows b
+    where b.follower = f.followee and b.followee = f.follower
+  );
+
+update public.follows as back
+set status = 'accepted'
+from public.follows as forward
+where forward.status = 'accepted'
+  and back.follower = forward.followee
+  and back.followee = forward.follower
+  and back.status is distinct from 'accepted';
 
 drop trigger if exists wishlists_add_owner on public.wishlists;
 create trigger wishlists_add_owner
@@ -520,6 +576,8 @@ revoke all on function public.profile_head(uuid) from public;
 revoke all on function public.search_profiles(text) from public;
 revoke all on function public.username_available(text) from public;
 revoke all on function public.delete_my_account() from public;
+revoke all on function public.accept_friend(uuid) from public;
+revoke all on function public.remove_friend(uuid) from public;
 
 grant execute on function public.can_view(uuid, uuid) to authenticated;
 grant execute on function public.mutual(uuid, uuid) to authenticated;
@@ -531,6 +589,8 @@ grant execute on function public.profile_head(uuid) to authenticated;
 grant execute on function public.search_profiles(text) to authenticated;
 grant execute on function public.username_available(text) to anon, authenticated;
 grant execute on function public.delete_my_account() to authenticated;
+grant execute on function public.accept_friend(uuid) to authenticated;
+grant execute on function public.remove_friend(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- RLS

@@ -176,7 +176,10 @@ async function start() {
       const statRow = Array.isArray(stats.data) ? stats.data[0] : stats.data;
       const extraRow = Array.isArray(extra.data) ? extra.data[0] : extra.data;
       return {
-        stats: statRow || { films: 0, followers: 0, following: 0 },
+        stats: {
+          films: Number(statRow && statRow.films) || 0,
+          friends: statRow && statRow.friends != null ? Number(statRow.friends) : null,
+        },
         sensitive: extraRow || { top_films: [], pinned_people: { actors: [], directors: [] } },
       };
     },
@@ -278,27 +281,8 @@ async function start() {
       const canView = Boolean(view.data);
       let entries = [];
       let films = [];
-      let head = null;
-      let headFilms = [];
-      if (!canView && profileResult.data.is_private === false) {
-        const headResult = await client.rpc('profile_head', { target });
-        const missing = headResult.error && (
-          headResult.error.code === 'PGRST202'
-          || /profile_head|schema cache/i.test(headResult.error.message || '')
-        );
-        if (headResult.error && !missing) throw headResult.error;
-        if (!headResult.error) {
-          head = Array.isArray(headResult.data) ? headResult.data[0] : headResult.data;
-          const ids = head && Array.isArray(head.top_films) ? head.top_films.filter(Boolean) : [];
-          if (ids.length) {
-            const listed = await client.from('films')
-              .select('id, title, original_title, year, kind, poster, tmdb_rating, tmdb_votes, facets')
-              .in('id', ids);
-            if (listed.error) throw listed.error;
-            headFilms = listed.data || [];
-          }
-        }
-      }
+      const head = null;
+      const headFilms = [];
       if (canView) {
         const entryResult = await client.from('entries')
           .select('film_id, rating, watched, favorite, next, in_archive, hidden, facet_overrides, updated_at')
@@ -318,7 +302,10 @@ async function start() {
       const extraRow = Array.isArray(sensitive.data) ? sensitive.data[0] : sensitive.data;
       return {
         profile: profileResult.data,
-        stats: statRow || { films: 0, followers: 0, following: 0 },
+        stats: {
+          films: Number(statRow && statRow.films) || 0,
+          friends: statRow && statRow.friends != null ? Number(statRow.friends) : null,
+        },
         sensitive: extraRow || null,
         canView,
         follow: follow.data && follow.data.status ? follow.data.status : 'none',
@@ -341,6 +328,14 @@ async function start() {
     async removeFollower(target) {
       const user = await currentUser();
       const { error } = await client.from('follows').delete().eq('followee', user.id).eq('follower', target);
+      if (error) throw error;
+    },
+    async acceptFriend(requester) {
+      const { error } = await client.rpc('accept_friend', { requester });
+      if (error) throw error;
+    },
+    async removeFriend(other) {
+      const { error } = await client.rpc('remove_friend', { other });
       if (error) throw error;
     },
     async acceptFollow(target) {
@@ -367,7 +362,7 @@ async function start() {
       const [lists, people, items] = await Promise.all([
         client.from('wishlists').select('id, title, created_by').in('id', listIds),
         client.from('profiles').select('id, username, avatar').in('id', peopleIds),
-        client.from('wishlist_items').select('id, wishlist_id, status, created_at, added_by').in('wishlist_id', listIds),
+        client.from('wishlist_items').select('id, wishlist_id, film_id, status, created_at, added_by').in('wishlist_id', listIds),
       ]);
       if (lists.error) throw lists.error;
       if (people.error) throw people.error;
@@ -392,6 +387,7 @@ async function start() {
           openCount: listItems.filter((item) => item.status !== 'geschaut').length,
           stamps: listItems.map((item) => ({
             id: item.id,
+            filmId: item.film_id,
             createdAt: item.created_at,
             addedBy: item.added_by,
           })),

@@ -938,8 +938,23 @@
     closeIcon.setAttribute('aria-label', 'Schließen');
     closeIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
     closeIcon.addEventListener('click', clearSelection);
+    const wish = el('button', 'panel-wish');
+    wish.type = 'button';
+    wish.setAttribute('aria-label', 'Wunschliste');
+    wish.setAttribute('aria-expanded', 'false');
+    wish.innerHTML = `<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+    const pick = el('div', 'wish-pick');
+    pick.hidden = true;
+    wish.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const willOpen = pick.hidden;
+      pick.hidden = !willOpen;
+      wish.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) fillWishPick(pick, film);
+    });
     const tools = el('div', 'panel-tools');
-    tools.append(closeIcon);
+    tools.append(closeIcon, wish, pick);
+    if (mine) tools.append(remove);
     panel.append(tools);
 
     const full = fullOf(film);
@@ -983,16 +998,12 @@
       film.genres.forEach((genre) => pills.append(el('li', null, genre)));
       genreRow.append(pills);
     }
-    if (mine) genreRow.append(remove);
     head.append(genreRow);
     panel.append(head);
     const followed = el('div', 'followed-row');
     followed.hidden = true;
     panel.append(followed);
     fillFollowed(film.id, followed);
-    const wishSlot = el('div', 'wish-slot');
-    panel.append(wishSlot);
-    paintWishSlot(wishSlot, film);
     if (!mine) {
       const addMine = el('button', 'text-line', 'Zu meinem Archiv hinzufügen');
       addMine.type = 'button';
@@ -1712,6 +1723,8 @@
   document.addEventListener('click', (event) => {
     if (event.target.closest('#mode-director') || event.target.closest('#sort-pop button')) return;
     closeSortMenu();
+    const pick = document.querySelector('#panel .wish-pick');
+    if (pick && !pick.hidden && !event.target.closest('.panel-tools')) pick.hidden = true;
   });
   modeRating.addEventListener('click', () => setMode('rating'));
   if (modeWish) modeWish.addEventListener('click', () => setMode('wish'));
@@ -2729,9 +2742,7 @@
   }
 
   function shownTopFilms() {
-    const custom = account && Array.isArray(account.top_films) ? account.top_films : [];
-    if (!custom.length) return { custom: false, films: defaultTopFilms() };
-    return { custom: true, films: custom.map((id) => byId.get(id)).filter(Boolean).slice(0, 5) };
+    return defaultTopFilms();
   }
 
   function personMaps() {
@@ -2861,8 +2872,8 @@
     try {
       if (action === 'follow') await cloud.follow(id);
       else if (action === 'unfollow') await cloud.unfollow(id);
-      else if (action === 'remove') await cloud.removeFollower(id);
-      else if (action === 'accept') await cloud.acceptFollow(id);
+      else if (action === 'remove') await cloud.removeFriend(id);
+      else if (action === 'accept') await cloud.acceptFriend(id);
       else if (action === 'decline') await cloud.declineFollow(id);
       otherCache.delete(id);
       followedCache = null;
@@ -3253,7 +3264,6 @@
     const head = el('div', 'profile-head');
     head.append(avatarNode(person.avatar, 56), el('h1', null, person.display_name || person.username || 'Profil'));
     root.append(head);
-    root.append(el('p', 'handle', person.username ? `@${person.username}` : ''));
     if (pack.canView) {
       const views = el('div', 'wish-menu');
       const networkButton = lineButton('Netzwerk');
@@ -3263,8 +3273,11 @@
       views.append(networkButton, ratingButton);
       root.append(views);
     }
-    const follow = lineButton(pack.follow === 'accepted' ? 'Entfolgen' : pack.follow === 'pending' ? 'Angefragt' : 'Folgen');
-    follow.addEventListener('click', () => changeFollow(person.id, pack.follow === 'none' ? 'follow' : 'unfollow'));
+    const incoming = (profileLists.requests || []).some((row) => row.id === person.id);
+    const friends = pack.follow === 'accepted';
+    const follow = lineButton(friends ? 'Entfernen' : pack.follow === 'pending' ? 'Angefragt' : incoming ? 'Annehmen' : 'Anfrage senden');
+    if (pack.follow === 'pending') follow.disabled = true;
+    else follow.addEventListener('click', () => changeFollow(person.id, friends ? 'remove' : incoming ? 'accept' : 'follow'));
     root.append(follow);
     const status = el('p', 'profile-status', '');
     status.setAttribute('role', 'status');
@@ -3273,23 +3286,10 @@
     const numbers = el('div', 'profile-stats');
     numbers.append(
       statNode(String(Number(stats.films) || 0), 'Filme'),
-      statNode(String(Number(stats.followers) || 0), 'Follower'),
-      statNode(String(Number(stats.following) || 0), 'Folgt'),
+      statNode(stats.friends == null ? '–' : String(Number(stats.friends) || 0), 'Friends'),
     );
     root.append(numbers);
-    if (!pack.canView) {
-      if (person.is_private) {
-        root.append(el('p', 'profile-note', 'Dieses Profil ist privat'));
-        return;
-      }
-      if (pack.head) {
-        root.append(paintHeadTop(pack));
-        const pins = theirPins({ sensitive: pack.head });
-        if (pins.actors.length) root.append(paintPeople('actors', 'Lieblingsschauspieler', new Map(), { readOnly: true, pins }));
-        if (pins.directors.length) root.append(paintPeople('directors', 'Lieblingsregie', new Map(), { readOnly: true, pins }));
-      }
-      return;
-    }
+    if (!pack.canView) return;
     root.append(paintComparison(pack));
     root.append(paintTheirTop(pack));
     const people = theirPeople(pack);
@@ -3425,24 +3425,76 @@
   }
 
   function paintRequests(root) {
-    if (!account || !account.is_private) return;
     const rows = profileLists.requests || [];
     if (!rows.length) return;
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', 'Anfragen'));
+    block.className = 'request-block';
     rows.forEach((person) => {
       const line = el('div', 'request-line');
+      line.append(avatarNode(person.avatar, 28));
       const name = el('button', 'text-line', person.name || person.username || 'Profil');
       name.type = 'button';
       if (person.id) name.addEventListener('click', () => showOther(person.id));
-      const accept = lineButton('Annehmen');
+      const accept = lineButton('Ja');
       accept.addEventListener('click', () => changeFollow(person.id, 'accept'));
-      const decline = lineButton('Ablehnen');
+      const decline = lineButton('Nein');
       decline.addEventListener('click', () => changeFollow(person.id, 'decline'));
       line.append(name, accept, decline);
       block.append(line);
     });
     root.append(block);
+  }
+
+  function paintAddFriend() {
+    const box = el('div', 'friend-add');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Benutzername';
+    input.setAttribute('aria-label', 'Benutzername');
+    input.autocomplete = 'off';
+    input.maxLength = 20;
+    const send = lineButton('Anfrage senden');
+    const status = el('p', 'profile-status', '');
+    status.setAttribute('role', 'status');
+    send.addEventListener('click', async () => {
+      const name = input.value.trim().toLowerCase();
+      if (!/^[a-z0-9_]{3,20}$/.test(name)) {
+        status.textContent = 'So heisst niemand.';
+        return;
+      }
+      if (account && name === account.username) {
+        status.textContent = 'Das bist du selbst.';
+        return;
+      }
+      send.disabled = true;
+      try {
+        const person = await globalThis.Cloud.profileByUsername(name);
+        if (!person) {
+          status.textContent = 'So heisst niemand.';
+          send.disabled = false;
+          return;
+        }
+        await changeFollow(person.id, 'follow');
+        status.textContent = 'Anfrage gesendet.';
+      } catch (error) {
+        status.textContent = followFail(error);
+        send.disabled = false;
+      }
+    });
+    const share = lineButton('Oder Link teilen');
+    share.addEventListener('click', async () => {
+      const username = account && account.username;
+      if (!username) return;
+      const url = `${location.origin}${location.pathname}?profil=${encodeURIComponent(username)}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        status.textContent = 'Link kopiert.';
+      } catch {
+        status.textContent = url;
+      }
+    });
+    box.append(input, send, share, status);
+    return box;
   }
 
   function addForeignFilm(film) {
@@ -3655,8 +3707,7 @@
       const stats = extra.stats || {};
       profileStats = {
         films: Number(stats.films) || 0,
-        followers: Number(stats.followers) || 0,
-        following: Number(stats.following) || 0,
+        friends: stats.friends != null ? Number(stats.friends) : null,
       };
       const sensitive = extra.sensitive || {};
       account.top_films = Array.isArray(sensitive.top_films)
@@ -3704,7 +3755,7 @@
       open.type = 'button';
       if (person.id) open.addEventListener('click', () => showOther(person.id));
       line.append(open);
-      if (kind === 'followers' && person.id) {
+      if ((kind === 'followers' || kind === 'friends') && person.id) {
         const remove = lineButton('Entfernen');
         remove.addEventListener('click', () => changeFollow(person.id, 'remove'));
         line.append(remove);
@@ -3786,14 +3837,11 @@
     const block = document.createElement('section');
     block.append(el('h2', 'profile-kicker', 'Top 5'));
     const chosen = shownTopFilms();
-    if (!chosen.films.length) {
-      const rated = FILMS.some((film) => entry(film.id).rating != null);
-      block.append(el('p', 'profile-note', !chosen.custom && !rated
-        ? 'Bewerte Filme, dann erscheinen hier deine Top 5'
-        : 'Die ausgewählten Filme sind nicht mehr im Archiv.'));
+    if (!chosen.length) {
+      block.append(el('p', 'profile-note', 'Bewerte Filme, dann erscheinen hier deine Top 5'));
     } else {
       const row = el('div', 'top-row');
-      chosen.films.forEach((film, index) => {
+      chosen.forEach((film, index) => {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'top-card';
@@ -3807,9 +3855,6 @@
       });
       block.append(row);
     }
-    const edit = lineButton('Top 5 bearbeiten');
-    edit.addEventListener('click', () => paintTopEditor());
-    block.append(edit);
     root.append(block);
   }
 
@@ -3982,25 +4027,25 @@
   }
 
   function paintSettings() {
-    const details = document.createElement('details');
-    details.className = 'profile-settings';
-    details.open = settingsOpen;
-    details.addEventListener('toggle', () => { settingsOpen = details.open; });
-    const summary = document.createElement('summary');
-    summary.textContent = 'Einstellungen';
-    const stack = el('div', 'stack');
-    const nameLabel = el('label', null, 'Anzeigename');
+    const stack = el('div', 'profile-settings stack');
+    const savedName = (account && account.display_name) || '';
+    stack.append(el('h2', 'profile-kicker', 'Anzeigename'));
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.value = (account && account.display_name) || '';
+    nameInput.value = savedName;
     nameInput.autocomplete = 'nickname';
     nameInput.maxLength = 80;
-    nameLabel.append(nameInput);
+    nameInput.setAttribute('aria-label', 'Anzeigename');
     const saveName = document.createElement('button');
     saveName.type = 'button';
     saveName.textContent = 'Speichern';
+    saveName.hidden = true;
     const nameStatus = el('p', 'profile-status', '');
     nameStatus.setAttribute('role', 'status');
+    const syncSave = () => {
+      saveName.hidden = nameInput.value.trim() === savedName;
+    };
+    nameInput.addEventListener('input', syncSave);
     saveName.addEventListener('click', async () => {
       const displayName = nameInput.value.trim();
       if (!displayName) {
@@ -4018,41 +4063,125 @@
         saveName.disabled = false;
       }
     });
-    const privacy = document.createElement('button');
-    privacy.type = 'button';
-    privacy.className = 'switch';
-    privacy.setAttribute('aria-pressed', account && account.is_private ? 'true' : 'false');
-    const mark = document.createElement('i');
-    privacy.append(mark, el('span', null, 'Privates Profil'));
-    privacy.addEventListener('click', async () => {
-      const next = privacy.getAttribute('aria-pressed') !== 'true';
-      privacy.disabled = true;
-      try {
-        await globalThis.Cloud.updateProfile({ is_private: next });
-        account.is_private = next;
-        privacy.setAttribute('aria-pressed', next ? 'true' : 'false');
-      } catch (error) {
-        nameStatus.textContent = profileFail(error);
-      } finally {
-        privacy.disabled = false;
-      }
-    });
-    stack.append(
-      nameLabel,
-      saveName,
-      nameStatus,
-      privacy,
-      el('p', 'profile-note', 'Folge-Anfragen müssen bestätigt werden. Ohne bestätigte Folge bleibt das Archiv unsichtbar.'),
-    );
+    stack.append(nameInput, saveName, nameStatus);
     if (recoveryOn) stack.append(paintRecovery());
-    stack.append(paintReset(), paintDelete());
+    stack.append(paintDanger(), paintSignOut());
+    return stack;
+  }
+
+  function paintSignOut() {
     const out = document.createElement('button');
     out.type = 'button';
+    out.className = 'sign-out';
     out.textContent = 'Abmelden';
     out.addEventListener('click', () => { leave(); });
-    stack.append(out);
-    details.append(summary, stack);
-    return details;
+    return out;
+  }
+
+  function dangerIcon(kind) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '1.6');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('d', kind === 'reset'
+      ? 'M20 12a8 8 0 1 1-2.3-5.6M20 4.8V9h-4.2'
+      : 'M6.5 6.5l11 11M17.5 6.5l-11 11');
+    svg.append(path);
+    return svg;
+  }
+
+  function paintDanger() {
+    const wrap = el('div', 'danger');
+    const row = el('div', 'danger-row');
+    let open = '';
+    const confirm = el('div', 'danger-confirm');
+    confirm.hidden = true;
+    const hint = el('p', 'profile-note', '');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.autocomplete = 'off';
+    const go = document.createElement('button');
+    go.type = 'button';
+    go.disabled = true;
+    const status = el('p', 'profile-status', '');
+    status.setAttribute('role', 'status');
+    confirm.append(hint, input, go, status);
+    const close = () => {
+      open = '';
+      confirm.hidden = true;
+      input.value = '';
+      go.disabled = true;
+      status.textContent = '';
+    };
+    const show = (kind) => {
+      if (open === kind) {
+        close();
+        return;
+      }
+      open = kind;
+      const word = kind === 'reset' ? 'zurücksetzen' : 'löschen';
+      hint.textContent = kind === 'reset'
+        ? 'Zum Bestätigen zurücksetzen eintippen'
+        : 'Zum Bestätigen löschen eintippen';
+      input.placeholder = word;
+      input.setAttribute('aria-label', `${word} eingeben`);
+      go.textContent = kind === 'reset' ? 'Archiv zurücksetzen' : 'Konto löschen';
+      input.value = '';
+      go.disabled = true;
+      status.textContent = '';
+      confirm.hidden = false;
+      input.focus();
+    };
+    input.addEventListener('input', () => {
+      const word = open === 'reset' ? 'zurücksetzen' : 'löschen';
+      go.disabled = input.value.trim().toLocaleLowerCase('de') !== word;
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+    });
+    go.addEventListener('click', async () => {
+      if (open === 'reset') {
+        go.disabled = true;
+        const next = await globalThis.Store.reset();
+        if (!next) {
+          go.disabled = false;
+          return;
+        }
+        adoptArchive(next);
+        if (network) {
+          network.setFilms(FILMS);
+          if (networkReady) network.reflow();
+        }
+        renderProfile();
+        return;
+      }
+      go.disabled = true;
+      try {
+        await globalThis.Cloud.deleteAccount();
+        await leave();
+      } catch (error) {
+        status.textContent = profileFail(error);
+        go.disabled = false;
+      }
+    });
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'danger-item';
+    reset.append(dangerIcon('reset'), el('span', null, 'Archiv zurücksetzen'));
+    reset.addEventListener('click', () => show('reset'));
+    const wipe = document.createElement('button');
+    wipe.type = 'button';
+    wipe.className = 'danger-item is-delete';
+    wipe.append(dangerIcon('delete'), el('span', null, 'Konto löschen'));
+    wipe.addEventListener('click', () => show('delete'));
+    row.append(reset, wipe);
+    wrap.append(row, confirm);
+    return wrap;
   }
 
   function paintRecovery() {
@@ -5129,6 +5258,45 @@
     root.append(chips, save, status);
   }
 
+  async function fillWishPick(pick, film) {
+    pick.replaceChildren();
+    if (!wishLists.length && globalThis.Cloud) await loadWishlists({ quiet: true }).catch(() => {});
+    const lists = wishLists || [];
+    const create = lineButton('Neue Wunschliste');
+    create.addEventListener('click', () => openNewWishlist());
+    if (!lists.length) {
+      pick.append(create);
+      return;
+    }
+    lists.forEach((list) => {
+      const stamp = (list.stamps || []).find((item) => item.filmId === film.id);
+      const choice = lineButton(stamp ? `✓ ${list.title}` : list.title);
+      choice.addEventListener('click', async () => {
+        choice.disabled = true;
+        if (stamp) {
+          try {
+            await globalThis.Cloud.removeWishlistItem(stamp.id);
+            await loadWishlists();
+            fillWishPick(pick, film);
+          } catch (error) {
+            choice.textContent = wishFail(error);
+            choice.disabled = false;
+          }
+          return;
+        }
+        const message = await addFilmToList(list.id, film, facetsOf(film));
+        if (message) {
+          choice.textContent = message;
+          choice.disabled = false;
+          return;
+        }
+        fillWishPick(pick, film);
+      });
+      pick.append(choice);
+    });
+    pick.append(create);
+  }
+
   function paintWishSlot(slot, film) {
     const button = lineButton('Zu Wunschliste hinzufügen');
     const box = el('div', 'wish-choices');
@@ -5202,21 +5370,36 @@
     if (!root) return;
     root.classList.remove('profile-list');
     const name = (account && (account.display_name || account.username)) || 'Profil';
-    const handle = account && account.username ? `@${account.username}` : '';
     const films = profileStats ? String(profileStats.films) : String(FILMS.length);
-    const followers = profileStats ? String(profileStats.followers) : '–';
-    const following = profileStats ? String(profileStats.following) : '–';
+    const friends = profileStats && profileStats.friends != null
+      ? String(profileStats.friends)
+      : String(mutualPeople().length);
     root.replaceChildren();
     const head = el('div', 'profile-head');
     head.append(avatarNode(account && account.avatar, 56), el('h1', null, name));
     root.append(head);
-    root.append(el('p', 'handle', handle));
-    root.append(paintFinder());
     const stats = el('div', 'profile-stats');
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'profile-stat';
+    add.setAttribute('aria-label', 'Add Friend');
+    const plus = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    plus.setAttribute('viewBox', '0 0 24 24');
+    plus.setAttribute('aria-hidden', 'true');
+    plus.innerHTML = '<path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
+    add.append(plus, el('span', null, 'Add Friend'));
+    add.addEventListener('click', () => {
+      const open = root.querySelector('.friend-add');
+      if (open) {
+        open.remove();
+        return;
+      }
+      stats.after(paintAddFriend());
+    });
     stats.append(
       statNode(films, 'Filme'),
-      statNode(followers, 'Follower', () => paintNames('Follower', profileLists.followers, 'followers')),
-      statNode(following, 'Folgt', () => paintNames('Folgt', profileLists.following, 'following')),
+      statNode(friends, 'Friends', () => paintNames('Freunde', mutualPeople(), 'friends')),
+      add,
     );
     root.append(stats);
     paintRequests(root);
@@ -5225,7 +5408,6 @@
     const people = personMaps();
     root.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors));
     root.append(paintPeople('directors', 'Lieblingsregie', people.directors));
-    root.append(paintWishHome());
     root.append(paintSettings());
   }
 
