@@ -22,6 +22,7 @@
   const modeDirector = document.getElementById('mode-director');
   const modeRating = document.getElementById('mode-rating');
   const modeProfile = document.getElementById('mode-profile');
+  const modeWish = document.getElementById('mode-wish');
   const netRating = document.getElementById('net-rating');
   const netCompare = document.getElementById('net-compare');
   const MODE_KEY = 'moviebylucia-view-v1';
@@ -81,6 +82,10 @@
   let panelFilm = null;
   let compareId = null;
   let lensId = null;
+  let panelList = null;
+  let panelListHold = false;
+  let wishBoardToken = 0;
+  const wishCollapsed = new Set();
   let lensPack = null;
   let guestNet = false;
   let compareName = '';
@@ -633,6 +638,8 @@
   }
 
   function openFilm(film, focus) {
+    if (!panelListHold) panelList = null;
+    panelListHold = false;
     if (spotlight) {
       spotlight = null;
       renderBar();
@@ -709,6 +716,86 @@
     if (network) network.paint();
   }
 
+  let avatarSerial = 0;
+
+  function avatarColors(avatar) {
+    const row = avatar && typeof avatar === 'object' ? avatar : {};
+    return {
+      outer: row.outer || 'hsl(220 18% 42%)',
+      mid: row.mid || 'hsl(220 12% 58%)',
+      core: row.core || 'hsl(220 8% 74%)',
+    };
+  }
+
+  function avatarNode(avatar, size) {
+    const colors = avatarColors(avatar);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const serial = ++avatarSerial;
+    svg.setAttribute('viewBox', '0 0 100 100');
+    svg.setAttribute('width', String(size || 32));
+    svg.setAttribute('height', String(size || 32));
+    svg.setAttribute('aria-hidden', 'true');
+    svg.classList.add('avatar');
+    const clip = `av-clip-${serial}`;
+    const glow = `av-glow-${serial}`;
+    const soft = `av-soft-${serial}`;
+    svg.innerHTML = `
+      <defs>
+        <clipPath id="${clip}"><circle cx="50" cy="50" r="50"></circle></clipPath>
+        <radialGradient id="${glow}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="${colors.mid}"></stop>
+          <stop offset="100%" stop-color="${colors.mid}" stop-opacity="0"></stop>
+        </radialGradient>
+        <filter id="${soft}" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="12"></feGaussianBlur>
+        </filter>
+        <filter id="${soft}-core" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="10"></feGaussianBlur>
+        </filter>
+      </defs>
+      <g clip-path="url(#${clip})">
+        <circle cx="50" cy="50" r="50" fill="${colors.outer}"></circle>
+        <circle cx="50" cy="50" r="42.5" fill="url(#${glow})"></circle>
+        <circle cx="50" cy="50" r="27.5" fill="${colors.mid}" filter="url(#${soft})"></circle>
+        <circle cx="50" cy="50" r="14" fill="${colors.core}" filter="url(#${soft}-core)"></circle>
+      </g>`;
+    return svg;
+  }
+
+  function paintAvatarTab() {
+    const slot = modeProfile && modeProfile.querySelector('.avatar-slot');
+    if (!slot) return;
+    slot.replaceChildren(avatarNode(account && account.avatar, 24));
+  }
+
+  function scoreBar(avatar, value, editable) {
+    const wrap = el('div', 'score-bar');
+    const colors = avatarColors(avatar);
+    const amount = value == null ? 0 : Math.max(0, Math.min(10, Number(value)));
+    wrap.style.setProperty('--outer', colors.outer);
+    wrap.style.setProperty('--mid', colors.mid);
+    wrap.style.setProperty('--core', colors.core);
+    wrap.style.setProperty('--p', `${amount * 10}%`);
+    wrap.append(el('span', 'score-fill'), el('span', 'score-dim'));
+    if (editable) {
+      const range = document.createElement('input');
+      range.id = 'own-rate';
+      range.className = 'rate';
+      range.type = 'range';
+      range.min = '0';
+      range.max = '10';
+      range.step = '0.1';
+      range.value = String(amount);
+      wrap.append(range);
+      wrap._range = range;
+    } else {
+      const grip = el('span', 'score-grip');
+      grip.style.left = `calc(${amount * 10}% - 5px)`;
+      wrap.append(grip);
+    }
+    return wrap;
+  }
+
   function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
@@ -727,6 +814,111 @@
     button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
     button.addEventListener('click', () => onChange(!pressed));
     return button;
+  }
+
+  function commitRating(film, rating, previous) {
+    writeEntry(film.id, { rating });
+    if (ratingView && ratingBucket(previous) !== ratingBucket(rating)) {
+      buildWall();
+      wall.querySelector(`[data-id="${film.id}"]`)?.scrollIntoView({ block: 'center', inline: 'nearest' });
+    } else {
+      paint();
+    }
+  }
+
+  function ownRateBlock(film, row) {
+    const block = document.createDocumentFragment();
+    const rateLabel = el('label', null, 'Bewertung');
+    rateLabel.htmlFor = 'own-rate';
+    const rateRow = el('div', 'member-rate');
+    rateRow.append(avatarNode(account && account.avatar, 28));
+    rateRow.append(el('span', 'member-name', (account && (account.display_name || account.username)) || 'Ich'));
+    const bar = scoreBar(account && account.avatar, row.rating, true);
+    const value = el('output', 'rate-value', formatScore(row.rating));
+    value.htmlFor = 'own-rate';
+    bar._range.addEventListener('input', () => {
+      const next = Math.round(Number(bar._range.value) * 10) / 10;
+      const rating = next > 0 ? next : null;
+      const previous = entry(film.id).rating;
+      value.textContent = formatScore(rating);
+      bar.style.setProperty('--p', `${next * 10}%`);
+      commitRating(film, rating, previous);
+    });
+    rateRow.append(bar, value);
+    block.append(rateLabel, rateRow);
+    return block;
+  }
+
+  function sharedRateBlock(film, list, row) {
+    const block = el('div', 'member-rates');
+    const average = el('p', 'rate-average', 'Durchschnitt –');
+    block.append(average);
+    const others = new Map();
+    const paintAverage = (mine) => {
+      const values = [...others.values()];
+      if (mine != null && mine > 0) values.push(mine);
+      const avg = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
+      average.textContent = avg == null ? 'Durchschnitt –' : `Durchschnitt ${formatScore(avg)}`;
+      const poster = document.querySelector(`#wish-board [data-id="${film.id}"]`);
+      if (!poster) return;
+      poster.classList.toggle('is-rated', avg != null);
+      const tint = poster.querySelector('.tint');
+      const score = poster.querySelector('.poster-score');
+      if (tint) tint.style.background = avg == null ? '' : ratingColor(avg);
+      if (score) score.textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
+    };
+    list.members.forEach((person) => {
+      const mine = account && person.id === account.id;
+      const rateRow = el('div', 'member-rate');
+      const avatar = mine ? (account.avatar || person.avatar) : person.avatar;
+      const name = mine
+        ? ((account && (account.display_name || account.username)) || person.username)
+        : (person.username || 'Profil');
+      rateRow.append(avatarNode(avatar, 28), el('span', 'member-name', name));
+      const known = mine ? row.rating : null;
+      const bar = scoreBar(avatar, known, mine);
+      const value = el('output', 'rate-value', formatScore(known));
+      if (mine) {
+        value.htmlFor = 'own-rate';
+        bar._range.addEventListener('input', () => {
+          const next = Math.round(Number(bar._range.value) * 10) / 10;
+          const rating = next > 0 ? next : null;
+          const previous = entry(film.id).rating;
+          value.textContent = formatScore(rating);
+          bar.style.setProperty('--p', `${next * 10}%`);
+          commitRating(film, rating, previous);
+          paintAverage(rating);
+        });
+      }
+      rateRow.append(bar, value);
+      rateRow.dataset.user = person.id;
+      block.append(rateRow);
+    });
+    paintAverage(row.rating);
+    const cloud = globalThis.Cloud;
+    if (cloud && cloud.memberRatings) {
+      cloud.memberRatings(list.members.map((person) => person.id), [film.id]).then((rows) => {
+        if (!block.isConnected) return;
+        rows.forEach((item) => {
+          const rating = Number(item.rating);
+          if (!(rating > 0)) return;
+          if (account && item.user_id === account.id) return;
+          others.set(item.user_id, rating);
+          const rateRow = block.querySelector(`[data-user="${item.user_id}"]`);
+          if (!rateRow) return;
+          const output = rateRow.querySelector('.rate-value');
+          const host = rateRow.querySelector('.score-bar');
+          if (output) output.textContent = formatScore(rating);
+          if (host) {
+            const person = list.members.find((member) => member.id === item.user_id);
+            const next = scoreBar(person && person.avatar, rating, false);
+            host.replaceWith(next);
+          }
+        });
+        paintAverage(entry(film.id).rating);
+      }).catch(() => {});
+    }
+    return block;
   }
 
   function renderPanel(film) {
@@ -809,33 +1001,8 @@
     }
 
     const field = el('div', 'block');
-    const rateLabel = el('label', null, 'Bewertung');
-    rateLabel.htmlFor = 'own-rate';
-    const rateRow = el('div', 'rate-row');
-    const range = document.createElement('input');
-    range.id = 'own-rate';
-    range.className = 'rate';
-    range.type = 'range';
-    range.min = '0';
-    range.max = '10';
-    range.step = '0.1';
-    range.value = row.rating == null ? '0' : String(row.rating);
-    const value = el('output', 'rate-value', formatScore(row.rating));
-    value.htmlFor = 'own-rate';
-    range.addEventListener('input', () => {
-      const next = Math.round(Number(range.value) * 10) / 10;
-      const rating = next > 0 ? next : null;
-      const previous = entry(film.id).rating;
-      value.textContent = formatScore(rating);
-      writeEntry(film.id, { rating });
-      if (ratingView && ratingBucket(previous) !== ratingBucket(rating)) {
-        buildWall();
-        wall.querySelector(`[data-id="${film.id}"]`)?.scrollIntoView({ block: 'center', inline: 'nearest' });
-      } else {
-        paint();
-      }
-    });
-    rateRow.append(range, value);
+    const shared = panelList && panelList.members && panelList.members.length > 1 ? panelList : null;
+    field.append(shared ? sharedRateBlock(film, shared, row) : ownRateBlock(film, row));
     const memoLabel = el('label', null, 'Notiz');
     memoLabel.htmlFor = 'own-memo';
     memoLabel.style.marginTop = '16px';
@@ -845,7 +1012,7 @@
     memo.maxLength = 500;
     memo.value = row.memo;
     memo.addEventListener('input', () => writeEntry(film.id, { memo: memo.value }));
-    field.append(rateLabel, rateRow, memoLabel, memo);
+    field.append(memoLabel, memo);
     panel.append(field);
 
     const toggles = el('div', 'toggles block');
@@ -1174,7 +1341,7 @@
   function savedMode() {
     try {
       const raw = localStorage.getItem(MODE_KEY);
-      if (raw === 'director' || raw === 'rating' || raw === 'network' || raw === 'profile') return raw;
+      if (raw === 'director' || raw === 'rating' || raw === 'network' || raw === 'profile' || raw === 'wish') return raw;
     } catch {
       /* private mode can refuse storage */
     }
@@ -1237,127 +1404,37 @@
     return network;
   }
 
-  function lensPeople() {
-    const me = {
-      id: account && account.id,
-      name: (account && (account.display_name || account.username)) || 'Profil',
-    };
-    const others = (profileLists.following || [])
-      .filter((person) => person && person.id && person.id !== me.id)
-      .slice()
-      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'de'));
-    return [me, ...others];
+  function paintLensBar() {
+    const bar = document.getElementById('lens-bar');
+    if (!bar) return;
+    const label = bar.querySelector('span');
+    const person = lensPack && lensPack.profile;
+    const visible = person && (mode === 'network' || mode === 'rating');
+    bar.hidden = !visible;
+    if (label) label.textContent = visible ? `Ansicht von ${person.display_name || person.username || 'Profil'}` : '';
   }
 
-  function paintProfileSwitch() {
-    const host = document.getElementById('profile-switch');
-    if (!host) return;
-    if (!account) {
-      host.hidden = true;
-      host.replaceChildren();
-      return;
-    }
-    const people = lensPeople();
-    const count = people.length;
-    const index = Math.max(0, people.findIndex((person) => (lensId ? person.id === lensId : person.id === account.id)));
-    const around = count < 2
-      ? [0]
-      : count === 2
-        ? [-1, 0, 1]
-        : [-2, -1, 0, 1, 2];
-    let track = host.querySelector('.switch-track');
-    if (!track) {
-      track = document.createElement('div');
-      track.className = 'switch-track';
-      host.replaceChildren(track);
-    }
-    track.replaceChildren();
-    track.style.transition = 'none';
-    around.forEach((offset) => {
-      const person = people[(index + offset + count) % count];
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = person.name || 'Profil';
-      button.classList.toggle('is-current', offset === 0);
-      button.addEventListener('click', () => {
-        if (switchMoved || !offset) return;
-        shiftLens(offset > 0 ? 1 : -1);
-      });
-      track.append(button);
-    });
-    host.hidden = false;
-    const focus = track.children[around.indexOf(0)];
-    const x = host.clientWidth / 2 - (focus.offsetLeft + focus.offsetWidth / 2);
-    track.style.transform = `translateX(${x}px)`;
-  }
-
-  async function setLens(id) {
-    const next = id && account && id !== account.id ? id : null;
-    if (next === lensId) {
-      paintProfileSwitch();
-      return;
-    }
-    lensId = next;
+  function clearLens() {
+    lensId = null;
     lensPack = null;
-    paintProfileSwitch();
-    if (!next) {
-      if (guestNet && network && network.restoreOwn) {
-        network.restoreOwn();
-        guestNet = false;
-      }
-      if (mode === 'profile') renderProfile();
-      else if (mode === 'network') showNetwork();
-      else showWall();
-      return;
-    }
-    const pack = await packFor(next).catch(() => null);
-    if (lensId !== next) return;
-    lensPack = pack;
-    if (!pack || !pack.canView) {
-      if (mode !== 'profile') {
-        skipProfileHome = true;
-        setMode('profile');
-      }
-      openOther(next);
-      return;
-    }
-    if (mode === 'profile') openOther(next);
-    else if (mode === 'network') showLensNetwork();
-    else showWall();
+    paintLensBar();
   }
 
-  function shiftLens(dir) {
-    const people = lensPeople();
-    const host = document.getElementById('profile-switch');
-    const track = host && host.querySelector('.switch-track');
-    if (people.length < 2 || !account || !track || track.dataset.busy === '1') return;
-    const step = dir > 0 ? 1 : -1;
-    const index = Math.max(0, people.findIndex((person) => (lensId ? person.id === lensId : person.id === account.id)));
-    const person = people[(index + step + people.length) % people.length];
-    const buttons = [...track.children];
-    const current = buttons.findIndex((button) => button.classList.contains('is-current'));
-    const target = buttons[current + step];
-    const finish = () => {
-      delete track.dataset.busy;
-      setLens(person.id === account.id ? null : person.id);
-    };
-    if (!target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      finish();
+  async function openTheirView(id, kind) {
+    if (!id || !account || id === account.id) return;
+    const next = kind === 'rating' ? 'rating' : 'network';
+    lensId = id;
+    lensPack = null;
+    const pack = await packFor(id).catch(() => null);
+    if (lensId !== id) return;
+    if (!pack || !pack.canView) {
+      clearLens();
+      showOther(id);
       return;
     }
-    track.dataset.busy = '1';
-    const x = host.clientWidth / 2 - (target.offsetLeft + target.offsetWidth / 2);
-    track.style.transition = 'transform 0.38s ease';
-    track.style.transform = `translateX(${x}px)`;
-    let settled = false;
-    const done = (event) => {
-      if (settled || (event && event.propertyName && event.propertyName !== 'transform')) return;
-      settled = true;
-      track.removeEventListener('transitionend', done);
-      finish();
-    };
-    track.addEventListener('transitionend', done);
-    window.setTimeout(done, 460);
+    lensPack = pack;
+    applyMode(next);
+    paintLensBar();
   }
 
   async function showLensNetwork() {
@@ -1430,6 +1507,11 @@
   }
 
   function setMode(next) {
+    clearLens();
+    return applyMode(next);
+  }
+
+  function applyMode(next) {
     if (next !== 'profile' && !started && account && !leaving) {
       openSheet(gateView());
       return Promise.resolve();
@@ -1449,10 +1531,15 @@
     modeDirector.setAttribute('aria-selected', next === 'director' ? 'true' : 'false');
     modeRating.setAttribute('aria-selected', next === 'rating' ? 'true' : 'false');
     if (modeProfile) modeProfile.setAttribute('aria-selected', next === 'profile' ? 'true' : 'false');
+    if (modeWish) modeWish.setAttribute('aria-selected', next === 'wish' ? 'true' : 'false');
     const profile = document.getElementById('profile');
+    const wishBoard = document.getElementById('wish-board');
     if (profile) profile.hidden = next !== 'profile';
+    if (wishBoard) wishBoard.hidden = next !== 'wish';
     document.body.classList.toggle('is-profile', next === 'profile');
     document.body.classList.toggle('is-rating', ratingView);
+    document.body.classList.toggle('is-wish', next === 'wish');
+    paintLensBar();
     if (next === 'profile') {
       networkEl.hidden = true;
       wall.hidden = true;
@@ -1461,6 +1548,14 @@
       else renderProfile();
       return Promise.resolve();
     }
+    if (next === 'wish') {
+      networkEl.hidden = true;
+      wall.hidden = true;
+      document.body.classList.remove('is-network');
+      paintWishBoard();
+      return Promise.resolve();
+    }
+    if (wishBoard) wishBoard.hidden = true;
     if (next === 'network') {
       const shown = showNetwork();
       if (relayoutTimer || relayoutIdle || relayoutWait) flushRelayout();
@@ -1619,76 +1714,15 @@
     closeSortMenu();
   });
   modeRating.addEventListener('click', () => setMode('rating'));
-  if (modeProfile) modeProfile.addEventListener('click', () => {
-    if (lensId) showOther(lensId);
-    else setMode('profile');
-  });
-  const profileSwitch = document.getElementById('profile-switch');
-  let swipeX = 0;
-  let swipeY = 0;
-  let didSwipe = false;
-  let dragBase = 0;
-  let draggingSwitch = false;
-  let switchMoved = false;
-  if (profileSwitch) {
-    profileSwitch.addEventListener('pointerdown', (event) => {
-      const track = profileSwitch.querySelector('.switch-track');
-      if (!track || event.button !== 0) return;
-      draggingSwitch = true;
-      switchMoved = false;
-      swipeX = event.clientX;
-      swipeY = event.clientY;
-      didSwipe = false;
-      const matrix = new DOMMatrix(getComputedStyle(track).transform);
-      dragBase = matrix.m41;
-      track.style.transition = 'none';
-      if (profileSwitch.setPointerCapture) profileSwitch.setPointerCapture(event.pointerId);
-    });
-    profileSwitch.addEventListener('pointermove', (event) => {
-      if (!draggingSwitch) return;
-      const track = profileSwitch.querySelector('.switch-track');
-      if (!track) return;
-      const dx = event.clientX - swipeX;
-      const dy = event.clientY - swipeY;
-      if (Math.abs(dx) > 8) switchMoved = true;
-      if (Math.abs(dy) > Math.abs(dx)) return;
-      track.style.transform = `translateX(${dragBase + dx}px)`;
-    });
-    profileSwitch.addEventListener('pointerup', (event) => {
-      if (!draggingSwitch) return;
-      draggingSwitch = false;
-      const dx = event.clientX - swipeX;
-      const dy = event.clientY - swipeY;
-      if (Math.abs(dx) >= 36 && Math.abs(dx) > Math.abs(dy)) {
-        didSwipe = true;
-        shiftLens(dx < 0 ? 1 : -1);
-        return;
-      }
-      paintProfileSwitch();
-    });
-    profileSwitch.addEventListener('pointercancel', () => {
-      draggingSwitch = false;
-      paintProfileSwitch();
+  if (modeWish) modeWish.addEventListener('click', () => setMode('wish'));
+  if (modeProfile) modeProfile.addEventListener('click', () => setMode('profile'));
+  const lensClose = document.getElementById('lens-close');
+  if (lensClose) {
+    lensClose.addEventListener('click', () => {
+      const back = mode === 'rating' ? 'rating' : 'network';
+      setMode(back);
     });
   }
-  wall.addEventListener('pointerdown', (event) => {
-    swipeX = event.clientX;
-    swipeY = event.clientY;
-    didSwipe = false;
-  });
-  wall.addEventListener('pointerup', (event) => {
-    const dx = event.clientX - swipeX;
-    const dy = event.clientY - swipeY;
-    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) || mode === 'network') return;
-    didSwipe = true;
-    shiftLens(dx < 0 ? 1 : -1);
-  });
-  wall.addEventListener('click', (event) => {
-    if (!didSwipe) return;
-    didSwipe = false;
-    event.preventDefault();
-    event.stopPropagation();
-  }, true);
   if (netRating) {
     netRating.addEventListener('click', () => {
       netRatingOn = !netRatingOn;
@@ -2056,6 +2090,11 @@
   }
 
   function showRoster() {
+    if (mode === 'wish') {
+      paintWishBoard();
+      refreshEmpty();
+      return;
+    }
     if (lensPack) {
       if (mode === 'network') showLensNetwork();
       else if (mode !== 'profile') showWall();
@@ -2084,7 +2123,7 @@
     started = true;
     wallSort = savedWallSort();
     paintSortMenu();
-    paintProfileSwitch();
+    paintAvatarTab();
     const ready = setMode(savedMode());
     loadPosters();
     loadStoredFacets();
@@ -2790,7 +2829,7 @@
     };
     followDot = (names.pending || 0) > 0;
     applyProfileDot();
-    paintProfileSwitch();
+    paintAvatarTab();
   }
 
   function applyProfileDot() {
@@ -3211,8 +3250,19 @@
     back.textContent = 'Zurück';
     back.addEventListener('click', () => renderProfile());
     root.append(back);
-    root.append(el('h1', null, person.display_name || person.username || 'Profil'));
+    const head = el('div', 'profile-head');
+    head.append(avatarNode(person.avatar, 56), el('h1', null, person.display_name || person.username || 'Profil'));
+    root.append(head);
     root.append(el('p', 'handle', person.username ? `@${person.username}` : ''));
+    if (pack.canView) {
+      const views = el('div', 'wish-menu');
+      const networkButton = lineButton('Netzwerk');
+      networkButton.addEventListener('click', () => openTheirView(person.id, 'network'));
+      const ratingButton = lineButton('Rating');
+      ratingButton.addEventListener('click', () => openTheirView(person.id, 'rating'));
+      views.append(networkButton, ratingButton);
+      root.append(views);
+    }
     const follow = lineButton(pack.follow === 'accepted' ? 'Entfolgen' : pack.follow === 'pending' ? 'Angefragt' : 'Folgen');
     follow.addEventListener('click', () => changeFollow(person.id, pack.follow === 'none' ? 'follow' : 'unfollow'));
     root.append(follow);
@@ -3450,8 +3500,9 @@
       const line = el('p', 'followed-names');
       rows.forEach((person, index) => {
         if (index) line.append(document.createTextNode(' · '));
-        const button = el('button', null, `${person.username} ${scoreText(person.rating)}`);
+        const button = document.createElement('button');
         button.type = 'button';
+        button.append(avatarNode(person.avatar, 18), document.createTextNode(`${person.username} ${scoreText(person.rating)}`));
         button.addEventListener('click', () => showOther(person.id));
         line.append(button);
       });
@@ -3476,6 +3527,7 @@
         list.push({
           id: person.id,
           username: person.username || person.name || 'Profil',
+          avatar: person.avatar || null,
           rating: row.rating,
         });
         map.set(film.id, list);
@@ -3647,6 +3699,7 @@
     }
     rows.forEach((person) => {
       const line = el('div', 'name-line');
+      line.append(avatarNode(person.avatar, 22));
       const open = el('button', 'text-line', person.name || person.username || 'Profil');
       open.type = 'button';
       if (person.id) open.addEventListener('click', () => showOther(person.id));
@@ -4246,6 +4299,8 @@
       wishLists = lists || [];
       refreshWishDot();
       bindWishRealtime();
+      const wishTyping = document.activeElement && document.activeElement.closest && document.activeElement.closest('#wish-board');
+      if (mode === 'wish' && !wishTyping) paintWishBoard();
       if (options && options.quiet) return;
       const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
       if (profileMode === 'home' && !typing) paintProfile();
@@ -4296,23 +4351,292 @@
     wishReloadTimer = window.setTimeout(() => loadWishlists(), 200);
   }
 
+  function wishCountLabel(count) {
+    return count === 1 ? '1 Movie' : `${count} Movies`;
+  }
+
+  function wishPoster(film, rating) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'poster';
+    button.dataset.id = film.id;
+    button.classList.toggle('is-rated', rating != null);
+    const image = document.createElement('img');
+    image.alt = '';
+    image.draggable = false;
+    image.decoding = 'async';
+    image.src = posterSrc(film);
+    const tint = document.createElement('span');
+    tint.className = 'tint';
+    tint.style.background = rating == null ? '' : ratingColor(rating);
+    const score = document.createElement('span');
+    score.className = 'poster-score';
+    score.textContent = rating == null ? '' : `★  ${Number(rating).toFixed(1).replace('.', ',')}`;
+    button.append(image, tint, score);
+    return button;
+  }
+
+  function openListedFilm(film, list) {
+    panelList = list && list.members && list.members.length > 1 ? list : null;
+    panelListHold = true;
+    openFilm(film);
+  }
+
+  function wishPlusTile(list) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'poster wish-plus';
+    button.setAttribute('aria-label', 'Film hinzufügen');
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path></svg>';
+    button.addEventListener('click', () => openWishSearch(list));
+    return button;
+  }
+
+  function openWishSearch(list) {
+    const box = el('div');
+    box.append(el('h2', null, list.title || 'Film hinzufügen'));
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Titel suchen';
+    input.setAttribute('aria-label', 'Film suchen');
+    const hits = el('div', 'profile-hits');
+    const note = el('p', 'profile-status', '');
+    let token = 0;
+    input.addEventListener('input', () => {
+      const query = input.value.trim();
+      window.clearTimeout(input._timer);
+      if (query.length < 2) {
+        hits.replaceChildren();
+        return;
+      }
+      input._timer = window.setTimeout(async () => {
+        const mine = ++token;
+        const rows = await wishSearch(query).catch(() => []);
+        if (mine !== token) return;
+        hits.replaceChildren();
+        if (!rows.length) {
+          hits.append(el('p', 'profile-note', 'Keine Treffer.'));
+          return;
+        }
+        rows.forEach((row) => {
+          const hit = document.createElement('button');
+          hit.type = 'button';
+          hit.className = 'hit-row';
+          hit.textContent = row.film.title || 'Film';
+          hit.addEventListener('click', async () => {
+            hit.disabled = true;
+            const result = await addFilmToList(list.id, row.film, row.facets);
+            note.textContent = result || '';
+            if (!result) {
+              closeSheet();
+              await loadWishlists();
+            } else hit.disabled = false;
+          });
+          hits.append(hit);
+        });
+      }, 250);
+    });
+    box.append(input, hits, note);
+    openSheet(box);
+    input.focus();
+  }
+
+  function wishMenu(list) {
+    const menu = el('div', 'wish-menu');
+    const owner = list.role === 'owner';
+    const renameInput = document.createElement('input');
+    renameInput.type = 'text';
+    renameInput.value = list.title;
+    renameInput.setAttribute('aria-label', 'Listenname');
+    const rename = el('button', null, 'Umbenennen');
+    rename.type = 'button';
+    rename.disabled = !owner;
+    rename.addEventListener('click', async () => {
+      const title = renameInput.value.trim();
+      if (!title || !owner) return;
+      try {
+        await globalThis.Cloud.renameWishlist(list.id, title);
+        await loadWishlists();
+      } catch (error) {
+        rename.textContent = wishFail(error);
+      }
+    });
+    const members = el('button', null, 'Mitglieder');
+    members.type = 'button';
+    members.disabled = !owner;
+    const memberBox = el('div', 'wish-chips');
+    memberBox.hidden = true;
+    members.addEventListener('click', () => {
+      memberBox.hidden = !memberBox.hidden;
+      if (memberBox.hidden) return;
+      memberBox.replaceChildren();
+      const have = new Set(list.members.map((person) => person.id));
+      mutualPeople().filter((person) => !have.has(person.id)).forEach((person) => {
+        const chip = el('button', 'wish-chip', person.username || person.name);
+        chip.type = 'button';
+        chip.addEventListener('click', async () => {
+          chip.disabled = true;
+          try {
+            await globalThis.Cloud.addWishlistMember(list.id, person.id);
+            await loadWishlists();
+          } catch (error) {
+            chip.disabled = false;
+            chip.textContent = wishFail(error, true);
+          }
+        });
+        memberBox.append(chip);
+      });
+      list.members.forEach((person) => {
+        if (account && person.id === account.id) return;
+        const remove = el('button', 'wish-chip', `${person.username} entfernen`);
+        remove.type = 'button';
+        remove.addEventListener('click', async () => {
+          try {
+            await globalThis.Cloud.removeWishlistMember(list.id, person.id);
+            await loadWishlists();
+          } catch (error) {
+            remove.textContent = wishFail(error);
+          }
+        });
+        memberBox.append(remove);
+      });
+    });
+    const leave = el('button', null, 'Verlassen');
+    leave.type = 'button';
+    leave.addEventListener('click', async () => {
+      try {
+        await globalThis.Cloud.leaveWishlist(list.id);
+        await loadWishlists();
+      } catch (error) {
+        leave.textContent = wishFail(error);
+      }
+    });
+    const wipe = document.createElement('input');
+    wipe.type = 'text';
+    wipe.placeholder = 'löschen';
+    wipe.setAttribute('aria-label', 'löschen eingeben');
+    wipe.hidden = !owner;
+    const destroy = el('button', null, 'Löschen');
+    destroy.type = 'button';
+    destroy.disabled = true;
+    destroy.hidden = !owner;
+    wipe.addEventListener('input', () => {
+      destroy.disabled = wipe.value.trim().toLocaleLowerCase('de') !== 'löschen';
+    });
+    destroy.addEventListener('click', async () => {
+      try {
+        await globalThis.Cloud.deleteWishlist(list.id);
+        await loadWishlists();
+      } catch (error) {
+        destroy.textContent = wishFail(error);
+      }
+    });
+    menu.append(renameInput, rename, members, memberBox, leave, wipe, destroy);
+    return menu;
+  }
+
+  async function paintWishGroup(board, list, token) {
+    const bar = document.createElement('button');
+    bar.type = 'button';
+    bar.className = 'genre-bar';
+    const title = el('span', 'genre-name', list.title);
+    const by = el('span', 'genre-count wish-by');
+    by.append(document.createTextNode('By:'));
+    list.members.forEach((person) => {
+      const personNode = el('span', 'wish-person');
+      personNode.append(avatarNode(person.avatar, 18), document.createTextNode(person.username || 'Profil'));
+      by.append(personNode);
+    });
+    const side = el('span', 'genre-score', wishCountLabel(0));
+    bar.append(title, by, side);
+    const menu = wishMenu(list);
+    const open = !wishCollapsed.has(list.id);
+    menu.hidden = !open;
+    bar.addEventListener('click', () => {
+      if (wishCollapsed.has(list.id)) wishCollapsed.delete(list.id);
+      else wishCollapsed.add(list.id);
+      const shown = !wishCollapsed.has(list.id);
+      menu.hidden = !shown;
+      board.querySelectorAll(`[data-list="${list.id}"]`).forEach((node) => {
+        node.hidden = !shown;
+      });
+    });
+    board.append(bar, menu);
+    let items = [];
+    try {
+      items = await globalThis.Cloud.wishDetail(list.id);
+    } catch {
+      items = [];
+    }
+    if (token !== wishBoardToken) return;
+    side.textContent = wishCountLabel(items.length);
+    const filmIds = items.map((item) => item.filmId).filter(Boolean);
+    let ratings = [];
+    if (list.members.length > 1 && filmIds.length && globalThis.Cloud.memberRatings) {
+      ratings = await globalThis.Cloud.memberRatings(list.members.map((person) => person.id), filmIds).catch(() => []);
+    }
+    if (token !== wishBoardToken) return;
+    const byFilm = new Map();
+    ratings.forEach((row) => {
+      const rating = Number(row.rating);
+      if (!(rating > 0)) return;
+      const bucket = byFilm.get(row.film_id) || [];
+      bucket.push(rating);
+      byFilm.set(row.film_id, bucket);
+    });
+    const averages = [];
+    const plus = wishPlusTile(list);
+    plus.dataset.list = list.id;
+    plus.hidden = !open;
+    board.append(plus);
+    items.forEach((item) => {
+      const film = wishFilmObject(item);
+      const bucket = byFilm.get(item.filmId) || [];
+      const mine = entry(film.id).rating;
+      if (mine != null && mine > 0 && !(account && ratings.some((row) => row.film_id === item.filmId && row.user_id === account.id))) {
+        bucket.push(mine);
+      }
+      const average = list.members.length > 1
+        ? (bucket.length ? bucket.reduce((sum, value) => sum + value, 0) / bucket.length : null)
+        : (mine != null && mine > 0 ? mine : null);
+      if (average != null) averages.push(average);
+      const poster = wishPoster(film, list.members.length > 1 || average != null ? average : null);
+      if (list.members.length < 2 && average == null) poster.classList.remove('is-rated');
+      poster.dataset.list = list.id;
+      poster.hidden = !open;
+      poster.addEventListener('click', () => openListedFilm(film, list));
+      board.append(poster);
+    });
+    if (list.members.length > 1 && averages.length) {
+      const avg = averages.reduce((sum, value) => sum + value, 0) / averages.length;
+      side.append(document.createTextNode(`  ★ ${avg.toFixed(1).replace('.', ',')}`));
+    }
+  }
+
+  async function paintWishBoard() {
+    const board = document.getElementById('wish-board');
+    if (!board) return;
+    const token = ++wishBoardToken;
+    board.replaceChildren();
+    if (!wishLists.length) board.append(el('p', 'empty', 'Noch keine Liste.'));
+    for (const list of wishLists) {
+      await paintWishGroup(board, list, token);
+      if (token !== wishBoardToken) return;
+    }
+    if (token !== wishBoardToken) return;
+    const create = document.createElement('button');
+    create.type = 'button';
+    create.className = 'genre-bar wish-create';
+    create.append(el('span', 'genre-name', 'Neue Wunschliste'));
+    create.addEventListener('click', () => openNewWishlist());
+    board.append(create);
+  }
+
   function paintWishHome() {
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', 'Wunschlisten'));
-    if (!wishLists.length) block.append(el('p', 'profile-note', 'Noch keine Liste.'));
-    wishLists.forEach((list) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'hit-row';
-      const names = list.members.map((person) => person.username).filter(Boolean).join(' · ');
-      const count = list.openCount === 1 ? '1 offen' : `${list.openCount} offen`;
-      button.append(document.createTextNode(list.title), el('small', null, `${names} · ${count}`));
-      button.addEventListener('click', () => openWishlist(list.id));
-      block.append(button);
-    });
-    const add = lineButton('Neue Wunschliste');
-    add.addEventListener('click', () => openNewWishlist());
-    block.append(add);
+    const open = lineButton('Wunschlisten öffnen');
+    open.addEventListener('click', () => setMode('wish'));
+    block.append(open);
     return block;
   }
 
@@ -4883,7 +5207,9 @@
     const followers = profileStats ? String(profileStats.followers) : '–';
     const following = profileStats ? String(profileStats.following) : '–';
     root.replaceChildren();
-    root.append(el('h1', null, name));
+    const head = el('div', 'profile-head');
+    head.append(avatarNode(account && account.avatar, 56), el('h1', null, name));
+    root.append(head);
     root.append(el('p', 'handle', handle));
     root.append(paintFinder());
     const stats = el('div', 'profile-stats');
@@ -4961,17 +5287,20 @@
     lensId = null;
     lensPack = null;
     guestNet = false;
-    const profileSwitchHost = document.getElementById('profile-switch');
-    if (profileSwitchHost) {
-      profileSwitchHost.hidden = true;
-      profileSwitchHost.replaceChildren();
-    }
+    panelList = null;
+    paintLensBar();
+    paintAvatarTab();
     selectedId = null;
     wall.replaceChildren();
     wall.hidden = true;
     networkEl.hidden = true;
     panel.hidden = true;
-    document.body.classList.remove('has-selection', 'is-network', 'is-rating', 'is-profile');
+    document.body.classList.remove('has-selection', 'is-network', 'is-rating', 'is-profile', 'is-wish');
+    const wishBoard = document.getElementById('wish-board');
+    if (wishBoard) {
+      wishBoard.hidden = true;
+      wishBoard.replaceChildren();
+    }
     const profile = document.getElementById('profile');
     if (profile) {
       profile.hidden = true;
@@ -5073,6 +5402,14 @@
         is_private: false,
       };
     }
+    if (account && globalThis.Cloud.ensureAvatar) {
+      try {
+        account.avatar = await globalThis.Cloud.ensureAvatar(account);
+      } catch {
+        /* avatar bleibt leer, bis schema.sql neu gelaufen ist */
+      }
+    }
+    paintAvatarTab();
     watchFollows(session.user.id);
     readWishSeen();
     loadWishlists();

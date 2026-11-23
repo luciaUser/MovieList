@@ -15,6 +15,7 @@ create table if not exists public.profiles (
   is_private boolean not null default false,
   top_films text[] not null default '{}',
   pinned_people jsonb not null default '{"actors":[],"directors":[]}'::jsonb,
+  avatar jsonb,
   created_at timestamptz not null default now()
 );
 
@@ -108,6 +109,8 @@ create table if not exists public.recovery_emails (
 -- ---------------------------------------------------------------------------
 -- Constraints (beim zweiten Lauf erst entfernen, dann neu anlegen)
 -- ---------------------------------------------------------------------------
+
+alter table public.profiles add column if not exists avatar jsonb;
 
 alter table public.profiles drop constraint if exists profiles_username_shape;
 alter table public.profiles add constraint profiles_username_shape
@@ -314,14 +317,15 @@ end;
 $$;
 
 -- Sucht öffentliche Profilfelder. Schließt einen selbst aus, höchstens 10 Treffer.
-create or replace function public.search_profiles(query text)
-returns table (id uuid, username text, display_name text, is_private boolean)
+drop function if exists public.search_profiles(text);
+create function public.search_profiles(query text)
+returns table (id uuid, username text, display_name text, is_private boolean, avatar jsonb)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.username, p.display_name, p.is_private
+  select p.id, p.username, p.display_name, p.is_private, p.avatar
   from public.profiles p
   where auth.uid() is not null
     and p.id <> auth.uid()
@@ -493,8 +497,8 @@ revoke all on public.recovery_emails from public, anon, authenticated;
 
 grant usage on schema public to anon, authenticated;
 
-grant select (id, username, display_name, is_private, created_at) on public.profiles to authenticated;
-grant update (display_name, is_private, top_films, pinned_people) on public.profiles to authenticated;
+grant select (id, username, display_name, is_private, created_at, avatar) on public.profiles to authenticated;
+grant update (display_name, is_private, top_films, pinned_people, avatar) on public.profiles to authenticated;
 
 grant select, insert, update, delete on public.follows to authenticated;
 grant select, insert, update on public.films to authenticated;

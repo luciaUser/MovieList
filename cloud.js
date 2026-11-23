@@ -58,6 +58,38 @@ async function start() {
     return user;
   }
 
+  function hueDistance(a, b) {
+    const delta = Math.abs(a - b) % 360;
+    return Math.min(delta, 360 - delta);
+  }
+
+  function avatarColor(hue) {
+    const saturation = Math.round(70 + Math.random() * 20);
+    const lightness = Math.round(55 + Math.random() * 10);
+    return `hsl(${Math.round(hue)} ${saturation}% ${lightness}%)`;
+  }
+
+  function randomAvatar() {
+    const hues = [];
+    let guard = 0;
+    while (hues.length < 3 && guard < 80) {
+      guard += 1;
+      const hue = Math.random() * 360;
+      if (hues.every((have) => hueDistance(have, hue) >= 60)) hues.push(hue);
+    }
+    while (hues.length < 3) hues.push((hues[hues.length - 1] + 120) % 360);
+    return {
+      outer: avatarColor(hues[0]),
+      mid: avatarColor(hues[1]),
+      core: avatarColor(hues[2]),
+      seed: Math.floor(Math.random() * 1e9),
+    };
+  }
+
+  function avatarReady(avatar) {
+    return Boolean(avatar && avatar.outer && avatar.mid && avatar.core);
+  }
+
   const Cloud = {
     enabled: true,
     ready: true,
@@ -119,9 +151,19 @@ async function start() {
     },
     async profile() {
       const user = await currentUser();
-      const { data, error } = await client.from('profiles').select('id, username, display_name, is_private').eq('id', user.id).single();
+      let result = await client.from('profiles').select('id, username, display_name, is_private, avatar').eq('id', user.id).single();
+      if (result.error && /avatar/i.test(result.error.message || '')) {
+        result = await client.from('profiles').select('id, username, display_name, is_private').eq('id', user.id).single();
+      }
+      if (result.error) throw result.error;
+      return result.data;
+    },
+    async ensureAvatar(row) {
+      if (avatarReady(row && row.avatar)) return row.avatar;
+      const avatar = randomAvatar();
+      const { error } = await client.from('profiles').update({ avatar }).eq('id', (row && row.id) || (await currentUser()).id);
       if (error) throw error;
-      return data;
+      return avatar;
     },
     async profileExtra() {
       const user = await currentUser();
@@ -158,7 +200,10 @@ async function start() {
       ids.delete(user.id);
       let people = [];
       if (ids.size) {
-        const found = await client.from('profiles').select('id, username, display_name').in('id', [...ids]);
+        let found = await client.from('profiles').select('id, username, display_name, avatar').in('id', [...ids]);
+        if (found.error && /avatar/i.test(found.error.message || '')) {
+          found = await client.from('profiles').select('id, username, display_name').in('id', [...ids]);
+        }
         if (found.error) throw found.error;
         people = found.data || [];
       }
@@ -169,6 +214,7 @@ async function start() {
           id,
           username: person && person.username ? person.username : '',
           name: person ? (person.display_name || person.username || 'Profil') : 'Profil',
+          avatar: person && person.avatar ? person.avatar : null,
         };
       };
       const requests = rows
@@ -194,7 +240,7 @@ async function start() {
       if (safe.length < 2) return [];
       const pattern = `"%${safe}%"`;
       const found = await client.from('profiles')
-        .select('id, username, display_name, is_private')
+        .select('id, username, display_name, is_private, avatar')
         .neq('id', user.id)
         .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
         .limit(10);
@@ -205,7 +251,7 @@ async function start() {
       const clean = normalize(name);
       if (!clean) return null;
       const { data, error } = await client.from('profiles')
-        .select('id, username, display_name, is_private')
+        .select('id, username, display_name, is_private, avatar')
         .eq('username', clean)
         .maybeSingle();
       if (error) throw error;
@@ -214,7 +260,7 @@ async function start() {
     async loadOther(target) {
       const user = await currentUser();
       const profileResult = await client.from('profiles')
-        .select('id, username, display_name, is_private')
+        .select('id, username, display_name, is_private, avatar')
         .eq('id', target)
         .maybeSingle();
       if (profileResult.error) throw profileResult.error;
@@ -320,13 +366,14 @@ async function start() {
       const peopleIds = [...new Set(rows.map((row) => row.user_id))];
       const [lists, people, items] = await Promise.all([
         client.from('wishlists').select('id, title, created_by').in('id', listIds),
-        client.from('profiles').select('id, username').in('id', peopleIds),
+        client.from('profiles').select('id, username, avatar').in('id', peopleIds),
         client.from('wishlist_items').select('id, wishlist_id, status, created_at, added_by').in('wishlist_id', listIds),
       ]);
       if (lists.error) throw lists.error;
       if (people.error) throw people.error;
       if (items.error) throw items.error;
       const names = new Map((people.data || []).map((person) => [person.id, person.username || '']));
+      const avatars = new Map((people.data || []).map((person) => [person.id, person.avatar || null]));
       return (lists.data || []).map((list) => {
         const group = rows.filter((row) => row.wishlist_id === list.id);
         const mine = group.find((row) => row.user_id === user.id);
@@ -339,6 +386,7 @@ async function start() {
           members: group.map((row) => ({
             id: row.user_id,
             username: names.get(row.user_id) || 'Profil',
+            avatar: avatars.get(row.user_id) || null,
             role: row.role,
           })).sort((a, b) => (a.role === 'owner' ? -1 : 0) - (b.role === 'owner' ? -1 : 0) || a.username.localeCompare(b.username, 'de')),
           openCount: listItems.filter((item) => item.status !== 'geschaut').length,
@@ -391,6 +439,17 @@ async function start() {
         })),
         mine: (votes.data || []).some((vote) => vote.item_id === row.id && vote.user_id === user.id),
       }));
+    },
+    async memberRatings(userIds, filmIds) {
+      const users = [...new Set((userIds || []).filter(Boolean))];
+      const films = [...new Set((filmIds || []).filter(Boolean))];
+      if (!users.length || !films.length) return [];
+      const result = await client.from('entries')
+        .select('user_id, film_id, rating')
+        .in('user_id', users)
+        .in('film_id', films);
+      if (result.error) throw result.error;
+      return (result.data || []).filter((row) => row.rating != null && Number(row.rating) > 0);
     },
     async followedFilms(userIds) {
       const ids = [...new Set((userIds || []).filter(Boolean))];

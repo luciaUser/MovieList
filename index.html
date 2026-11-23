@@ -8,6 +8,10 @@
 </head>
 <body>
   <header>
+    <button type="button" id="mode-profile" role="tab" aria-selected="false" aria-label="Profil">
+      <span class="avatar-slot"></span>
+      <span class="profile-dot" hidden></span>
+    </button>
     <div class="add-film">
       <button type="button" id="add-film" aria-expanded="false" aria-controls="add-form">
         <span class="sr">Film ablegen</span>
@@ -25,7 +29,10 @@
         <button type="submit" class="sr">Ablegen</button>
       </form>
     </div>
-    <div id="profile-switch" hidden></div>
+    <div id="lens-bar" hidden>
+      <span></span>
+      <button type="button" id="lens-close" aria-label="Zurück zu meiner Ansicht">×</button>
+    </div>
     <div class="modes" role="tablist" aria-label="Ansicht">
       <button type="button" id="mode-network" class="icon-tab" role="tab" aria-selected="true" aria-label="Netzwerk">
         <svg viewBox="6.7 3.5 25.6 22.7" aria-hidden="true">
@@ -43,19 +50,6 @@
           <circle cx="11.02" cy="21.8914" r="3.25" fill="none" stroke="currentColor" stroke-width="1.67"></circle>
         </svg>
       </button>
-      <button type="button" id="mode-profile" class="icon-tab" role="tab" aria-selected="false" aria-label="Profil">
-        <svg viewBox="8.9 3.9 22.2 26.3" aria-hidden="true">
-          <defs>
-            <linearGradient id="lit-profile" gradientUnits="userSpaceOnUse" x1="0" y1="30.2" x2="0" y2="3.9">
-              <stop offset="0" stop-color="#ffffff"></stop>
-              <stop offset="1" stop-color="#8d8d8d"></stop>
-            </linearGradient>
-          </defs>
-          <path d="M30.0773 29.1233L26.6699 19.3867C26.3892 18.5845 25.6321 18.0474 24.7822 18.0474H14.7024C13.817 18.0474 13.0369 18.6296 12.785 19.4784L9.92285 29.1233" fill="none" stroke="currentColor" stroke-width="1.75"></path>
-          <path d="M13.6459 15.165L11.9312 7.0201L16.6466 10.4495L19.6474 4.87671L22.6481 10.4495L27.3636 7.0201L25.6489 15.165H19.6474H13.6459Z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"></path>
-        </svg>
-        <span class="profile-dot" hidden></span>
-      </button>
       <button type="button" id="mode-rating" class="icon-tab" role="tab" aria-selected="false" aria-label="Rating">
         <svg viewBox="8.3 4.6 22.2 25.4" aria-hidden="true">
           <defs>
@@ -66,6 +60,22 @@
           </defs>
           <path d="M10.5068 24.4804L9.57178 27.4397C9.28118 28.3594 10.3327 29.1169 11.1131 28.55L16.7346 24.4657C17.0851 24.2111 17.5597 24.2111 17.9101 24.4657L23.4976 28.5253C24.2813 29.0947 25.3358 28.3285 25.0364 27.4072L22.9022 20.8388C22.7683 20.4268 22.915 19.9754 23.2655 19.7207L28.8529 15.6612C29.6367 15.0918 29.2339 13.8522 28.2652 13.8522H21.3587C20.9255 13.8522 20.5415 13.5732 20.4076 13.1612L18.2693 6.58002C17.9703 5.65995 16.6693 5.65828 16.368 6.57757L15.8864 8.04677" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
           <path d="M9.33301 12.4472L12.733 11.0472V21.2472" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
+        </svg>
+      </button>
+      <button type="button" id="mode-wish" class="icon-tab" role="tab" aria-selected="false" aria-label="Wunschliste">
+        <svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true">
+          <defs>
+            <linearGradient id="lit-wish" gradientUnits="userSpaceOnUse" x1="0" y1="30.1" x2="0" y2="8.9">
+              <stop offset="0" stop-color="#ffffff"></stop>
+              <stop offset="1" stop-color="#8d8d8d"></stop>
+            </linearGradient>
+          </defs>
+          <path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
       </button>
       <div class="sort-wrap">
@@ -108,6 +118,7 @@
   </div>
   <section id="profile" hidden aria-label="Profil"></section>
   <main id="wall" hidden aria-label="Filmcover. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></main>
+  <main id="wish-board" hidden aria-label="Wunschlisten"></main>
   <div id="network" hidden aria-label="Netzwerk. Ziehen verschiebt die Karte, Scrollen zoomt. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen.">
     <div class="net-world"></div>
     <div id="net-bar" hidden></div>
