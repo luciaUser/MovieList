@@ -112,6 +112,11 @@ create table if not exists public.recovery_emails (
 
 alter table public.profiles add column if not exists avatar jsonb;
 
+alter table public.wishlists add column if not exists color text;
+alter table public.wishlists drop constraint if exists wishlists_color_hex;
+alter table public.wishlists add constraint wishlists_color_hex
+  check (color is null or color ~ '^#[0-9A-Fa-f]{6}$');
+
 alter table public.profiles drop constraint if exists profiles_username_shape;
 alter table public.profiles add constraint profiles_username_shape
   check (username ~ '^[a-z0-9_]{3,20}$');
@@ -694,7 +699,7 @@ grant select, insert, update, delete on public.entries to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.wishlists to authenticated;
 revoke update on public.wishlists from authenticated;
-grant update (title) on public.wishlists to authenticated;
+grant update (title, color) on public.wishlists to authenticated;
 grant select, insert, update, delete on public.wishlist_members to authenticated;
 grant select, insert, update, delete on public.wishlist_items to authenticated;
 grant select, insert, delete on public.wishlist_votes to authenticated;
@@ -982,7 +987,7 @@ declare
   name text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
-    foreach name in array array['wishlist_items', 'wishlist_votes', 'wishlist_members', 'follows']
+    foreach name in array array['wishlists', 'wishlist_items', 'wishlist_votes', 'wishlist_members', 'follows']
     loop
       if not exists (
         select 1 from pg_publication_tables

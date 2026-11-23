@@ -2111,6 +2111,13 @@
     if (invite && !invite.contains(event.target)) closeFriendInvite();
     const memberLine = document.querySelector('.wish-by.is-inviting');
     if (memberLine && !memberLine.contains(event.target)) closeWishMemberLine(memberLine);
+    const hue = document.querySelector('.genre-name.is-hue');
+    if (hue && !hue.contains(event.target)) hue.classList.remove('is-hue');
+    const avatar = document.querySelector('.profile-avatar.is-armed, .profile-avatar.is-dirty');
+    if (avatar && !avatar.contains(event.target) && avatar._commitAvatar) {
+      avatar.classList.remove('is-armed');
+      avatar._commitAvatar();
+    }
     if (document.querySelector('header').contains(event.target)) return;
     if (addFilm.classList.contains('is-open')) closeAdd();
     if (searchForm.classList.contains('is-open')) closeSearch();
@@ -2159,6 +2166,7 @@
         return;
       }
       if (closeWishMemberLine()) return;
+      if (closeWishHue()) return;
       const sureBar = document.querySelector('.wish-bar.is-sure');
       if (sureBar) {
         sureBar.classList.remove('is-sure');
@@ -3909,7 +3917,7 @@
       refreshFollowLists().then(() => {
         const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
       const inviting = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
-      if (profileMode === 'home' && !typing && !inviting) paintProfile();
+      if (profileMode === 'home' && !typing && !inviting && !document.querySelector('.profile-avatar.is-dirty')) paintProfile();
       else if (profileMode === 'list' && !document.querySelector('.friend-row.is-gone')) repaintList();
         else if (profileMode === 'other' && viewingId && (!other || viewingId === other)) openOther(viewingId, true);
         if (compareId && (!other || compareId === other)) {
@@ -4381,42 +4389,78 @@
 
   function paintSettings() {
     const stack = el('div', 'profile-settings stack');
-    const savedName = (account && account.display_name) || '';
+    const savedName = (account && (account.display_name || account.username)) || '';
     stack.append(el('h2', 'profile-kicker', 'Anzeigename'));
+    const nameField = el('div', 'name-field');
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = savedName;
-    nameInput.autocomplete = 'nickname';
-    nameInput.maxLength = 80;
+    nameInput.autocomplete = 'username';
+    nameInput.maxLength = 20;
+    nameInput.spellcheck = false;
+    nameInput.dataset.saved = savedName;
     nameInput.setAttribute('aria-label', 'Anzeigename');
     const saveName = document.createElement('button');
     saveName.type = 'button';
     saveName.textContent = 'Speichern';
     saveName.hidden = true;
-    const nameStatus = el('p', 'profile-status', '');
-    nameStatus.setAttribute('role', 'status');
     const syncSave = () => {
-      saveName.hidden = nameInput.value.trim() === savedName;
+      nameField.classList.remove('is-error');
+      saveName.hidden = nameInput.value.trim() === nameInput.dataset.saved;
+    };
+    const showNameMessage = (message) => {
+      nameField.classList.add('is-error');
+      nameInput.value = '';
+      nameInput.placeholder = message;
+      saveName.hidden = true;
+      window.setTimeout(() => {
+        if (!nameInput.isConnected) return;
+        nameField.classList.remove('is-error');
+        nameInput.placeholder = '';
+        nameInput.value = nameInput.dataset.saved || '';
+        saveName.hidden = true;
+      }, 1400);
     };
     nameInput.addEventListener('input', syncSave);
     saveName.addEventListener('click', async () => {
       const displayName = nameInput.value.trim();
-      if (!displayName) {
-        nameStatus.textContent = 'Bitte einen Anzeigenamen eintragen.';
+      if (!/^[A-Za-z0-9_]*$/.test(displayName)) {
+        showNameMessage('Nur Buchstaben, Ziffern und _');
+        return;
+      }
+      if (displayName.length < 3 || displayName.length > 20) {
+        showNameMessage('3 bis 20 Zeichen');
         return;
       }
       saveName.disabled = true;
       try {
-        await globalThis.Cloud.updateProfile({ display_name: displayName });
-        account.display_name = displayName;
-        profileStatus = '';
-        paintProfile();
+        const result = await globalThis.Cloud.renameAccount(displayName);
+        account.display_name = result.display_name || displayName;
+        account.username = result.username || displayName.toLowerCase();
+        nameInput.dataset.saved = account.display_name;
+        nameInput.value = account.display_name;
+        saveName.hidden = true;
+        const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        mark.setAttribute('viewBox', '0 0 24 24');
+        mark.setAttribute('aria-hidden', 'true');
+        mark.classList.add('name-check');
+        mark.innerHTML = '<path d="M5 12.5 10 17.5 19 7" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>';
+        nameField.append(mark);
+        window.setTimeout(() => {
+          if (nameField.isConnected) paintProfile();
+        }, 700);
       } catch (error) {
-        nameStatus.textContent = profileFail(error);
+        const message = error && error.message;
+        if (message === 'Name vergeben' || message === 'Nur Buchstaben, Ziffern und _' || message === '3 bis 20 Zeichen' || message === 'Höchstens 5 pro Stunde.' || message === 'Keine Verbindung.') {
+          showNameMessage(message);
+        } else {
+          showNameMessage(message || 'Das hat nicht geklappt.');
+        }
         saveName.disabled = false;
       }
     });
-    stack.append(nameInput, saveName, nameStatus);
+    nameField.append(nameInput, saveName);
+    stack.append(nameField);
     if (recoveryOn) stack.append(paintRecovery());
     stack.append(paintDanger(), paintSignOut());
     return stack;
@@ -4789,14 +4833,17 @@
       const lists = await cloud.wishOverview();
       if (token !== wishBoot || !account) return;
       wishLists = lists || [];
+      await ensureWishColors(wishLists);
+      if (token !== wishBoot || !account) return;
       refreshWishDot();
       bindWishRealtime();
       const wishTyping = document.activeElement && document.activeElement.closest && document.activeElement.closest('#wish-board');
-      if (mode === 'wish' && !wishTyping) paintWishBoard();
+      const hueOpen = document.querySelector('.genre-name.is-hue');
+      if (mode === 'wish' && !wishTyping && !hueOpen) paintWishBoard();
       if (options && options.quiet) return;
       const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
       const inviting = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
-      if (profileMode === 'home' && !typing && !inviting) paintProfile();
+      if (profileMode === 'home' && !typing && !inviting && !document.querySelector('.profile-avatar.is-dirty')) paintProfile();
       else if (profileMode === 'wish' && wishOpenId) {
         if (!wishLists.some((list) => list.id === wishOpenId)) renderProfile();
         else paintWishlist();
@@ -4820,6 +4867,7 @@
     };
     listen('wishlist_members', `user_id=eq.${account.id}`);
     wishLists.forEach((list) => {
+      listen('wishlists', `id=eq.${list.id}`);
       listen('wishlist_items', `wishlist_id=eq.${list.id}`);
       listen('wishlist_members', `wishlist_id=eq.${list.id}`);
     });
@@ -4832,6 +4880,10 @@
   function onWishEvent(table, payload) {
     const eventName = payload && (payload.eventType || payload.event);
     const row = payload && payload.new && payload.new.id ? payload.new : null;
+    if (table === 'wishlists' && eventName === 'UPDATE' && row) {
+      const open = document.querySelector('.genre-name.is-hue');
+      if (open && open.dataset.list === row.id) return;
+    }
     if (table === 'wishlist_items' && eventName === 'INSERT' && row && row.added_by !== (account && account.id)) {
       wishFresh.add(row.id);
       window.setTimeout(() => {
@@ -4842,6 +4894,188 @@
     }
     window.clearTimeout(wishReloadTimer);
     wishReloadTimer = window.setTimeout(() => loadWishlists(), 200);
+  }
+
+  function closeWishHue() {
+    const open = document.querySelector('.genre-name.is-hue');
+    if (!open) return false;
+    open.classList.remove('is-hue');
+    return true;
+  }
+
+  function wishHex(hue, sat, light) {
+    const s = sat / 100;
+    const l = light / 100;
+    const a = s * Math.min(l, 1 - l);
+    const channel = (n) => {
+      const k = (n + hue / 30) % 12;
+      const value = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      return Math.round(255 * value).toString(16).padStart(2, '0');
+    };
+    return `#${channel(0)}${channel(8)}${channel(4)}`;
+  }
+
+  function wishHue(hex) {
+    const text = String(hex || '').replace('#', '');
+    if (!/^[0-9a-fA-F]{6}$/.test(text)) return 0;
+    const n = parseInt(text, 16);
+    const r = ((n >> 16) & 255) / 255;
+    const g = ((n >> 8) & 255) / 255;
+    const b = (n & 255) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const delta = max - min;
+    if (!delta) return 0;
+    let hue = 0;
+    if (max === r) hue = ((g - b) / delta) % 6;
+    else if (max === g) hue = (b - r) / delta + 2;
+    else hue = (r - g) / delta + 4;
+    return (hue * 60 + 360) % 360;
+  }
+
+  async function ensureWishColors(lists) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.randomWishColor || !cloud.setWishlistColor) return;
+    const missing = (lists || []).filter((list) => list.myStatus === 'accepted' && !list.color);
+    await Promise.all(missing.map(async (list) => {
+      const color = cloud.randomWishColor();
+      list.color = color;
+      try { await cloud.setWishlistColor(list.id, color); } catch { /* Spalte fehlt, bis schema.sql läuft */ }
+    }));
+  }
+
+  function wishNameCell(list) {
+    const accepted = list.myStatus === 'accepted';
+    const invited = list.myStatus === 'invited';
+    const cell = el('div', 'genre-name');
+    cell.dataset.list = list.id;
+    const color = list.color || '#ffffff';
+    const swatch = document.createElement(accepted ? 'button' : 'span');
+    if (accepted) swatch.type = 'button';
+    swatch.className = 'wish-swatch';
+    swatch.style.background = color;
+    if (accepted) swatch.setAttribute('aria-label', 'Farbe');
+    const label = el('span', 'wish-title', list.title || (invited ? 'Liste' : ''));
+    label.style.color = color;
+    cell.append(swatch, label);
+    if (!accepted) return cell;
+    label.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (cell.classList.contains('is-hue')) return;
+      beginWishRename(label, list);
+    });
+    const scale = el('div', 'wish-hue');
+    const bar = el('div', 'wish-hue-bar');
+    const grip = el('span', 'wish-hue-grip');
+    bar.append(grip);
+    scale.append(bar);
+    cell.append(scale);
+    const place = (hex) => {
+      swatch.style.background = hex;
+      label.style.color = hex;
+      grip.style.left = `${(wishHue(hex) / 360) * 100}%`;
+    };
+    place(color);
+    const at = (event) => {
+      const box = bar.getBoundingClientRect();
+      const width = box.width || 1;
+      const x = Math.min(Math.max(event.clientX - box.left, 0), width);
+      const hue = (x / width) * 360;
+      return wishHex(hue >= 360 ? 0 : hue, 100, 50);
+    };
+    let dragging = false;
+    swatch.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      if (cell.classList.contains('is-hue')) {
+        cell.classList.remove('is-hue');
+        return;
+      }
+      document.querySelectorAll('.genre-name.is-hue').forEach((node) => node.classList.remove('is-hue'));
+      cell.classList.add('is-hue');
+      place(list.color || color);
+    });
+    bar.addEventListener('pointerdown', (event) => {
+      if (!cell.classList.contains('is-hue')) return;
+      event.stopPropagation();
+      dragging = true;
+      bar.setPointerCapture(event.pointerId);
+      const hex = at(event);
+      list.color = hex;
+      place(hex);
+    });
+    bar.addEventListener('pointermove', (event) => {
+      if (!dragging) return;
+      const hex = at(event);
+      list.color = hex;
+      place(hex);
+    });
+    const release = async (event) => {
+      if (!dragging) return;
+      dragging = false;
+      const hex = at(event);
+      list.color = hex;
+      place(hex);
+      try { await globalThis.Cloud.setWishlistColor(list.id, hex); } catch { /* Anzeige bleibt */ }
+    };
+    bar.addEventListener('pointerup', release);
+    bar.addEventListener('pointercancel', release);
+    return cell;
+  }
+
+  function paintOwnAvatar(size) {
+    const wrap = el('div', 'profile-avatar');
+    const draw = (avatar) => {
+      const roll = wrap.querySelector('.avatar-roll');
+      wrap.replaceChildren(avatarNode(avatar, size));
+      if (roll) wrap.append(roll);
+    };
+    const roll = document.createElement('button');
+    roll.type = 'button';
+    roll.className = 'avatar-roll';
+    roll.setAttribute('aria-label', 'Profilbild neu würfeln');
+    roll.append(dangerIcon('reset'));
+    draw(account && account.avatar);
+    wrap.append(roll);
+    let dirty = false;
+    let timer = 0;
+    const phone = window.matchMedia('(hover: none), (max-width: 720px)').matches;
+    const commit = async () => {
+      window.clearTimeout(timer);
+      timer = 0;
+      if (!dirty || !account || !account.avatar) return;
+      dirty = false;
+      wrap.classList.remove('is-dirty');
+      try {
+        await globalThis.Cloud.updateProfile({ avatar: account.avatar });
+      } catch {
+        dirty = false;
+        wrap.classList.remove('is-dirty');
+      }
+    };
+    wrap._commitAvatar = commit;
+    roll.addEventListener('click', (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      const cloud = globalThis.Cloud;
+      if (!cloud || !cloud.rollAvatar || !account) return;
+      account.avatar = cloud.rollAvatar();
+      dirty = true;
+      wrap.classList.add('is-dirty');
+      draw(account.avatar);
+      paintAvatarTab();
+      window.clearTimeout(timer);
+      timer = window.setTimeout(commit, 2000);
+    });
+    wrap.addEventListener('click', (event) => {
+      if (event.target.closest('.avatar-roll')) return;
+      if (phone && !wrap.classList.contains('is-armed')) wrap.classList.add('is-armed');
+    });
+    wrap.addEventListener('mouseleave', () => {
+      if (phone) return;
+      commit();
+    });
+    return wrap;
   }
 
   function wishCountLabel(count) {
@@ -5003,8 +5237,8 @@
     });
   }
 
-  function beginWishRename(cell, list) {
-    if (!list || list.myStatus !== 'accepted' || cell.querySelector('input')) return;
+  function beginWishRename(label, list) {
+    if (!list || list.myStatus !== 'accepted' || !label || label.querySelector('input')) return;
     const current = list.title || '';
     const input = document.createElement('input');
     input.type = 'text';
@@ -5014,7 +5248,8 @@
     input.setAttribute('aria-label', 'Name');
     input.autocomplete = 'off';
     input.spellcheck = false;
-    cell.replaceChildren(input);
+    input.style.color = list.color || '';
+    label.replaceChildren(input);
     input.focus();
     const end = input.value.length;
     input.setSelectionRange(end, end);
@@ -5022,7 +5257,7 @@
     const restore = (text) => {
       if (closed) return;
       closed = true;
-      cell.replaceChildren(document.createTextNode(text));
+      label.replaceChildren(document.createTextNode(text));
     };
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') {
@@ -5043,13 +5278,13 @@
         return;
       }
       closed = true;
-      cell.replaceChildren(document.createTextNode(next));
+      label.replaceChildren(document.createTextNode(next));
       try {
         await globalThis.Cloud.renameWishlist(list.id, next);
         list.title = next;
       } catch {
         list.title = current;
-        if (cell.isConnected) cell.replaceChildren(document.createTextNode(current));
+        if (label.isConnected) label.replaceChildren(document.createTextNode(current));
       }
     });
   }
@@ -5491,13 +5726,7 @@
     const invited = list.myStatus === 'invited';
     const accepted = list.myStatus === 'accepted';
     const bar = el('div', invited ? 'genre-bar wish-bar' : 'genre-bar wish-bar has-x');
-    const title = el('div', 'genre-name', list.title || (invited ? 'Liste' : ''));
-    if (accepted) {
-      title.addEventListener('click', (event) => {
-        event.stopPropagation();
-        beginWishRename(title, list);
-      });
-    }
+    const title = wishNameCell(list);
     const by = el('div', 'genre-count wish-by');
     if (accepted && list.role === 'owner') by.append(wishMemberPlus(list, by));
     const names = el('span', 'wish-by-names');
@@ -5523,7 +5752,8 @@
     side.append(wishRemoveButton(list, bar));
     board.append(bar);
     if (wishFocusId === list.id) {
-      beginWishRename(title, list);
+      const label = title.querySelector('.wish-title');
+      if (label) beginWishRename(label, list);
       wishFocusId = null;
     }
     let items = [];
@@ -6251,6 +6481,7 @@
   }
 
   function paintProfile() {
+    if (document.querySelector('.profile-avatar.is-dirty')) return;
     const root = profileRoot();
     if (!root) return;
     root.classList.remove('profile-list');
@@ -6261,7 +6492,7 @@
       : String(mutualPeople().length);
     root.replaceChildren();
     const head = el('div', 'profile-head');
-    head.append(avatarNode(account && account.avatar, 56), el('h1', null, name));
+    head.append(paintOwnAvatar(56), el('h1', null, name));
     root.append(head);
     const stats = el('div', 'profile-stats');
     stats.append(

@@ -69,7 +69,26 @@ async function start() {
     return `hsl(${Math.round(hue)} ${saturation}% ${lightness}%)`;
   }
 
-  function randomAvatar() {
+  function hslToHex(hue, sat, light) {
+  const s = sat / 100;
+  const l = light / 100;
+  const a = s * Math.min(l, 1 - l);
+  const channel = (n) => {
+    const k = (n + hue / 30) % 12;
+    const value = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * value).toString(16).padStart(2, '0');
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+
+function nextWishColor() {
+  const hue = Math.random() * 360;
+  const sat = 85 + Math.random() * 15;
+  const light = 50 + Math.random() * 10;
+  return hslToHex(hue, sat, light);
+}
+
+function randomAvatar() {
     const hues = [];
     let guard = 0;
     while (hues.length < 3 && guard < 80) {
@@ -182,6 +201,12 @@ async function start() {
         },
         sensitive: extraRow || { top_films: [], pinned_people: { actors: [], directors: [] } },
       };
+    },
+    rollAvatar() {
+      return randomAvatar();
+    },
+    randomWishColor() {
+      return nextWishColor();
     },
     async updateProfile(patch) {
       const user = await currentUser();
@@ -367,10 +392,11 @@ async function start() {
       const rows = members.data || [];
       if (!rows.length) return [];
       const listIds = [...new Set(rows.map((row) => row.wishlist_id))];
-      const [lists, items] = await Promise.all([
-        client.from('wishlists').select('id, title, created_by').in('id', listIds),
-        client.from('wishlist_items').select('id, wishlist_id, film_id, status, created_at, added_by').in('wishlist_id', listIds),
-      ]);
+      let lists = await client.from('wishlists').select('id, title, created_by, color').in('id', listIds);
+      if (lists.error && /color/i.test(lists.error.message || '')) {
+        lists = await client.from('wishlists').select('id, title, created_by').in('id', listIds);
+      }
+      const items = await client.from('wishlist_items').select('id, wishlist_id, film_id, status, created_at, added_by').in('wishlist_id', listIds);
       if (lists.error) throw lists.error;
       if (items.error) throw items.error;
       const peopleIds = [...new Set(rows.map((row) => row.user_id).concat((lists.data || []).map((list) => list.created_by)).filter(Boolean))];
@@ -412,6 +438,7 @@ async function start() {
         return {
           id: list.id,
           title: list.title,
+          color: typeof list.color === 'string' ? list.color : '',
           createdBy: list.created_by,
           role: mine ? mine.role : 'editor',
           myStatus: mine && mine.status ? mine.status : 'accepted',
@@ -531,7 +558,11 @@ async function start() {
     async createWishlist(title, memberIds) {
       const user = await currentUser();
       const id = crypto.randomUUID();
-      const created = await client.from('wishlists').insert({ id, title, created_by: user.id });
+      const color = nextWishColor();
+      let created = await client.from('wishlists').insert({ id, title, created_by: user.id, color });
+      if (created.error && /color/i.test(created.error.message || '')) {
+        created = await client.from('wishlists').insert({ id, title, created_by: user.id });
+      }
       if (created.error) throw created.error;
       const others = [...new Set((memberIds || []).filter((memberId) => memberId && memberId !== user.id))];
       if (others.length) {
@@ -547,6 +578,40 @@ async function start() {
     async renameWishlist(listId, title) {
       const { error } = await client.from('wishlists').update({ title }).eq('id', listId);
       if (error) throw error;
+    },
+    async setWishlistColor(listId, color) {
+      const next = String(color || '').trim().toLowerCase();
+      if (!/^#[0-9a-f]{6}$/.test(next)) throw new Error('Ungültige Farbe.');
+      const { error } = await client.from('wishlists').update({ color: next }).eq('id', listId);
+      if (error) throw error;
+    },
+    async renameAccount(displayName) {
+      const session = await client.auth.getSession();
+      const token = session && session.data && session.data.session && session.data.session.access_token;
+      if (!token) throw new Error('Bitte zuerst anmelden.');
+      let response;
+      try {
+        response = await fetch('/api/account', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ action: 'rename', name: displayName }),
+        });
+      } catch {
+        const error = new Error('Keine Verbindung.');
+        error.code = 'network';
+        throw error;
+      }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const error = new Error(data.error || 'Das hat nicht geklappt.');
+        error.code = data.code || '';
+        throw error;
+      }
+      try { await client.auth.refreshSession(); } catch { /* die bestehende Sitzung bleibt gültig */ }
+      return data;
     },
     async deleteWishlist(listId) {
       const { error } = await client.from('wishlists').delete().eq('id', listId);
