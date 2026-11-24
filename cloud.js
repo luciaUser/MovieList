@@ -196,13 +196,19 @@ function randomAvatar() {
       const user = await currentUser();
       const saved = await client.from('profiles').update({ avatar }).eq('id', user.id).select('avatar').maybeSingle();
       if (saved.error) throw saved.error;
-      const got = saved.data && saved.data.avatar;
+      if (!saved.data) throw new Error('avatar: keine Zeile aktualisiert (RLS/Policy?)');
+      const got = saved.data.avatar;
+      const color = (value) => String(value == null ? '' : value).trim().toLowerCase();
       const same = got
-        && got.outer === avatar.outer
-        && got.mid === avatar.mid
-        && got.core === avatar.core
+        && typeof got === 'object'
+        && color(got.outer) === color(avatar.outer)
+        && color(got.mid) === color(avatar.mid)
+        && color(got.core) === color(avatar.core)
         && Number(got.seed) === Number(avatar.seed);
-      if (!same) throw new Error('Das Profilbild wurde nicht gespeichert.');
+      if (!same) {
+        console.error('[avatar] Wert weicht ab', avatar, got);
+        throw new Error('avatar: Wert weicht ab');
+      }
       return got;
     },
     async profileExtra() {

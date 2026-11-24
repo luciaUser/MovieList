@@ -5373,9 +5373,16 @@
       } catch (error) {
         if (stamp !== generation) return;
         tries += 1;
+        const info = error || {};
+        console.error('[avatar]', info, info.message, info.code, info.details, info.hint);
+        const text = String(info.message || '');
+        const rights = info.code === '42501'
+          || /keine zeile aktualisiert|permission denied|row-level security|rls\/policy/i.test(text);
         showNote(profileFail(error) === 'Keine Verbindung.'
           ? 'Keine Verbindung.'
-          : 'Das Profilbild wurde nicht gespeichert.');
+          : rights
+            ? 'Profilbild: keine Berechtigung. Schema neu ausführen.'
+            : 'Das Profilbild wurde nicht gespeichert.');
         if (tries < 3) timer = window.setTimeout(commit, 700);
       } finally {
         saving = false;
