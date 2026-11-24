@@ -296,7 +296,8 @@ async function askGemini(summary) {
     }
     const shaped = shapeOutput(readModelJson(body));
     if (!shaped) {
-      console.error('[taste]', 'bad_output');
+      const cand = body.candidates && body.candidates[0];
+      console.error('[taste]', 'bad_output', cand && cand.finishReason, JSON.stringify(body.usageMetadata || {}));
       return { error: 'bad_output' };
     }
     return {
@@ -311,7 +312,10 @@ async function askGemini(summary) {
       },
     };
   } catch (error) {
-    if (error && (error.name === 'AbortError' || error.code === 'ABORT_ERR')) return { error: 'timeout' };
+    if (error && (error.name === 'AbortError' || error.code === 'ABORT_ERR')) {
+      console.error('[taste]', 'timeout nach 25 s', model);
+      return { error: 'timeout' };
+    }
     console.error('[taste]', error && error.message);
     return { error: 'ai_failed' };
   } finally {

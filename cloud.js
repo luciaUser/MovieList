@@ -91,16 +91,22 @@ function nextWishColor() {
 function randomAvatar() {
     const hues = [];
     let guard = 0;
-    while (hues.length < 3 && guard < 80) {
+    while (hues.length < 4 && guard < 160) {
       guard += 1;
       const hue = Math.random() * 360;
-      if (hues.every((have) => hueDistance(have, hue) >= 60)) hues.push(hue);
+      if (hues.every((have) => hueDistance(have, hue) >= 40)) hues.push(hue);
     }
-    while (hues.length < 3) hues.push((hues[hues.length - 1] + 120) % 360);
+    let step = 0;
+    while (hues.length < 4 && step < 360) {
+      const hue = ((hues[0] || 0) + step) % 360;
+      if (hues.every((have) => hueDistance(have, hue) >= 40)) hues.push(hue);
+      step += 10;
+    }
     return {
       outer: avatarColor(hues[0]),
       mid: avatarColor(hues[1]),
       core: avatarColor(hues[2]),
+      under: avatarColor(hues[3]),
       seed: Math.floor(Math.random() * 1e9),
     };
   }
@@ -295,6 +301,7 @@ function randomAvatar() {
         && color(got.outer) === color(avatar.outer)
         && color(got.mid) === color(avatar.mid)
         && color(got.core) === color(avatar.core)
+        && color(got.under) === color(avatar.under)
         && Number(got.seed) === Number(avatar.seed);
       if (!same) {
         console.error('[avatar] Wert weicht ab', avatar, got);

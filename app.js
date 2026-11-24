@@ -867,12 +867,102 @@
 
   let avatarSerial = 0;
 
+  function mulberry32(seed) {
+    let state = Number(seed) >>> 0;
+    return function next() {
+      state = (state + 0x6d2b79f5) >>> 0;
+      let t = state;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function hslParts(value) {
+    const match = String(value || '').match(/hsl\(\s*([0-9.]+)\s+([0-9.]+)%\s+([0-9.]+)%\s*\)/i);
+    if (!match) return null;
+    return { h: Number(match[1]), s: Number(match[2]), l: Number(match[3]) };
+  }
+
+  function hslRgb(h, s, l) {
+    const sat = s / 100;
+    const light = l / 100;
+    const c = (1 - Math.abs((2 * light) - 1)) * sat;
+    const hp = (((h % 360) + 360) % 360) / 60;
+    const x = c * (1 - Math.abs((hp % 2) - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (hp < 1) { r = c; g = x; }
+    else if (hp < 2) { r = x; g = c; }
+    else if (hp < 3) { g = c; b = x; }
+    else if (hp < 4) { g = x; b = c; }
+    else if (hp < 5) { r = x; b = c; }
+    else { r = c; b = x; }
+    const m = light - (c / 2);
+    return { r: r + m, g: g + m, b: b + m };
+  }
+
+  function relLum(rgb) {
+    const channel = (value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+    return (0.2126 * channel(rgb.r)) + (0.7152 * channel(rgb.g)) + (0.0722 * channel(rgb.b));
+  }
+
+  function readableOnBlack(color) {
+    const parts = hslParts(color);
+    if (!parts) return color || 'hsl(0 0% 100%)';
+    const contrast = (light) => (relLum(hslRgb(parts.h, parts.s, light)) + 0.05) / 0.05;
+    if (contrast(parts.l) >= 4.5) return color;
+    let lo = parts.l;
+    let hi = 100;
+    for (let i = 0; i < 18; i += 1) {
+      const mid = (lo + hi) / 2;
+      if (contrast(mid) >= 4.5) hi = mid;
+      else lo = mid;
+    }
+    const light = Math.min(100, Math.ceil(hi * 10) / 10);
+    return `hsl(${parts.h} ${parts.s}% ${light}%)`;
+  }
+
+  function derivedUnder(outer, mid, seed) {
+    const base = hslParts(outer);
+    const upper = hslParts(mid);
+    const shift = (mulberry32(seed)() * 40) - 20;
+    if (!base || !upper) {
+      const hue = Math.round((220 + shift + 360) % 360);
+      return `hsl(${hue} 40% 50%)`;
+    }
+    let delta = (upper.h - base.h) % 360;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    const hue = Math.round((base.h + (delta / 2) + shift + 360) % 360);
+    const sat = Math.round((base.s + upper.s) / 2);
+    const light = Math.round((base.l + upper.l) / 2);
+    return `hsl(${hue} ${sat}% ${light}%)`;
+  }
+
   function avatarColors(avatar) {
     const row = avatar && typeof avatar === 'object' ? avatar : {};
+    const outer = row.outer || 'hsl(220 18% 42%)';
+    const mid = row.mid || 'hsl(220 12% 58%)';
+    const core = row.core || 'hsl(220 8% 74%)';
     return {
-      outer: row.outer || 'hsl(220 18% 42%)',
-      mid: row.mid || 'hsl(220 12% 58%)',
-      core: row.core || 'hsl(220 8% 74%)',
+      outer,
+      mid,
+      core,
+      under: row.under || derivedUnder(outer, mid, row.seed),
+    };
+  }
+
+  function avatarSpot(rand, x, y, rx, ry) {
+    const nudge = (base, amount) => base + ((rand() * 2 - 1) * amount);
+    const scale = (base) => base * (1 + ((rand() * 2 - 1) * 0.1));
+    return {
+      x: nudge(x, 4).toFixed(1),
+      y: nudge(y, 4).toFixed(1),
+      rx: scale(rx).toFixed(1),
+      ry: scale(ry).toFixed(1),
+      rot: nudge(0, 8).toFixed(1),
     };
   }
 
@@ -880,33 +970,37 @@
     const colors = avatarColors(avatar);
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const serial = ++avatarSerial;
+    const rand = mulberry32(avatar && avatar.seed);
+    const under = avatarSpot(rand, 50, 58, 46, 30);
+    const mid = avatarSpot(rand, 50, 44, 50, 30);
+    const top = avatarSpot(rand, 50, 20, 38, 20);
     svg.setAttribute('viewBox', '0 0 100 100');
     svg.setAttribute('width', String(size || 32));
     svg.setAttribute('height', String(size || 32));
     svg.setAttribute('aria-hidden', 'true');
     svg.classList.add('avatar');
     const clip = `av-clip-${serial}`;
-    const glow = `av-glow-${serial}`;
-    const soft = `av-soft-${serial}`;
+    const blurUnder = `av-under-${serial}`;
+    const blurMid = `av-mid-${serial}`;
+    const blurTop = `av-top-${serial}`;
     svg.innerHTML = `
       <defs>
         <clipPath id="${clip}"><circle cx="50" cy="50" r="50"></circle></clipPath>
-        <radialGradient id="${glow}" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="${colors.mid}"></stop>
-          <stop offset="100%" stop-color="${colors.mid}" stop-opacity="0"></stop>
-        </radialGradient>
-        <filter id="${soft}" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="12"></feGaussianBlur>
-        </filter>
-        <filter id="${soft}-core" x="-50%" y="-50%" width="200%" height="200%">
+        <filter id="${blurUnder}" x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="10"></feGaussianBlur>
+        </filter>
+        <filter id="${blurMid}" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="10"></feGaussianBlur>
+        </filter>
+        <filter id="${blurTop}" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="9"></feGaussianBlur>
         </filter>
       </defs>
       <g clip-path="url(#${clip})">
         <circle cx="50" cy="50" r="50" fill="${colors.outer}"></circle>
-        <circle cx="50" cy="50" r="42.5" fill="url(#${glow})"></circle>
-        <circle cx="50" cy="50" r="27.5" fill="${colors.mid}" filter="url(#${soft})"></circle>
-        <circle cx="50" cy="50" r="14" fill="${colors.core}" filter="url(#${soft}-core)"></circle>
+        <ellipse cx="${under.x}" cy="${under.y}" rx="${under.rx}" ry="${under.ry}" fill="${colors.under}" filter="url(#${blurUnder})" transform="rotate(${under.rot} ${under.x} ${under.y})"></ellipse>
+        <ellipse cx="${mid.x}" cy="${mid.y}" rx="${mid.rx}" ry="${mid.ry}" fill="${colors.mid}" filter="url(#${blurMid})" transform="rotate(${mid.rot} ${mid.x} ${mid.y})"></ellipse>
+        <ellipse cx="${top.x}" cy="${top.y}" rx="${top.rx}" ry="${top.ry}" fill="${colors.core}" filter="url(#${blurTop})" transform="rotate(${top.rot} ${top.x} ${top.y})"></ellipse>
       </g>`;
     return svg;
   }
@@ -959,6 +1053,10 @@
     otherCache.forEach((pack) => {
       if (pack && pack.profile && pack.profile.id === account.id) pack.profile.avatar = avatar;
     });
+    if (profileMode === 'home') {
+      const block = document.querySelector('#profile .taste-block');
+      if (block) applyTasteColors(block, avatar);
+    }
   }
 
   function paintAvatarTab() {
@@ -3714,7 +3812,7 @@
     const head = el('div', 'profile-head');
     head.append(avatarNode(person.avatar, 56), el('h1', null, person.display_name || person.username || 'Profil'));
     root.append(head);
-    loadTheirTaste(root, person.id);
+    loadTheirTaste(root, person.id, person.avatar);
     if (pack.canView) {
       const views = el('div', 'wish-menu');
       const networkButton = lineButton('Netzwerk');
@@ -7025,8 +7123,17 @@
     return true;
   }
 
-  function tasteView(taste) {
+  function applyTasteColors(block, avatar) {
+    const colors = avatarColors(avatar);
+    block.style.setProperty('--taste-1', readableOnBlack(colors.core));
+    block.style.setProperty('--taste-2', readableOnBlack(colors.mid));
+    block.style.setProperty('--taste-3', readableOnBlack(colors.under));
+    block.style.setProperty('--taste-4', readableOnBlack(colors.outer));
+  }
+
+  function tasteView(taste, avatar) {
     const block = el('section', 'taste-block');
+    applyTasteColors(block, avatar);
     if (taste.title) block.append(el('h2', 'taste-title', taste.title));
     if (taste.taste) block.append(el('p', 'taste-copy', taste.taste));
     if (taste.character) block.append(el('p', 'taste-character', taste.character));
@@ -7049,7 +7156,7 @@
     slot.replaceChildren();
     if (!tasteCloudReady()) return;
     const count = ratedTasteFilms().length;
-    const block = taste && taste.title ? tasteView(taste) : el('section', 'taste-block');
+    const block = taste && taste.title ? tasteView(taste, account && account.avatar) : el('section', 'taste-block');
     if (count < 15) {
       const line = el('p', 'taste-quiet', `Ab 15 bewerteten Filmen kann dein Filmprofil erstellt werden (noch ${15 - count}).`);
       slot.append(line);
@@ -7189,7 +7296,7 @@
     });
   }
 
-  function loadTheirTaste(root, personId) {
+  function loadTheirTaste(root, personId, avatar) {
     if (!personId || !globalThis.Cloud || !globalThis.Cloud.tasteOf || !account || !account.id) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     const serial = ++tasteSerial;
@@ -7201,7 +7308,7 @@
       if (!taste || !taste.title) return;
       const head = root.querySelector('.profile-head');
       if (!head || root.querySelector('.taste-block')) return;
-      head.insertAdjacentElement('afterend', tasteView(taste));
+      head.insertAdjacentElement('afterend', tasteView(taste, avatar));
     }).catch((error) => {
       console.error('[taste]', error);
     });
