@@ -1001,6 +1001,7 @@
         button.style.setProperty('--mark', markColor(film));
         const tint = button.querySelector('.tint');
         tint.style.background = score == null ? '' : options.ratingColor(score);
+        if (options.paintWear) options.paintWear(button, score);
         button.querySelector('.net-score').textContent = score == null
           ? ''
           : `★  ${score.toFixed(1).replace('.', ',')}`;

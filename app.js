@@ -290,7 +290,6 @@
 
   function ratingColor(score) {
     const stops = [
-      [0, '#9a221c'],
       [5, '#e4231a'],
       [6.2, '#f08a1a'],
       [7.4, '#f0d04a'],
@@ -306,6 +305,140 @@
       }
     }
     return stops[stops.length - 1][1];
+  }
+
+  function grimeLevel(rating) {
+    if (typeof rating !== 'number' || !(rating <= 4)) return 0;
+    if (rating <= 1) return 4;
+    if (rating <= 2) return 3;
+    if (rating <= 3) return 2;
+    return 1;
+  }
+
+  function grimeTurn(id) {
+    const text = String(id || '');
+    let hash = 0;
+    for (let i = 0; i < text.length; i += 1) hash = ((hash * 31) + text.charCodeAt(i)) >>> 0;
+    return hash % 4;
+  }
+
+  function readPosterLift(id) {
+    if (!id) return null;
+    try {
+      const raw = localStorage.getItem('posterLift:' + id);
+      if (raw == null || raw === '') return null;
+      const value = Number(raw);
+      return Number.isFinite(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writePosterLift(id, value) {
+    try {
+      localStorage.setItem('posterLift:' + id, String(value));
+    } catch {
+      /* der Faktor wird beim nächsten Poster erneut gemessen */
+    }
+  }
+
+  const liftJobs = new Set();
+
+  function applyLiftValue(id, factor) {
+    const rounded = String(Math.round(factor * 1000) / 1000);
+    let nodes = [];
+    try {
+      nodes = document.querySelectorAll('[data-id="' + CSS.escape(id) + '"]');
+    } catch {
+      return;
+    }
+    nodes.forEach((node) => {
+      if (!node.classList.contains('poster') && !node.classList.contains('net-film')) return;
+      if (!node.classList.contains('is-low')) return;
+      node.style.setProperty('--lift', rounded);
+    });
+  }
+
+  function ensurePosterLift(id, image) {
+    if (!id || liftJobs.has(id)) return;
+    const cached = readPosterLift(id);
+    if (cached != null) {
+      applyLiftValue(id, cached);
+      return;
+    }
+    const src = image && (image.currentSrc || image.getAttribute('src') || '');
+    if (!src || src.startsWith('data:')) return;
+    liftJobs.add(id);
+    const finish = (factor) => {
+      writePosterLift(id, factor);
+      applyLiftValue(id, factor);
+    };
+    const measure = (source) => {
+      let factor = 1;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 32;
+        canvas.height = 48;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) throw new Error('canvas');
+        ctx.drawImage(source, 0, 0, 32, 48);
+        const data = ctx.getImageData(0, 0, 32, 48).data;
+        let sum = 0;
+        let count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i + 3] < 16) continue;
+          sum += ((0.2126 * data[i]) + (0.7152 * data[i + 1]) + (0.0722 * data[i + 2])) / 255;
+          count += 1;
+        }
+        if (count) {
+          const mean = sum / count;
+          factor = mean > 0.001 ? 0.42 / mean : 1;
+          factor = Math.min(1.8, Math.max(0.8, factor));
+        }
+      } catch {
+        factor = 1;
+      }
+      finish(factor);
+    };
+    if (image && image.complete && image.naturalWidth) {
+      measure(image);
+      return;
+    }
+    const probe = new Image();
+    probe.crossOrigin = 'anonymous';
+    probe.onload = () => measure(probe);
+    probe.onerror = () => finish(1);
+    probe.src = src;
+  }
+
+  function paintWear(host, rating) {
+    if (!host) return;
+    let grime = host.querySelector(':scope > .grime');
+    if (!grime) {
+      grime = document.createElement('span');
+      grime.className = 'grime';
+      const tint = host.querySelector(':scope > .tint');
+      if (tint) tint.after(grime);
+      else host.append(grime);
+    }
+    grime.dataset.grime = String(grimeLevel(rating));
+    grime.dataset.turn = String(grimeTurn(host.dataset.id));
+    const low = typeof rating === 'number' && rating <= 5;
+    host.classList.toggle('is-low', low);
+    if (!low) {
+      host.style.removeProperty('--lift');
+      return;
+    }
+    const cached = readPosterLift(host.dataset.id);
+    if (cached != null) host.style.setProperty('--lift', String(cached));
+    else ensurePosterLift(host.dataset.id, host.querySelector('img'));
+  }
+
+  function preloadGrime() {
+    [1, 2, 3, 4].forEach((level) => {
+      const image = new Image();
+      image.src = 'textures/DirtLvl' + level + '.png';
+    });
   }
 
   function lineStyle(reasons) {
@@ -713,6 +846,7 @@
       button.classList.toggle('is-next', row.next);
       const tint = button.querySelector('.tint');
       tint.style.background = row.rating == null ? '' : ratingColor(row.rating);
+      paintWear(button, row.rating);
       button.querySelector('.poster-score').textContent = row.rating == null
         ? ''
         : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
@@ -926,6 +1060,7 @@
       const tint = poster.querySelector('.tint');
       const score = poster.querySelector('.poster-score');
       if (tint) tint.style.background = avg == null ? '' : ratingColor(avg);
+      paintWear(poster, avg);
       if (score) score.textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
     };
     list.members.forEach((person) => {
@@ -1462,6 +1597,7 @@
       films: FILMS,
       posterSrc,
       ratingColor,
+      paintWear,
       entry: (id) => viewEntry(id),
       selectedId: () => selectedId,
       onChoose: choose,
@@ -3383,6 +3519,7 @@
     score.className = 'poster-score';
     score.textContent = row.rating == null ? '' : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
     button.append(image, tint, score);
+    paintWear(button, row.rating);
     button.addEventListener('click', () => openFilm(film));
     return button;
   }
@@ -5397,6 +5534,7 @@
     score.className = 'poster-score';
     score.textContent = rating == null ? '' : `★  ${Number(rating).toFixed(1).replace('.', ',')}`;
     button.append(image, tint, score);
+    paintWear(button, rating);
     return button;
   }
 
@@ -7243,6 +7381,7 @@
   }
 
   async function boot() {
+    preloadGrime();
     wall.hidden = true;
     networkEl.hidden = true;
     if (needsProfile()) renderAuth('in');
