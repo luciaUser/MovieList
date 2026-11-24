@@ -884,46 +884,6 @@
     return { h: Number(match[1]), s: Number(match[2]), l: Number(match[3]) };
   }
 
-  function hslRgb(h, s, l) {
-    const sat = s / 100;
-    const light = l / 100;
-    const c = (1 - Math.abs((2 * light) - 1)) * sat;
-    const hp = (((h % 360) + 360) % 360) / 60;
-    const x = c * (1 - Math.abs((hp % 2) - 1));
-    let r = 0;
-    let g = 0;
-    let b = 0;
-    if (hp < 1) { r = c; g = x; }
-    else if (hp < 2) { r = x; g = c; }
-    else if (hp < 3) { g = c; b = x; }
-    else if (hp < 4) { g = x; b = c; }
-    else if (hp < 5) { r = x; b = c; }
-    else { r = c; b = x; }
-    const m = light - (c / 2);
-    return { r: r + m, g: g + m, b: b + m };
-  }
-
-  function relLum(rgb) {
-    const channel = (value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
-    return (0.2126 * channel(rgb.r)) + (0.7152 * channel(rgb.g)) + (0.0722 * channel(rgb.b));
-  }
-
-  function readableOnBlack(color) {
-    const parts = hslParts(color);
-    if (!parts) return color || 'hsl(0 0% 100%)';
-    const contrast = (light) => (relLum(hslRgb(parts.h, parts.s, light)) + 0.05) / 0.05;
-    if (contrast(parts.l) >= 4.5) return color;
-    let lo = parts.l;
-    let hi = 100;
-    for (let i = 0; i < 18; i += 1) {
-      const mid = (lo + hi) / 2;
-      if (contrast(mid) >= 4.5) hi = mid;
-      else lo = mid;
-    }
-    const light = Math.min(100, Math.ceil(hi * 10) / 10);
-    return `hsl(${parts.h} ${parts.s}% ${light}%)`;
-  }
-
   function derivedUnder(outer, mid, seed) {
     const base = hslParts(outer);
     const upper = hslParts(mid);
@@ -956,13 +916,12 @@
 
   function avatarSpot(rand, x, y, rx, ry) {
     const nudge = (base, amount) => base + ((rand() * 2 - 1) * amount);
-    const scale = (base) => base * (1 + ((rand() * 2 - 1) * 0.1));
+    const scale = (base) => base * (1 + ((rand() * 2 - 1) * 0.05));
     return {
-      x: nudge(x, 4).toFixed(1),
-      y: nudge(y, 4).toFixed(1),
+      x: nudge(x, 2).toFixed(1),
+      y: nudge(y, 2).toFixed(1),
       rx: scale(rx).toFixed(1),
       ry: scale(ry).toFixed(1),
-      rot: nudge(0, 8).toFixed(1),
     };
   }
 
@@ -971,9 +930,9 @@
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const serial = ++avatarSerial;
     const rand = mulberry32(avatar && avatar.seed);
-    const under = avatarSpot(rand, 50, 58, 46, 30);
-    const mid = avatarSpot(rand, 50, 44, 50, 30);
-    const top = avatarSpot(rand, 50, 20, 38, 20);
+    const under = avatarSpot(rand, 50, 48, 52, 44);
+    const mid = avatarSpot(rand, 50, 38, 54, 40);
+    const top = avatarSpot(rand, 50, 30, 40, 32);
     svg.setAttribute('viewBox', '0 0 100 100');
     svg.setAttribute('width', String(size || 32));
     svg.setAttribute('height', String(size || 32));
@@ -983,24 +942,45 @@
     const blurUnder = `av-under-${serial}`;
     const blurMid = `av-mid-${serial}`;
     const blurTop = `av-top-${serial}`;
+    const shadeUnder = `av-shade-under-${serial}`;
+    const shadeMid = `av-shade-mid-${serial}`;
+    const shadeTop = `av-shade-top-${serial}`;
     svg.innerHTML = `
       <defs>
         <clipPath id="${clip}"><circle cx="50" cy="50" r="50"></circle></clipPath>
+        <radialGradient id="${shadeUnder}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="${colors.under}" stop-opacity="1"></stop>
+          <stop offset="50%" stop-color="${colors.under}" stop-opacity="0.85"></stop>
+          <stop offset="80%" stop-color="${colors.under}" stop-opacity="0.35"></stop>
+          <stop offset="100%" stop-color="${colors.under}" stop-opacity="0"></stop>
+        </radialGradient>
+        <radialGradient id="${shadeMid}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="${colors.mid}" stop-opacity="1"></stop>
+          <stop offset="50%" stop-color="${colors.mid}" stop-opacity="0.85"></stop>
+          <stop offset="80%" stop-color="${colors.mid}" stop-opacity="0.35"></stop>
+          <stop offset="100%" stop-color="${colors.mid}" stop-opacity="0"></stop>
+        </radialGradient>
+        <radialGradient id="${shadeTop}" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="${colors.core}" stop-opacity="1"></stop>
+          <stop offset="35%" stop-color="${colors.core}" stop-opacity="0.9"></stop>
+          <stop offset="70%" stop-color="${colors.core}" stop-opacity="0.45"></stop>
+          <stop offset="100%" stop-color="${colors.core}" stop-opacity="0"></stop>
+        </radialGradient>
         <filter id="${blurUnder}" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="10"></feGaussianBlur>
+          <feGaussianBlur stdDeviation="5"></feGaussianBlur>
         </filter>
         <filter id="${blurMid}" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="10"></feGaussianBlur>
+          <feGaussianBlur stdDeviation="5"></feGaussianBlur>
         </filter>
         <filter id="${blurTop}" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="9"></feGaussianBlur>
+          <feGaussianBlur stdDeviation="4"></feGaussianBlur>
         </filter>
       </defs>
       <g clip-path="url(#${clip})">
         <circle cx="50" cy="50" r="50" fill="${colors.outer}"></circle>
-        <ellipse cx="${under.x}" cy="${under.y}" rx="${under.rx}" ry="${under.ry}" fill="${colors.under}" filter="url(#${blurUnder})" transform="rotate(${under.rot} ${under.x} ${under.y})"></ellipse>
-        <ellipse cx="${mid.x}" cy="${mid.y}" rx="${mid.rx}" ry="${mid.ry}" fill="${colors.mid}" filter="url(#${blurMid})" transform="rotate(${mid.rot} ${mid.x} ${mid.y})"></ellipse>
-        <ellipse cx="${top.x}" cy="${top.y}" rx="${top.rx}" ry="${top.ry}" fill="${colors.core}" filter="url(#${blurTop})" transform="rotate(${top.rot} ${top.x} ${top.y})"></ellipse>
+        <ellipse cx="${under.x}" cy="${under.y}" rx="${under.rx}" ry="${under.ry}" fill="url(#${shadeUnder})" filter="url(#${blurUnder})"></ellipse>
+        <ellipse cx="${mid.x}" cy="${mid.y}" rx="${mid.rx}" ry="${mid.ry}" fill="url(#${shadeMid})" filter="url(#${blurMid})"></ellipse>
+        <ellipse cx="${top.x}" cy="${top.y}" rx="${top.rx}" ry="${top.ry}" fill="url(#${shadeTop})" filter="url(#${blurTop})"></ellipse>
       </g>`;
     return svg;
   }
@@ -1053,10 +1033,6 @@
     otherCache.forEach((pack) => {
       if (pack && pack.profile && pack.profile.id === account.id) pack.profile.avatar = avatar;
     });
-    if (profileMode === 'home') {
-      const block = document.querySelector('#profile .taste-block');
-      if (block) applyTasteColors(block, avatar);
-    }
   }
 
   function paintAvatarTab() {
@@ -3812,7 +3788,17 @@
     const head = el('div', 'profile-head');
     head.append(avatarNode(person.avatar, 56), el('h1', null, person.display_name || person.username || 'Profil'));
     root.append(head);
-    loadTheirTaste(root, person.id, person.avatar);
+    const stats = pack.stats || {};
+    const numbers = el('div', 'profile-stats');
+    numbers.append(
+      statNode(String(Number(stats.films) || 0), 'Filme'),
+      statNode(stats.friends == null ? '–' : String(Number(stats.friends) || 0), 'Friends'),
+    );
+    root.append(numbers);
+    if (pack.canView) root.append(paintTheirTop(pack));
+    const tasteSlot = el('div', 'taste-slot');
+    root.append(tasteSlot);
+    loadTheirTaste(root, person.id);
     if (pack.canView) {
       const views = el('div', 'wish-menu');
       const networkButton = lineButton('Netzwerk');
@@ -3831,15 +3817,7 @@
     const status = el('p', 'profile-status', '');
     status.setAttribute('role', 'status');
     root.append(status);
-    const stats = pack.stats || {};
-    const numbers = el('div', 'profile-stats');
-    numbers.append(
-      statNode(String(Number(stats.films) || 0), 'Filme'),
-      statNode(stats.friends == null ? '–' : String(Number(stats.friends) || 0), 'Friends'),
-    );
-    root.append(numbers);
     if (!pack.canView) return;
-    root.append(paintTheirTop(pack));
     const people = theirPeople(pack);
     const pins = theirPins(pack);
     const split = el('div', 'profile-split');
@@ -7123,17 +7101,8 @@
     return true;
   }
 
-  function applyTasteColors(block, avatar) {
-    const colors = avatarColors(avatar);
-    block.style.setProperty('--taste-1', readableOnBlack(colors.core));
-    block.style.setProperty('--taste-2', readableOnBlack(colors.mid));
-    block.style.setProperty('--taste-3', readableOnBlack(colors.under));
-    block.style.setProperty('--taste-4', readableOnBlack(colors.outer));
-  }
-
-  function tasteView(taste, avatar) {
+  function tasteView(taste) {
     const block = el('section', 'taste-block');
-    applyTasteColors(block, avatar);
     if (taste.title) block.append(el('h2', 'taste-title', taste.title));
     if (taste.taste) block.append(el('p', 'taste-copy', taste.taste));
     if (taste.character) block.append(el('p', 'taste-character', taste.character));
@@ -7156,7 +7125,7 @@
     slot.replaceChildren();
     if (!tasteCloudReady()) return;
     const count = ratedTasteFilms().length;
-    const block = taste && taste.title ? tasteView(taste, account && account.avatar) : el('section', 'taste-block');
+    const block = taste && taste.title ? tasteView(taste) : el('section', 'taste-block');
     if (count < 15) {
       const line = el('p', 'taste-quiet', `Ab 15 bewerteten Filmen kann dein Filmprofil erstellt werden (noch ${15 - count}).`);
       slot.append(line);
@@ -7175,80 +7144,52 @@
     }
     const made = Date.parse(taste.created_at);
     const open = !Number.isFinite(made) || Date.now() - made >= 20 * 60 * 60 * 1000;
-    const actions = el('div', 'taste-actions');
-    const again = el('button', 'text-line', opts.busy ? 'Wird erstellt …' : 'Neu erstellen');
+    const hidden = Boolean(account && account.taste_hidden);
+    const meta = el('div', 'taste-meta-row');
+    meta.append(el('span', 'taste-meta-line'));
+    meta.append(el('p', 'taste-meta', `Erstellt am ${tasteWhen(taste.created_at, false)} · aus ${Number(taste.rated_count) || 0} Bewertungen`));
+    const tools = el('div', 'taste-tools');
+    const renewWrap = el('div', 'taste-tool');
+    const again = document.createElement('button');
     again.type = 'button';
+    again.className = 'taste-renew';
     again.disabled = Boolean(opts.busy) || !open;
+    again.append(tasteRefreshIcon(), el('span', null, opts.busy ? 'Wird erstellt …' : 'Neu erstellen'));
+    again.addEventListener('click', () => makeTaste(slot));
+    renewWrap.append(again);
     if (!open && !opts.busy) {
       const when = tasteWhen(new Date(made + 20 * 60 * 60 * 1000).toISOString(), true);
-      if (when) again.textContent = `Neu erstellen · wieder ab ${when}`;
+      if (when) renewWrap.append(el('p', 'taste-quiet', `wieder ab ${when}`));
     }
-    again.addEventListener('click', () => makeTaste(slot));
-    actions.append(again);
     if (count >= Number(taste.rated_count || 0) + 10) {
-      actions.append(el('span', 'taste-quiet', 'Dein Geschmack hat sich verändert'));
+      renewWrap.append(el('p', 'taste-quiet', 'Dein Geschmack hat sich verändert'));
     }
-    const hidden = Boolean(account && account.taste_hidden);
-    const eye = el('button', 'text-line', hidden ? 'Für Freunde einblenden' : 'Für Freunde ausblenden');
+    const eye = document.createElement('button');
     eye.type = 'button';
+    eye.className = 'taste-vis';
     eye.disabled = Boolean(opts.busy);
+    eye.append(el('span', hidden ? 'taste-box is-off' : 'taste-box'));
+    eye.append(el('span', null, hidden ? 'unsichtbar für freunde' : 'sichtbar für freunde'));
     eye.addEventListener('click', () => toggleTasteHidden(slot));
-    actions.append(eye);
-    actions.append(tasteDeleteButton(slot, opts.busy));
-    block.append(el('p', 'taste-meta', `Erstellt am ${tasteWhen(taste.created_at, false)} · aus ${Number(taste.rated_count) || 0} Bewertungen`));
-    block.append(actions);
-    if (hidden) block.append(el('p', 'taste-quiet', 'nur für dich sichtbar'));
+    tools.append(renewWrap, eye);
+    block.append(meta, tools);
     slot.append(block);
     if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
   }
 
-  function tasteDeleteButton(slot, busy) {
-    const bar = el('div', 'wish-bar');
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'wish-x';
-    button.disabled = Boolean(busy);
-    button.setAttribute('aria-label', 'Filmprofil löschen');
-    button.append(el('span', 'wish-sure', 'sure?'));
-    button.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>');
-    let timer = 0;
-    const calm = () => {
-      window.clearTimeout(timer);
-      bar.classList.remove('is-sure');
-    };
-    button.addEventListener('click', async (event) => {
-      event.stopPropagation();
-      if (button.disabled || tasteBusy) return;
-      if (!bar.classList.contains('is-sure')) {
-        bar.classList.add('is-sure');
-        window.clearTimeout(timer);
-        timer = window.setTimeout(() => {
-          endTransient(button);
-          calm();
-        }, 4000);
-        openTransient(button, calm);
-        return;
-      }
-      endTransient(button);
-      window.clearTimeout(timer);
-      calm();
-      const cloud = globalThis.Cloud;
-      if (!cloud || !cloud.deleteTaste) return;
-      tasteBusy = true;
-      button.disabled = true;
-      try {
-        await cloud.deleteTaste();
-        const live = profileRoot() && profileRoot().querySelector('.taste-slot');
-        if (live) paintOwnTaste(live, null);
-      } catch (error) {
-        const live = profileRoot() && profileRoot().querySelector('.taste-slot');
-        if (live) paintOwnTaste(live, live._taste || slot._taste || null, { error });
-      } finally {
-        tasteBusy = false;
-      }
-    });
-    bar.append(button);
-    return bar;
+  function tasteRefreshIcon() {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '1.6');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    path.setAttribute('d', 'M20 12a8 8 0 1 1-2.3-5.6M20 4.8V9h-4.2');
+    svg.append(path);
+    return svg;
   }
 
   async function makeTaste(slot) {
@@ -7296,7 +7237,7 @@
     });
   }
 
-  function loadTheirTaste(root, personId, avatar) {
+  function loadTheirTaste(root, personId) {
     if (!personId || !globalThis.Cloud || !globalThis.Cloud.tasteOf || !account || !account.id) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     const serial = ++tasteSerial;
@@ -7305,10 +7246,9 @@
     globalThis.Cloud.tasteOf(personId).then((taste) => {
       if (!root.isConnected || root.dataset.theirTaste !== String(serial)) return;
       if (token !== otherToken || viewingId !== personId) return;
-      if (!taste || !taste.title) return;
-      const head = root.querySelector('.profile-head');
-      if (!head || root.querySelector('.taste-block')) return;
-      head.insertAdjacentElement('afterend', tasteView(taste, avatar));
+      const slot = root.querySelector('.taste-slot');
+      if (!slot || !taste || !taste.title) return;
+      slot.replaceChildren(tasteView(taste));
     }).catch((error) => {
       console.error('[taste]', error);
     });
@@ -7328,8 +7268,6 @@
     const head = el('div', 'profile-head');
     head.append(paintOwnAvatar(56), el('h1', null, name));
     root.append(head);
-    const tasteSlot = el('div', 'taste-slot');
-    root.append(tasteSlot);
     const stats = el('div', 'profile-stats');
     stats.append(
       statNode(films, 'Filme'),
@@ -7337,9 +7275,11 @@
       friendInviteNode(),
     );
     root.append(stats);
+    paintTop(root);
+    const tasteSlot = el('div', 'taste-slot');
+    root.append(tasteSlot);
     paintRequests(root);
     if (profileStatus) root.append(el('p', 'profile-status', profileStatus));
-    paintTop(root);
     const people = personMaps();
     const split = el('div', 'profile-split');
     const left = el('div', 'profile-col');

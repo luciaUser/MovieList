@@ -63,10 +63,9 @@ async function start() {
     return Math.min(delta, 360 - delta);
   }
 
-  function avatarColor(hue) {
-    const saturation = Math.round(70 + Math.random() * 20);
-    const lightness = Math.round(55 + Math.random() * 10);
-    return `hsl(${Math.round(hue)} ${saturation}% ${lightness}%)`;
+  function avatarColor(hue, saturation, lightness) {
+    const turn = ((Math.round(hue) % 360) + 360) % 360;
+    return `hsl(${turn} ${Math.round(saturation)}% ${Math.round(lightness)}%)`;
   }
 
   function hslToHex(hue, sat, light) {
@@ -89,24 +88,89 @@ function nextWishColor() {
 }
 
 function randomAvatar() {
-    const hues = [];
-    let guard = 0;
-    while (hues.length < 4 && guard < 160) {
-      guard += 1;
+    const dir = Math.random() < 0.5 ? -1 : 1;
+    const wrap = (hue) => ((hue % 360) + 360) % 360;
+    const pick = (min, max) => min + Math.random() * (max - min);
+    const families = [[28, 48], [290, 335], [255, 280], [180, 200]];
+    const family = families[Math.floor(Math.random() * families.length)];
+    const core = pick(family[0], family[1]);
+    const mid = wrap(core + dir * pick(30, 70));
+    const under = wrap(mid + dir * pick(20, 40));
+    let outer = wrap(under + 180);
+    for (let attempt = 0; attempt < 50; attempt += 1) {
       const hue = Math.random() * 360;
-      if (hues.every((have) => hueDistance(have, hue) >= 40)) hues.push(hue);
+      if (hueDistance(hue, mid) >= 70 && hueDistance(hue, under) >= 70 && hueDistance(hue, core) >= 40) {
+        outer = hue;
+        break;
+      }
     }
-    let step = 0;
-    while (hues.length < 4 && step < 360) {
-      const hue = ((hues[0] || 0) + step) % 360;
-      if (hues.every((have) => hueDistance(have, hue) >= 40)) hues.push(hue);
-      step += 10;
+    const patterns = [
+      [[70, 100, 90, 96], [80, 95, 55, 62], [60, 80, 38, 46], [85, 100, 68, 76]],
+      [[60, 85, 30, 38], [80, 95, 55, 62], [70, 100, 82, 90], [70, 90, 40, 48]],
+      [[90, 100, 56, 62], [75, 90, 48, 56], [55, 75, 28, 36], [85, 100, 74, 82]],
+      [[90, 100, 56, 62], [80, 95, 66, 72], [70, 100, 84, 92], [60, 85, 30, 38]],
+      [[85, 100, 76, 84], [85, 100, 55, 62], [60, 80, 36, 44], [90, 100, 56, 64]],
+      [[60, 85, 32, 40], [85, 100, 55, 62], [80, 100, 76, 84], [90, 100, 56, 64]],
+    ];
+    const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+    const hues = [core, mid, under, outer];
+    const sat = pattern.map((band) => pick(band[0], band[1]));
+    const light = pattern.map((band) => pick(band[2], band[3]));
+    const olive = (hue) => {
+      const turn = wrap(hue);
+      return turn >= 45 && turn <= 160;
+    };
+    const floorOf = (index) => (olive(hues[index]) ? 55 : 25);
+    const clamp = (index, value) => Math.min(97, Math.max(floorOf(index), value));
+    const separate = (i, j) => {
+      let a = clamp(i, light[i]);
+      let b = clamp(j, light[j]);
+      if (Math.abs(a - b) >= 10) {
+        light[i] = a;
+        light[j] = b;
+        return;
+      }
+      const center = (a + b) / 2;
+      if (a <= b) {
+        a = center - 5;
+        b = center + 5;
+      } else {
+        a = center + 5;
+        b = center - 5;
+      }
+      a = clamp(i, a);
+      b = clamp(j, b);
+      if (a <= b && b - a < 10) {
+        b = Math.min(97, a + 10);
+        a = Math.max(floorOf(i), b - 10);
+        if (b - a < 10) b = Math.min(97, a + 10);
+      } else if (a - b < 10) {
+        a = Math.min(97, b + 10);
+        b = Math.max(floorOf(j), a - 10);
+        if (a - b < 10) a = Math.min(97, b + 10);
+      }
+      light[i] = clamp(i, a);
+      light[j] = clamp(j, b);
+    };
+    for (let pass = 0; pass < 6; pass += 1) {
+      for (let i = 0; i < 4; i += 1) light[i] = clamp(i, light[i]);
+      separate(0, 1);
+      separate(1, 2);
+      separate(2, 3);
+      let brightest = 0;
+      let darkest = -1;
+      for (let i = 0; i < 4; i += 1) {
+        if (light[i] > light[brightest]) brightest = i;
+        if (!olive(hues[i]) && (darkest < 0 || light[i] < light[darkest])) darkest = i;
+      }
+      if (light[brightest] < 75) light[brightest] = 75;
+      if (Math.min(light[0], light[1], light[2], light[3]) > 46 && darkest >= 0) light[darkest] = 46;
     }
     return {
-      outer: avatarColor(hues[0]),
-      mid: avatarColor(hues[1]),
-      core: avatarColor(hues[2]),
-      under: avatarColor(hues[3]),
+      outer: avatarColor(outer, sat[3], light[3]),
+      mid: avatarColor(mid, sat[1], light[1]),
+      core: avatarColor(core, sat[0], light[0]),
+      under: avatarColor(under, sat[2], light[2]),
       seed: Math.floor(Math.random() * 1e9),
     };
   }
