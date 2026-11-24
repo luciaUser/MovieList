@@ -593,12 +593,24 @@ header > * { pointer-events: auto; }
 }
 
 .wish-swatch {
-  width: 14px;
-  height: 14px;
+  position: relative;
+  width: 8.4px;
+  height: 11.9px;
   flex: none;
   padding: 0;
   border: 0;
   background: #fff;
+  overflow: visible;
+}
+
+.wish-swatch::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
 }
 
 button.wish-swatch { cursor: pointer; }
@@ -1020,6 +1032,18 @@ button.wish-swatch { cursor: pointer; }
 .profile-avatar.is-armed .avatar-roll {
   opacity: 1;
   pointer-events: auto;
+}
+
+.avatar-note {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: max-content;
+  max-width: 220px;
+  margin: 0;
+  color: #e23d3d;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .name-field { position: relative; }
@@ -2942,6 +2966,24 @@ button.profile-stat { cursor: pointer; }
 
   #profile h1 { font-size: 28px; }
   .profile-stat b { font-size: 24px; }
+}
+
+@media (min-width: 1000px) {
+  #profile { max-width: none; }
+
+  #profile .profile-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 48px;
+    align-items: start;
+  }
+
+  #profile .top-row { flex-wrap: nowrap; }
+
+  #profile .top-card {
+    flex: 0 0 94px;
+    width: 94px;
+  }
 }
 
 .unsynced {

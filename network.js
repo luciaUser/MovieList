@@ -44,6 +44,7 @@
     let motion = 0;
     let lens = null;
     let lensToken = 0;
+    let framed = null;
 
     const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     lines.setAttribute('class', 'net-lines');
@@ -576,6 +577,114 @@
       return raw * raw * (3 - (2 * raw));
     }
 
+    function panelFree() {
+      const rect = viewSize();
+      const top = chromeTop();
+      const panel = document.getElementById('panel');
+      const open = Boolean(panel && !panel.hidden && panel.getClientRects().length);
+      if (!open) {
+        return { open: false, left: 0, top, right: rect.width, bottom: rect.height, axis: null };
+      }
+      const box = panel.getBoundingClientRect();
+      const stageBox = stage.getBoundingClientRect();
+      const panelLeft = box.left - stageBox.left;
+      const panelTop = box.top - stageBox.top;
+      const phone = panelTop > rect.height * 0.35 && box.width > rect.width * 0.75;
+      if (phone) {
+        return {
+          open: true,
+          left: 0,
+          top,
+          right: rect.width,
+          bottom: Math.max(top + 80, panelTop - 12),
+          axis: 'y',
+        };
+      }
+      return {
+        open: true,
+        left: 0,
+        top,
+        right: Math.max(80, panelLeft - 12),
+        bottom: rect.height,
+        axis: 'x',
+      };
+    }
+
+    function dodgeGoal(center, slots, free, view) {
+      const identity = { sx: 1, sy: 1, dx: 0, dy: 0, nx: 0, ny: 0 };
+      if (!free.open) return identity;
+      let minX = 0;
+      let maxX = 0;
+      let minY = 0;
+      let maxY = 0;
+      slots.forEach((at, id) => {
+        if (id === lens.centerId) return;
+        minX = Math.min(minX, at.x - center.x);
+        maxX = Math.max(maxX, at.x - center.x);
+        minY = Math.min(minY, at.y - center.y);
+        maxY = Math.max(maxY, at.y - center.y);
+      });
+      const pad = 26 / Math.max(view.scale, 1e-4);
+      const edge = {
+        left: (free.left - view.tx) / view.scale,
+        right: (free.right - view.tx) / view.scale,
+        top: (free.top - view.ty) / view.scale,
+        bottom: (free.bottom - view.ty) / view.scale,
+      };
+      if (free.axis === 'y') {
+        const span = Math.max(maxY, 1);
+        const room = edge.bottom - pad - center.y;
+        const sy = Math.max(0.7, Math.min(1, room / span));
+        const still = center.y + (maxY * sy) + pad - edge.bottom;
+        const shift = still > 0 ? -still : 0;
+        const cap = span * 0.22;
+        const film = Math.max(-cap, Math.min(cap, shift));
+        const topRoom = center.y + film + (minY * sy) - pad - edge.top;
+        const lift = topRoom < 0 ? -topRoom : 0;
+        return { sx: 1, sy, dx: 0, dy: film + lift, nx: 0, ny: shift - film };
+      }
+      const span = Math.max(maxX, 1);
+      const room = edge.right - pad - center.x;
+      const sx = Math.max(0.7, Math.min(1, room / span));
+      const still = center.x + (maxX * sx) + pad - edge.right;
+      const shift = still > 0 ? -still : 0;
+      const cap = span * 0.22;
+      const film = Math.max(-cap, Math.min(cap, shift));
+      const leftRoom = center.x + film + (minX * sx) - pad - edge.left;
+      const push = leftRoom < 0 ? -leftRoom : 0;
+      return { sx, sy: 1, dx: film + push, dy: 0, nx: shift - film, ny: 0 };
+    }
+
+    function approachFit(current, goal, ease) {
+      if (!current || !ease) return Object.assign({ stamp: performance.now() }, goal);
+      const now = performance.now();
+      const dt = Math.min(50, now - (current.stamp || now));
+      const gain = 1 - Math.exp(-dt / 110);
+      const next = { stamp: now };
+      let pending = false;
+      ['sx', 'sy', 'dx', 'dy', 'nx', 'ny'].forEach((key) => {
+        const from = Number.isFinite(current[key]) ? current[key] : goal[key];
+        const value = from + ((goal[key] - from) * gain);
+        const close = Math.abs(goal[key] - value) < 0.001;
+        next[key] = close ? goal[key] : value;
+        if (!close) pending = true;
+      });
+      if (pending && lens) requestAnimationFrame(() => { if (lens) paintLensMembers(); });
+      return next;
+    }
+
+    function applyFit(slots, center, fit) {
+      const next = new Map();
+      slots.forEach((at, id) => {
+        const neighbor = id !== lens.centerId;
+        next.set(id, {
+          x: center.x + ((at.x - center.x) * fit.sx) + fit.dx + (neighbor ? fit.nx : 0),
+          y: center.y + ((at.y - center.y) * fit.sy) + fit.dy + (neighbor ? fit.ny : 0),
+        });
+      });
+      return next;
+    }
+
     function computeSlots(center, radius) {
       const map = new Map();
       map.set(lens.centerId, center);
@@ -611,8 +720,26 @@
       const center = worldPoint(lens.centerId);
       if (!center) return;
       const rect = viewSize();
-      const radius = (0.3 * Math.min(rect.width, rect.height)) / Math.max(scale, 1e-4);
-      lens.slots = computeSlots(center, radius);
+      if (rect.width < 50 || rect.height < 50) return;
+      const view = framed || { tx, ty, scale };
+      const free = panelFree();
+      const key = [free.open, Math.round(free.left), Math.round(free.top), Math.round(free.right), Math.round(free.bottom)].join(':');
+      if (lens.freeKey !== key) {
+        if (lens.freeKey != null && !framed) lens.easeDodge = true;
+        lens.freeKey = key;
+      }
+      const fullShort = Math.min(rect.width, rect.height);
+      const freeShort = Math.max(80, Math.min(free.right - free.left, free.bottom - free.top));
+      const radius = (0.3 * (free.open ? freeShort : fullShort)) / Math.max(view.scale, 1e-4);
+      const raw = computeSlots(center, radius);
+      const goal = dodgeGoal(center, raw, free, view);
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const ease = Boolean(lens.easeDodge) && !framed && !reduce;
+      lens.fit = approachFit(lens.fit, goal, ease);
+      if (!ease || ['sx', 'sy', 'dx', 'dy', 'nx', 'ny'].every((key) => lens.fit[key] === goal[key])) {
+        lens.easeDodge = false;
+      }
+      lens.slots = applyFit(raw, center, lens.fit);
       lens.amount = lensBlend() * lens.anim;
       lens.ids.forEach((id) => {
         const at = displayWorld(id);
@@ -776,6 +903,7 @@
 
     function cancelMotion() {
       motion += 1;
+      framed = null;
     }
 
     function frame(ids, opts) {
@@ -799,19 +927,29 @@
       maxY += 110;
       const rect = viewSize();
       const headerPad = 84;
-      const availW = Math.max(120, rect.width - 48);
-      const availH = Math.max(120, rect.height - headerPad - 36);
+      const free = panelFree();
+      let availW = Math.max(120, rect.width - 48);
+      let availH = Math.max(120, rect.height - headerPad - 36);
+      let viewX = rect.width / 2;
+      let viewY = headerPad + ((rect.height - headerPad) / 2);
+      if (free.open) {
+        availW = Math.max(120, free.right - free.left);
+        availH = Math.max(120, free.bottom - free.top);
+        viewX = (free.left + free.right) / 2;
+        viewY = (free.top + free.bottom) / 2;
+      }
       let next = Math.min(availW / Math.max(40, maxX - minX), availH / Math.max(40, maxY - minY));
       if (opts && opts.minScale) next = Math.max(next, opts.minScale);
       next = Math.min(maxScale, Math.max(minScale, next));
       const cx = (minX + maxX) / 2;
       const cy = (minY + maxY) / 2;
       const start = { tx, ty, scale };
-      tx = rect.width / 2 - cx * next;
-      ty = headerPad + (rect.height - headerPad) / 2 - cy * next;
+      tx = viewX - (cx * next);
+      ty = viewY - (cy * next);
       scale = next;
       clampPan();
       const target = { tx, ty, scale };
+      framed = target;
       tx = start.tx;
       ty = start.ty;
       scale = start.scale;
@@ -836,6 +974,7 @@
         tx = target.tx;
         ty = target.ty;
         scale = target.scale;
+        framed = null;
         clampPan();
         applyClass();
         applyTransform();

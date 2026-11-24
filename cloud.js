@@ -170,19 +170,40 @@ function randomAvatar() {
     },
     async profile() {
       const user = await currentUser();
-      let result = await client.from('profiles').select('id, username, display_name, is_private, avatar').eq('id', user.id).single();
-      if (result.error && /avatar/i.test(result.error.message || '')) {
-        result = await client.from('profiles').select('id, username, display_name, is_private').eq('id', user.id).single();
+      const full = await client.from('profiles').select('id, username, display_name, is_private, avatar').eq('id', user.id).single();
+      if (full.error && /avatar/i.test(full.error.message || '')) {
+        const plain = await client.from('profiles').select('id, username, display_name, is_private').eq('id', user.id).single();
+        if (plain.error) throw plain.error;
+        return Object.assign({}, plain.data, { avatarKnown: false });
       }
-      if (result.error) throw result.error;
-      return result.data;
+      if (full.error) throw full.error;
+      return Object.assign({}, full.data, { avatarKnown: true });
     },
     async ensureAvatar(row) {
-      if (avatarReady(row && row.avatar)) return row.avatar;
+      const id = (row && row.id) || (await currentUser()).id;
+      const read = await client.from('profiles').select('avatar').eq('id', id).maybeSingle();
+      if (read.error) throw read.error;
+      if (!read.data) throw new Error('Profil fehlt.');
+      if (read.data.avatar != null) return read.data.avatar;
       const avatar = randomAvatar();
-      const { error } = await client.from('profiles').update({ avatar }).eq('id', (row && row.id) || (await currentUser()).id);
-      if (error) throw error;
-      return avatar;
+      const saved = await client.from('profiles').update({ avatar }).eq('id', id).select('avatar').maybeSingle();
+      if (saved.error) throw saved.error;
+      if (!saved.data || saved.data.avatar == null) throw new Error('Das Profilbild wurde nicht gespeichert.');
+      return saved.data.avatar;
+    },
+    async saveAvatar(avatar) {
+      if (!avatarReady(avatar)) throw new Error('Das Profilbild wurde nicht gespeichert.');
+      const user = await currentUser();
+      const saved = await client.from('profiles').update({ avatar }).eq('id', user.id).select('avatar').maybeSingle();
+      if (saved.error) throw saved.error;
+      const got = saved.data && saved.data.avatar;
+      const same = got
+        && got.outer === avatar.outer
+        && got.mid === avatar.mid
+        && got.core === avatar.core
+        && Number(got.seed) === Number(avatar.seed);
+      if (!same) throw new Error('Das Profilbild wurde nicht gespeichert.');
+      return got;
     },
     async profileExtra() {
       const user = await currentUser();

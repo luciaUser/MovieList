@@ -777,6 +777,56 @@
     return svg;
   }
 
+  const AVATAR_CACHE = 'moviebylucia-avatar-v1';
+
+  function readAvatarCache(id) {
+    if (!id) return null;
+    try {
+      const all = JSON.parse(localStorage.getItem(AVATAR_CACHE) || '{}');
+      const row = all[id];
+      return row && row.outer && row.mid && row.core ? row : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeAvatarCache(id, avatar) {
+    if (!id || !avatar) return;
+    try {
+      const all = JSON.parse(localStorage.getItem(AVATAR_CACHE) || '{}');
+      all[id] = avatar;
+      localStorage.setItem(AVATAR_CACHE, JSON.stringify(all));
+    } catch {
+      /* die Anzeige bleibt, der nächste erfolgreiche Abruf schreibt neu */
+    }
+  }
+
+  function spreadAvatar(avatar) {
+    if (!account) return;
+    account.avatar = avatar;
+    paintAvatarTab();
+    const colors = avatarColors(avatar);
+    document.querySelectorAll('#panel .member-rate').forEach((row) => {
+      const mine = row.querySelector('.rate') || (account.id && row.dataset.user === account.id);
+      if (!mine) return;
+      const svg = row.querySelector(':scope > .avatar');
+      if (svg) svg.replaceWith(avatarNode(avatar, 28));
+      const bar = row.querySelector('.score-bar');
+      if (!bar) return;
+      bar.style.setProperty('--outer', colors.outer);
+      bar.style.setProperty('--mid', colors.mid);
+      bar.style.setProperty('--core', colors.core);
+    });
+    (wishLists || []).forEach((list) => {
+      (list.members || []).forEach((person) => {
+        if (person.id === account.id) person.avatar = avatar;
+      });
+    });
+    otherCache.forEach((pack) => {
+      if (pack && pack.profile && pack.profile.id === account.id) pack.profile.avatar = avatar;
+    });
+  }
+
   function paintAvatarTab() {
     const slot = modeProfile && modeProfile.querySelector('.avatar-slot');
     if (!slot) return;
@@ -2259,8 +2309,18 @@
       clearSelection();
     }
   });
+  let profileShape = '';
   window.addEventListener('resize', () => {
     if (mode === 'network' && network) network.resize();
+    const shape = `${window.innerWidth < 1000 ? 'narrow' : 'wide'}:${topCap()}`;
+    if (shape === profileShape) return;
+    profileShape = shape;
+    const typing = document.activeElement && document.activeElement.closest && document.activeElement.closest('#profile input, #profile textarea');
+    if (typing || document.querySelector('.profile-avatar.is-dirty')) return;
+    if (mode === 'profile' && profileMode === 'home') paintProfile();
+    else if (mode === 'profile' && profileMode === 'other' && viewingId && otherCache.has(viewingId)) {
+      paintOther(otherCache.get(viewingId));
+    }
   });
 
   function refreshPosterImages() {
@@ -2979,12 +3039,19 @@
     };
   }
 
+  function topCap() {
+    if (window.innerWidth < 1000) return 5;
+    const root = profileRoot();
+    const width = root && root.clientWidth > 200 ? root.clientWidth - 56 : window.innerWidth - 56;
+    return Math.max(1, Math.min(10, Math.floor((width + 8) / 102)));
+  }
+
   function defaultTopFilms() {
     return FILMS.filter((film) => entry(film.id).rating != null).sort((a, b) => {
       const diff = entry(b.id).rating - entry(a.id).rating;
       if (diff) return diff;
       return (Date.parse(entry(b.id).ratedAt) || 0) - (Date.parse(entry(a.id).ratedAt) || 0);
-    }).slice(0, 5);
+    }).slice(0, topCap());
   }
 
   function shownTopFilms() {
@@ -3366,7 +3433,7 @@
 
   function paintHeadTop(pack) {
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', 'Top 5'));
+    block.append(el('h2', 'profile-kicker', `Top ${topCap()}`));
     const films = pack.headFilms || [];
     if (!films.length) {
       block.append(el('p', 'profile-note', 'Noch zu wenig Wertungen'));
@@ -3391,15 +3458,16 @@
 
   function paintTheirTop(pack) {
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', 'Top 5'));
+    const cap = topCap();
+    block.append(el('h2', 'profile-kicker', `Top ${cap}`));
     const custom = pack.sensitive && Array.isArray(pack.sensitive.top_films) ? pack.sensitive.top_films : [];
     const films = custom.length
-      ? custom.map((id) => pack.films.find((film) => film.id === id)).filter(Boolean).slice(0, 5)
+      ? custom.map((id) => pack.films.find((film) => film.id === id)).filter(Boolean).slice(0, cap)
       : pack.films.filter((film) => pack.entryOf(film.id).rating != null).sort((a, b) => {
         const diff = pack.entryOf(b.id).rating - pack.entryOf(a.id).rating;
         if (diff) return diff;
         return (Date.parse(pack.entryOf(b.id).updatedAt) || 0) - (Date.parse(pack.entryOf(a.id).updatedAt) || 0);
-      }).slice(0, 5);
+      }).slice(0, cap);
     if (!films.length) {
       block.append(el('p', 'profile-note', custom.length
         ? 'Die ausgewählten Filme sind nicht mehr im Archiv.'
@@ -3537,12 +3605,17 @@
     );
     root.append(numbers);
     if (!pack.canView) return;
-    root.append(paintComparison(pack));
     root.append(paintTheirTop(pack));
     const people = theirPeople(pack);
     const pins = theirPins(pack);
-    root.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors, { readOnly: true, pins }));
-    root.append(paintPeople('directors', 'Lieblingsregie', people.directors, { readOnly: true, pins }));
+    const split = el('div', 'profile-split');
+    const left = el('div', 'profile-col');
+    const right = el('div', 'profile-col');
+    left.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors, { readOnly: true, pins }));
+    right.append(paintPeople('directors', 'Lieblingsregie', people.directors, { readOnly: true, pins }));
+    split.append(left, right);
+    root.append(split);
+    root.append(paintComparison(pack));
     root.append(paintTheirWall(pack));
     root.append(paintTheirNext(pack));
   }
@@ -4278,10 +4351,11 @@
 
   function paintTop(root) {
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', 'Top 5'));
+    const cap = topCap();
+    block.append(el('h2', 'profile-kicker', `Top ${cap}`));
     const chosen = shownTopFilms();
     if (!chosen.length) {
-      block.append(el('p', 'profile-note', 'Bewerte Filme, dann erscheinen hier deine Top 5'));
+      block.append(el('p', 'profile-note', `Bewerte Filme, dann erscheinen hier deine Top ${cap}`));
     } else {
       const row = el('div', 'top-row');
       chosen.forEach((film, index) => {
@@ -5118,8 +5192,10 @@
     const wrap = el('div', 'profile-avatar');
     const draw = (avatar) => {
       const roll = wrap.querySelector('.avatar-roll');
+      const status = wrap.querySelector('.avatar-note');
       wrap.replaceChildren(avatarNode(avatar, size));
       if (roll) wrap.append(roll);
+      if (status) wrap.append(status);
     };
     const roll = document.createElement('button');
     roll.type = 'button';
@@ -5128,20 +5204,47 @@
     roll.append(dangerIcon('reset'));
     draw(account && account.avatar);
     wrap.append(roll);
+    const note = el('p', 'avatar-note', '');
+    note.setAttribute('role', 'status');
+    wrap.append(note);
     let dirty = false;
     let timer = 0;
+    let saving = false;
+    let generation = 0;
+    let tries = 0;
     const phone = window.matchMedia('(hover: none), (max-width: 720px)').matches;
+    const showNote = (message) => {
+      note.textContent = message || '';
+    };
     const commit = async () => {
       window.clearTimeout(timer);
       timer = 0;
-      if (!dirty || !account || !account.avatar) return;
-      dirty = false;
-      wrap.classList.remove('is-dirty');
+      if (saving || !dirty || !account || !account.avatar) return;
+      const cloud = globalThis.Cloud;
+      if (!cloud || !cloud.saveAvatar) return;
+      const stamp = generation;
+      const avatar = account.avatar;
+      saving = true;
       try {
-        await globalThis.Cloud.updateProfile({ avatar: account.avatar });
-      } catch {
+        const saved = await cloud.saveAvatar(avatar);
+        if (stamp !== generation) return;
+        spreadAvatar(saved);
+        writeAvatarCache(account.id, saved);
         dirty = false;
+        tries = 0;
         wrap.classList.remove('is-dirty');
+        showNote('');
+        draw(saved);
+      } catch (error) {
+        if (stamp !== generation) return;
+        tries += 1;
+        showNote(profileFail(error) === 'Keine Verbindung.'
+          ? 'Keine Verbindung.'
+          : 'Das Profilbild wurde nicht gespeichert.');
+        if (tries < 3) timer = window.setTimeout(commit, 700);
+      } finally {
+        saving = false;
+        if (stamp !== generation && dirty) commit();
       }
     };
     wrap._commitAvatar = commit;
@@ -5150,11 +5253,14 @@
       event.preventDefault();
       const cloud = globalThis.Cloud;
       if (!cloud || !cloud.rollAvatar || !account) return;
+      generation += 1;
+      tries = 0;
       account.avatar = cloud.rollAvatar();
       dirty = true;
       wrap.classList.add('is-dirty');
+      showNote('');
       draw(account.avatar);
-      paintAvatarTab();
+      spreadAvatar(account.avatar);
       window.clearTimeout(timer);
       timer = window.setTimeout(commit, 2000);
     });
@@ -6630,9 +6736,13 @@
     if (profileStatus) root.append(el('p', 'profile-status', profileStatus));
     paintTop(root);
     const people = personMaps();
-    root.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors));
-    root.append(paintPeople('directors', 'Lieblingsregie', people.directors));
-    root.append(paintSettings());
+    const split = el('div', 'profile-split');
+    const left = el('div', 'profile-col');
+    const right = el('div', 'profile-col');
+    left.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors));
+    right.append(paintPeople('directors', 'Lieblingsregie', people.directors), paintSettings());
+    split.append(left, right);
+    root.append(split);
   }
 
   function renderProfile() {
@@ -6797,9 +6907,11 @@
       catalog: catalogRow,
     });
     globalThis.Store.setSyncError(showSyncState);
+    let avatarKnown = false;
     try {
       account = await globalThis.Cloud.profile();
       if (account && !account.id) account.id = session.user.id;
+      avatarKnown = Boolean(account && account.avatarKnown);
     } catch {
       const meta = session.user.user_metadata || {};
       account = {
@@ -6809,12 +6921,18 @@
         is_private: false,
       };
     }
-    if (account && globalThis.Cloud.ensureAvatar) {
+    if (account && avatarKnown && account.avatar == null && globalThis.Cloud.ensureAvatar) {
       try {
         account.avatar = await globalThis.Cloud.ensureAvatar(account);
       } catch {
-        /* avatar bleibt leer, bis schema.sql neu gelaufen ist */
+        /* leer lassen, bis ein späterer Abruf das Feld wirklich leer bestätigt */
       }
+    }
+    if (account && !avatarKnown) {
+      const cached = readAvatarCache(account.id);
+      if (cached) account.avatar = cached;
+    } else if (account && account.avatar && account.avatar.outer) {
+      writeAvatarCache(account.id, account.avatar);
     }
     paintAvatarTab();
     watchFollows(session.user.id);
