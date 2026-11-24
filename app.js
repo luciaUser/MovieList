@@ -471,13 +471,19 @@
     return button;
   }
 
-  function grimeLayerOpacity(rating, level) {
-    if (typeof rating !== 'number') return 0;
-    const start = 5 - level;
-    const end = start - 1;
-    if (rating > start) return 0;
-    if (rating <= end) return 1;
-    return 0.4 + (0.6 * (start - rating));
+  // Dreck beginnt knapp unter 5.0 und nimmt stufenlos bis 0 zu.
+  // Jede Ebene kriecht vom Rand nach innen: harte Elemente erscheinen zuerst aussen,
+  // mit sinkendem Rating wächst die Fläche bis zur Mitte.
+  const GRIME_STARTS = [5, 4, 3, 2];
+  const GRIME_RAMP = 2;
+  const GRIME_FEATHER = 30;
+
+  // -1 = Ebene aus, sonst Fortschritt 0 (nur Rand) bis 1 (ganze Fläche)
+  function grimeLayerProgress(rating, level) {
+    if (typeof rating !== 'number') return -1;
+    const start = GRIME_STARTS[level - 1];
+    if (start == null || rating >= start) return -1;
+    return Math.min(1, (start - rating) / GRIME_RAMP);
   }
 
   function grimeTurn(id) {
@@ -595,12 +601,14 @@
         layer.dataset.level = String(level);
         grime.append(layer);
       }
-      const opacity = grimeLayerOpacity(rating, level);
-      if (opacity <= 0) {
+      const progress = grimeLayerProgress(rating, level);
+      if (progress < 0) {
         layer.style.display = 'none';
       } else {
+        const reach = 125 * (1 - progress);
         layer.style.display = '';
-        layer.style.setProperty('--p', String(Math.round(opacity * 1000) / 1000));
+        layer.style.setProperty('--r', reach.toFixed(1) + '%');
+        layer.style.setProperty('--rs', (reach - GRIME_FEATHER).toFixed(1) + '%');
       }
     }
     const low = typeof rating === 'number' && rating <= 5 && !profileColorOn();
@@ -3854,7 +3862,8 @@
   function paintTheirTop(pack) {
     const block = document.createElement('section');
     const cap = topCap();
-    block.append(el('h2', 'profile-kicker', `Top ${cap}`));
+    block.append(el('h2', 'profile-kicker top-kicker', `Top ${cap}`));
+    block.append(el('span', 'top-rule'));
     const custom = pack.sensitive && Array.isArray(pack.sensitive.top_films) ? pack.sensitive.top_films : [];
     const films = custom.length
       ? custom.map((id) => pack.films.find((film) => film.id === id)).filter(Boolean).slice(0, cap)
@@ -4750,7 +4759,8 @@
   function paintTop(root) {
     const block = document.createElement('section');
     const cap = topCap();
-    block.append(el('h2', 'profile-kicker', `Top ${cap}`));
+    block.append(el('h2', 'profile-kicker top-kicker', `Top ${cap}`));
+    block.append(el('span', 'top-rule'));
     const chosen = shownTopFilms();
     if (!chosen.length) {
       block.append(el('p', 'profile-note', `Bewerte Filme, dann erscheinen hier deine Top ${cap}`));
@@ -7331,29 +7341,24 @@
     const made = Date.parse(taste.created_at);
     const open = !Number.isFinite(made) || Date.now() - made >= 20 * 60 * 60 * 1000;
     const hidden = Boolean(account && account.taste_hidden);
-    const meta = el('div', 'taste-meta-row');
-    meta.append(el('span', 'taste-meta-line'));
-    meta.append(el('p', 'taste-meta', `Erstellt am ${tasteWhen(taste.created_at, false)} · aus ${Number(taste.rated_count) || 0} Bewertungen`));
+    const changed = open && !opts.busy && count >= Number(taste.rated_count || 0) + 10;
+    let label = 'Neu erstellen';
+    if (opts.busy) label = 'Wird erstellt …';
+    else if (!open) {
+      const until = new Date(made + 20 * 60 * 60 * 1000);
+      if (!Number.isNaN(until.getTime())) label = `ab ${until.getDate()}.${until.getMonth() + 1}`;
+    }
     const tools = el('div', 'taste-tools');
-    const renewWrap = el('div', 'taste-tool');
     const again = document.createElement('button');
     again.type = 'button';
     again.className = 'taste-renew';
     again.disabled = Boolean(opts.busy) || !open;
-    again.append(tasteRefreshIcon(), el('span', null, opts.busy ? 'Wird erstellt …' : 'Neu erstellen'));
+    if (changed) again.title = 'Dein Geschmack hat sich verändert';
+    const iconWrap = el('span', 'taste-icon');
+    iconWrap.append(tasteRefreshIcon());
+    if (changed) iconWrap.append(el('span', 'taste-dot'));
+    again.append(iconWrap, el('span', 'taste-label', label));
     again.addEventListener('click', () => makeTaste(slot));
-    const renewRow = el('div', 'taste-renew-row');
-    renewRow.append(again);
-    if (!open && !opts.busy) {
-      const until = new Date(made + 20 * 60 * 60 * 1000);
-      if (!Number.isNaN(until.getTime())) {
-        renewRow.append(el('p', 'taste-quiet', `ab ${until.getDate()}.${until.getMonth() + 1}`));
-      }
-    }
-    renewWrap.append(renewRow);
-    if (count >= Number(taste.rated_count || 0) + 10) {
-      renewWrap.append(el('p', 'taste-quiet', 'Dein Geschmack hat sich verändert'));
-    }
     const eye = document.createElement('button');
     eye.type = 'button';
     eye.className = 'taste-vis';
@@ -7361,8 +7366,10 @@
     eye.append(markBox(hidden, false));
     eye.append(el('span', null, hidden ? 'unsichtbar für freunde' : 'sichtbar für freunde'));
     eye.addEventListener('click', () => toggleTasteHidden(slot));
-    tools.append(renewWrap, eye);
-    block.append(meta, tools);
+    tools.append(again, eye);
+    const foot = el('div', 'taste-foot');
+    foot.append(block.querySelector('.taste-tags') || el('div', 'taste-tags'), tools);
+    block.append(foot);
     slot.append(block);
     if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
   }
