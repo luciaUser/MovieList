@@ -307,6 +307,170 @@
     return stops[stops.length - 1][1];
   }
 
+  function standardScoreGradient() {
+    return 'linear-gradient(90deg, #e4231a 0%, #e4231a 50%, #f08a1a 62%, #f0d04a 74%, #8fce3a 86%, #12a34a 100%)';
+  }
+
+  function colorChannels(color) {
+    const text = String(color || '').trim();
+    if (text.charAt(0) === '#') return hex(text);
+    const hsl = hslParts(text);
+    if (!hsl) return [207, 207, 207];
+    const sat = hsl.s / 100;
+    const light = hsl.l / 100;
+    const chroma = (1 - Math.abs((2 * light) - 1)) * sat;
+    const hp = (((hsl.h % 360) + 360) % 360) / 60;
+    const x = chroma * (1 - Math.abs((hp % 2) - 1));
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    if (hp < 1) { r = chroma; g = x; }
+    else if (hp < 2) { r = x; g = chroma; }
+    else if (hp < 3) { g = chroma; b = x; }
+    else if (hp < 4) { g = x; b = chroma; }
+    else if (hp < 5) { r = x; b = chroma; }
+    else { r = chroma; b = x; }
+    const shift = light - (chroma / 2);
+    return [r + shift, g + shift, b + shift].map((channel) => Math.round(channel * 255));
+  }
+
+  function profileColorOn() {
+    if (!account || !account.id) return false;
+    try {
+      return localStorage.getItem('moviebylucia-profilecolor:' + account.id) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  function profileGradientStops(avatar) {
+    const colors = avatarColors(avatar);
+    return [
+      { at: 0, color: colors.outer },
+      { at: 0.28, color: colors.outer },
+      { at: 0.4, color: colors.under },
+      { at: 0.52, color: colors.mid },
+      { at: 0.68, color: colors.mid },
+      { at: 0.84, color: colors.core },
+      { at: 1, color: colors.core },
+    ];
+  }
+
+  function profileGradientCss(avatar) {
+    const parts = profileGradientStops(avatar).map((stop) => `${stop.color} ${Math.round(stop.at * 100)}%`);
+    return `linear-gradient(90deg, ${parts.join(', ')})`;
+  }
+
+  function profileRatingColor(score, avatar) {
+    const stops = profileGradientStops(avatar);
+    const place = Math.max(0, Math.min(1, Number(score) / 10));
+    if (!Number.isFinite(place)) return stops[0].color;
+    let index = 1;
+    while (index < stops.length && place > stops[index].at) index += 1;
+    const next = stops[Math.min(index, stops.length - 1)];
+    const prev = stops[Math.max(0, index - 1)];
+    const span = next.at - prev.at;
+    const t = span <= 0 ? 0 : (place - prev.at) / span;
+    const from = colorChannels(prev.color);
+    const to = colorChannels(next.color);
+    return `rgb(${from.map((channel, i) => Math.round(channel + (to[i] - channel) * t)).join(',')})`;
+  }
+
+  function coverTint(score) {
+    if (score == null || Number.isNaN(Number(score))) return '#cfcfcf';
+    if (profileColorOn()) return profileRatingColor(score, account && account.avatar);
+    return ratingColor(score);
+  }
+
+  function applyScoreBar(bar, avatar) {
+    const on = profileColorOn();
+    bar.classList.toggle('is-profile', on);
+    bar.style.setProperty('--score-gradient', on ? profileGradientCss(avatar) : standardScoreGradient());
+  }
+
+  function avatarForBar(bar) {
+    const row = bar.closest('.member-rate');
+    const personId = row && row.dataset.user;
+    if (!personId || (account && personId === account.id)) return account && account.avatar;
+    const person = panelList && (panelList.members || []).find((member) => member.id === personId);
+    return person ? person.avatar : null;
+  }
+
+  function readPosterScore(button) {
+    const text = (button.querySelector('.poster-score') || {}).textContent || '';
+    const match = text.match(/(\d+)[,.](\d)/);
+    if (!match) return null;
+    return Number(match[1] + '.' + match[2]);
+  }
+
+  function refreshForeignTints() {
+    document.querySelectorAll('.their-wall .poster, #wish-board .poster').forEach((button) => {
+      const score = readPosterScore(button);
+      if (score == null) return;
+      const tint = button.querySelector('.tint');
+      if (tint) tint.style.background = coverTint(score);
+      paintWear(button, score);
+    });
+  }
+
+  function setProfileColor(on) {
+    if (account && account.id) {
+      try {
+        localStorage.setItem('moviebylucia-profilecolor:' + account.id, on ? '1' : '0');
+      } catch {
+        /* der Schalter bleibt, bis der Speicher wieder geht */
+      }
+    }
+    document.body.classList.toggle('is-profile-color', Boolean(on));
+    document.querySelectorAll('#panel .score-bar').forEach((bar) => applyScoreBar(bar, avatarForBar(bar)));
+    paint();
+    refreshForeignTints();
+  }
+
+  function markBox(dashed, checked) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', '4.2');
+    rect.setAttribute('y', '4.2');
+    rect.setAttribute('width', '15.6');
+    rect.setAttribute('height', '15.6');
+    rect.setAttribute('fill', 'none');
+    rect.setAttribute('stroke', 'currentColor');
+    rect.setAttribute('stroke-width', '1.6');
+    if (dashed) rect.setAttribute('stroke-dasharray', '2.6 2.2');
+    svg.append(rect);
+    if (checked) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', 'M7.6 12.2 10.5 15.1 16.5 8.7');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'currentColor');
+      path.setAttribute('stroke-width', '1.6');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+      svg.append(path);
+    }
+    return svg;
+  }
+
+  function profileColorSwitch() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'profile-color';
+    const on = profileColorOn();
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    button.append(markBox(false, on), el('span', null, 'Profilfarbe'));
+    button.addEventListener('click', () => {
+      const next = !profileColorOn();
+      setProfileColor(next);
+      button.setAttribute('aria-pressed', next ? 'true' : 'false');
+      const icon = button.querySelector('svg');
+      if (icon) icon.replaceWith(markBox(false, next));
+    });
+    return button;
+  }
+
   function grimeLevel(rating) {
     if (typeof rating !== 'number' || !(rating <= 4)) return 0;
     if (rating <= 1) return 4;
@@ -423,7 +587,7 @@
     }
     grime.dataset.grime = String(grimeLevel(rating));
     grime.dataset.turn = String(grimeTurn(host.dataset.id));
-    const low = typeof rating === 'number' && rating <= 5;
+    const low = typeof rating === 'number' && rating <= 5 && !profileColorOn();
     host.classList.toggle('is-low', low);
     if (!low) {
       host.style.removeProperty('--lift');
@@ -845,7 +1009,7 @@
       button.classList.toggle('is-favorite', row.favorite);
       button.classList.toggle('is-next', row.next);
       const tint = button.querySelector('.tint');
-      tint.style.background = row.rating == null ? '' : ratingColor(row.rating);
+      tint.style.background = row.rating == null ? '' : coverTint(row.rating);
       paintWear(button, row.rating);
       button.querySelector('.poster-score').textContent = row.rating == null
         ? ''
@@ -1013,7 +1177,6 @@
     if (!account) return;
     account.avatar = avatar;
     paintAvatarTab();
-    const colors = avatarColors(avatar);
     document.querySelectorAll('#panel .member-rate').forEach((row) => {
       const mine = row.querySelector('.rate') || (account.id && row.dataset.user === account.id);
       if (!mine) return;
@@ -1021,9 +1184,7 @@
       if (svg) svg.replaceWith(avatarNode(avatar, 28));
       const bar = row.querySelector('.score-bar');
       if (!bar) return;
-      bar.style.setProperty('--outer', colors.outer);
-      bar.style.setProperty('--mid', colors.mid);
-      bar.style.setProperty('--core', colors.core);
+      applyScoreBar(bar, avatar);
     });
     (wishLists || []).forEach((list) => {
       (list.members || []).forEach((person) => {
@@ -1033,6 +1194,10 @@
     otherCache.forEach((pack) => {
       if (pack && pack.profile && pack.profile.id === account.id) pack.profile.avatar = avatar;
     });
+    if (profileColorOn()) {
+      paint();
+      refreshForeignTints();
+    }
   }
 
   function paintAvatarTab() {
@@ -1043,13 +1208,10 @@
 
   function scoreBar(avatar, value, editable) {
     const wrap = el('div', 'score-bar');
-    const colors = avatarColors(avatar);
     const amount = value == null ? 0 : Math.max(0, Math.min(10, Number(value)));
-    wrap.style.setProperty('--outer', colors.outer);
-    wrap.style.setProperty('--mid', colors.mid);
-    wrap.style.setProperty('--core', colors.core);
     wrap.style.setProperty('--p', `${amount * 10}%`);
-    wrap.append(el('span', 'score-fill'), el('span', 'score-dim'), el('span', 'score-grip'));
+    applyScoreBar(wrap, avatar);
+    wrap.append(el('span', 'score-fill'), el('span', 'score-dirt'), el('span', 'score-dim'), el('span', 'score-grip'));
     if (editable) {
       const range = document.createElement('input');
       range.id = 'own-rate';
@@ -1102,6 +1264,7 @@
     const rateRow = el('div', 'member-rate');
     rateRow.append(avatarNode(account && account.avatar, 28));
     rateRow.append(el('span', 'member-name', (account && (account.display_name || account.username)) || 'Ich'));
+    rateRow.append(profileColorSwitch());
     const bar = scoreBar(account && account.avatar, row.rating, true);
     const value = el('output', 'rate-value', formatScore(row.rating));
     value.htmlFor = 'own-rate';
@@ -1133,7 +1296,7 @@
       poster.classList.toggle('is-rated', avg != null);
       const tint = poster.querySelector('.tint');
       const score = poster.querySelector('.poster-score');
-      if (tint) tint.style.background = avg == null ? '' : ratingColor(avg);
+      if (tint) tint.style.background = avg == null ? '' : coverTint(avg);
       paintWear(poster, avg);
       if (score) score.textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
     };
@@ -1145,6 +1308,7 @@
         ? ((account && (account.display_name || account.username)) || person.username)
         : (person.username || 'Profil');
       rateRow.append(avatarNode(avatar, 28), el('span', 'member-name', name));
+      if (mine) rateRow.append(profileColorSwitch());
       const known = mine ? row.rating : null;
       const bar = scoreBar(avatar, known, mine);
       const value = el('output', 'rate-value', formatScore(known));
@@ -1670,7 +1834,7 @@
       stage: networkEl,
       films: FILMS,
       posterSrc,
-      ratingColor,
+      ratingColor: (score) => coverTint(score),
       paintWear,
       entry: (id) => viewEntry(id),
       selectedId: () => selectedId,
@@ -3586,7 +3750,7 @@
     image.src = posterSrc(film);
     const tint = document.createElement('span');
     tint.className = 'tint';
-    tint.style.background = row.rating == null ? '' : ratingColor(row.rating);
+    tint.style.background = row.rating == null ? '' : coverTint(row.rating);
     const score = document.createElement('span');
     score.className = 'poster-score';
     score.textContent = row.rating == null ? '' : `★  ${row.rating.toFixed(1).replace('.', ',')}`;
@@ -5611,7 +5775,7 @@
     image.src = posterSrc(film);
     const tint = document.createElement('span');
     tint.className = 'tint';
-    tint.style.background = rating == null ? '' : ratingColor(rating);
+    tint.style.background = rating == null ? '' : coverTint(rating);
     const score = document.createElement('span');
     score.className = 'poster-score';
     score.textContent = rating == null ? '' : `★  ${Number(rating).toFixed(1).replace('.', ',')}`;
@@ -7156,11 +7320,15 @@
     again.disabled = Boolean(opts.busy) || !open;
     again.append(tasteRefreshIcon(), el('span', null, opts.busy ? 'Wird erstellt …' : 'Neu erstellen'));
     again.addEventListener('click', () => makeTaste(slot));
-    renewWrap.append(again);
+    const renewRow = el('div', 'taste-renew-row');
+    renewRow.append(again);
     if (!open && !opts.busy) {
-      const when = tasteWhen(new Date(made + 20 * 60 * 60 * 1000).toISOString(), true);
-      if (when) renewWrap.append(el('p', 'taste-quiet', `wieder ab ${when}`));
+      const until = new Date(made + 20 * 60 * 60 * 1000);
+      if (!Number.isNaN(until.getTime())) {
+        renewRow.append(el('p', 'taste-quiet', `ab ${until.getDate()}.${until.getMonth() + 1}`));
+      }
     }
+    renewWrap.append(renewRow);
     if (count >= Number(taste.rated_count || 0) + 10) {
       renewWrap.append(el('p', 'taste-quiet', 'Dein Geschmack hat sich verändert'));
     }
@@ -7168,7 +7336,7 @@
     eye.type = 'button';
     eye.className = 'taste-vis';
     eye.disabled = Boolean(opts.busy);
-    eye.append(el('span', hidden ? 'taste-box is-off' : 'taste-box'));
+    eye.append(markBox(hidden, false));
     eye.append(el('span', null, hidden ? 'unsichtbar für freunde' : 'sichtbar für freunde'));
     eye.addEventListener('click', () => toggleTasteHidden(slot));
     tools.append(renewWrap, eye);
@@ -7346,6 +7514,7 @@
     byId.clear();
     started = false;
     account = null;
+    document.body.classList.remove('is-profile-color');
     lensId = null;
     lensPack = null;
     guestNet = false;
@@ -7481,6 +7650,7 @@
       writeAvatarCache(account.id, account.avatar);
     }
     paintAvatarTab();
+    document.body.classList.toggle('is-profile-color', profileColorOn());
     watchFollows(session.user.id);
     readWishSeen();
     loadWishlists();
