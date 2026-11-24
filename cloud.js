@@ -109,6 +109,50 @@ function randomAvatar() {
     return Boolean(avatar && avatar.outer && avatar.mid && avatar.core);
   }
 
+  async function tasteRequest(method, body) {
+    const session = await client.auth.getSession();
+    const token = session && session.data && session.data.session && session.data.session.access_token;
+    if (!token) {
+      const error = new Error('Bitte zuerst anmelden.');
+      error.code = 'unauthorized';
+      throw error;
+    }
+    let response;
+    try {
+      response = await fetch('/api/taste', {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: body == null ? undefined : JSON.stringify(body),
+      });
+    } catch {
+      const error = new Error('Keine Verbindung.');
+      error.code = 'network';
+      throw error;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(data.error || 'taste');
+      error.code = data.error || '';
+      if (data.retryAt) error.retryAt = data.retryAt;
+      if (data.have != null) error.have = data.have;
+      throw error;
+    }
+    return data;
+  }
+
+  async function loadTaste(userId) {
+    const { data, error } = await client.rpc('profile_taste', { uid: userId });
+    if (error) {
+      const missing = error.code === 'PGRST202' || /profile_taste|schema cache/i.test(error.message || '');
+      if (missing) return null;
+      throw error;
+    }
+    return data || null;
+  }
+
   const Cloud = {
     enabled: true,
     ready: true,
@@ -170,14 +214,61 @@ function randomAvatar() {
     },
     async profile() {
       const user = await currentUser();
-      const full = await client.from('profiles').select('id, username, display_name, is_private, avatar').eq('id', user.id).single();
-      if (full.error && /avatar/i.test(full.error.message || '')) {
-        const plain = await client.from('profiles').select('id, username, display_name, is_private').eq('id', user.id).single();
-        if (plain.error) throw plain.error;
-        return Object.assign({}, plain.data, { avatarKnown: false });
+      let avatarKnown = true;
+      let hiddenKnown = true;
+      let result = await client.from('profiles')
+        .select('id, username, display_name, is_private, avatar, taste_hidden')
+        .eq('id', user.id)
+        .single();
+      if (result.error && /avatar/i.test(result.error.message || '') && !/taste_hidden/i.test(result.error.message || '')) {
+        avatarKnown = false;
+        result = await client.from('profiles')
+          .select('id, username, display_name, is_private, taste_hidden')
+          .eq('id', user.id)
+          .single();
       }
-      if (full.error) throw full.error;
-      return Object.assign({}, full.data, { avatarKnown: true });
+      if (result.error && /taste_hidden/i.test(result.error.message || '')) {
+        hiddenKnown = false;
+        const columns = avatarKnown
+          ? 'id, username, display_name, is_private, avatar'
+          : 'id, username, display_name, is_private';
+        result = await client.from('profiles').select(columns).eq('id', user.id).single();
+        if (result.error && avatarKnown && /avatar/i.test(result.error.message || '')) {
+          avatarKnown = false;
+          result = await client.from('profiles')
+            .select('id, username, display_name, is_private')
+            .eq('id', user.id)
+            .single();
+        }
+      }
+      if (result.error && /avatar/i.test(result.error.message || '')) {
+        avatarKnown = false;
+        result = await client.from('profiles')
+          .select('id, username, display_name, is_private')
+          .eq('id', user.id)
+          .single();
+      }
+      if (result.error) throw result.error;
+      const taste = await loadTaste(user.id);
+      return Object.assign({}, result.data, {
+        avatarKnown,
+        taste_hidden: hiddenKnown ? Boolean(result.data.taste_hidden) : false,
+        taste,
+      });
+    },
+    async createTaste(summary) {
+      return tasteRequest('POST', summary);
+    },
+    async deleteTaste() {
+      return tasteRequest('DELETE');
+    },
+    async setTasteHidden(hidden) {
+      const user = await currentUser();
+      const { error } = await client.from('profiles').update({ taste_hidden: Boolean(hidden) }).eq('id', user.id);
+      if (error) throw error;
+    },
+    async tasteOf(userId) {
+      return loadTaste(userId);
     },
     async ensureAvatar(row) {
       const id = (row && row.id) || (await currentUser()).id;

@@ -3714,6 +3714,7 @@
     const head = el('div', 'profile-head');
     head.append(avatarNode(person.avatar, 56), el('h1', null, person.display_name || person.username || 'Profil'));
     root.append(head);
+    loadTheirTaste(root, person.id);
     if (pack.canView) {
       const views = el('div', 'wish-menu');
       const networkButton = lineButton('Netzwerk');
@@ -6854,6 +6855,358 @@
     host.hidden = false;
   }
 
+  function round1(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return 0;
+    return Math.round(number * 10) / 10;
+  }
+
+  function ratedTasteFilms() {
+    return FILMS.filter((film) => entry(film.id).rating != null);
+  }
+
+  function tasteDecade(film) {
+    let year = Number(film.yearNum);
+    if (!Number.isFinite(year)) {
+      const match = String(film.year || '').match(/\d{4}/);
+      year = match ? Number(match[0]) : NaN;
+    }
+    if (!Number.isFinite(year)) return '';
+    return `${Math.floor(year / 10) * 10}er`;
+  }
+
+  function tasteGroups(map, limit) {
+    return [...map.values()]
+      .sort((a, b) => b.count - a.count || (b.sum / b.count) - (a.sum / a.count) || a.name.localeCompare(b.name, 'de'))
+      .slice(0, limit)
+      .map((row) => ({ name: row.name, count: row.count, avg: round1(row.sum / row.count) }));
+  }
+
+  function tasteAdd(map, name, rating) {
+    const key = String(name || '').trim();
+    if (!key) return;
+    const row = map.get(key) || { name: key, count: 0, sum: 0 };
+    row.count += 1;
+    row.sum += rating;
+    map.set(key, row);
+  }
+
+  function tasteSummary() {
+    const films = ratedTasteFilms();
+    const ratings = films.map((film) => entry(film.id).rating);
+    const count = ratings.length;
+    const avg = count ? ratings.reduce((sum, value) => sum + value, 0) / count : 0;
+    const variance = count ? ratings.reduce((sum, value) => sum + ((value - avg) ** 2), 0) / count : 0;
+    const genres = new Map();
+    const subgenres = new Map();
+    const themes = new Map();
+    const decades = new Map();
+    const tone = {};
+    const intensity = {};
+    const narrative = {};
+    const bump = (bag, value) => {
+      const key = String(value == null ? '' : value).trim();
+      if (!key) return;
+      bag[key] = (bag[key] || 0) + 1;
+    };
+    films.forEach((film) => {
+      const full = fullOf(film);
+      const rating = entry(film.id).rating;
+      (full.genres || []).forEach((name) => tasteAdd(genres, name, rating));
+      (full.subgenres || []).forEach((name) => tasteAdd(subgenres, name, rating));
+      (full.themes || []).forEach((name) => tasteAdd(themes, name, rating));
+      (full.tone || []).forEach((name) => bump(tone, name));
+      (full.narrative || []).forEach((name) => bump(narrative, name));
+      if (typeof full.intensity === 'number' && Number.isFinite(full.intensity)) bump(intensity, full.intensity);
+      tasteAdd(decades, tasteDecade(film), rating);
+    });
+    const ranked = films.slice().sort((a, b) => {
+      const diff = entry(b.id).rating - entry(a.id).rating;
+      if (diff) return diff;
+      return (Date.parse(entry(b.id).ratedAt) || 0) - (Date.parse(entry(a.id).ratedAt) || 0);
+    });
+    const filmRow = (film) => ({
+      title: film.title || '',
+      year: film.year ? String(film.year) : '',
+      rating: round1(entry(film.id).rating),
+    });
+    const people = personMaps();
+    const pins = pinsOf();
+    const peopleRow = (kind) => rankedPeople(people[kind], pins[kind]).slice(0, 5).map((person) => ({
+      name: person.name,
+      count: person.count,
+      avg: round1(person.avg),
+    }));
+    const outliers = films.map((film) => {
+      const full = fullOf(film);
+      const genre = (full.genres && full.genres[0]) || full.cluster || '';
+      const row = genres.get(genre);
+      if (!genre || !row || !row.count) return null;
+      const rating = entry(film.id).rating;
+      const genreAvg = row.sum / row.count;
+      const gap = Math.abs(rating - genreAvg);
+      if (gap < 2.5) return null;
+      return {
+        title: film.title || '',
+        genre,
+        rating: round1(rating),
+        genre_avg: round1(genreAvg),
+        gap,
+      };
+    }).filter(Boolean).sort((a, b) => b.gap - a.gap).slice(0, 5).map((row) => ({
+      title: row.title,
+      genre: row.genre,
+      rating: row.rating,
+      genre_avg: row.genre_avg,
+    }));
+    const summary = {
+      rated_count: count,
+      avg_rating: round1(avg),
+      rating_spread: round1(Math.sqrt(variance)),
+      share_high: count ? round1(ratings.filter((value) => value >= 8).length / count) : 0,
+      share_low: count ? round1(ratings.filter((value) => value <= 4).length / count) : 0,
+    };
+    const putList = (key, list) => {
+      if (list.length) summary[key] = list;
+    };
+    putList('genres', tasteGroups(genres, 8));
+    putList('subgenres', tasteGroups(subgenres, 10));
+    putList('themes', tasteGroups(themes, 10));
+    if (Object.keys(tone).length) summary.tone = tone;
+    if (Object.keys(intensity).length) summary.intensity = intensity;
+    if (Object.keys(narrative).length) summary.narrative = narrative;
+    putList('decades', tasteGroups(decades, 12));
+    putList('top_films', ranked.slice(0, 10).map(filmRow));
+    putList('low_films', ranked.slice().reverse().slice(0, 5).map(filmRow));
+    putList('directors', peopleRow('directors'));
+    putList('actors', peopleRow('actors'));
+    putList('outliers', outliers);
+    const keys = ['outliers', 'low_films', 'decades', 'actors', 'directors', 'themes', 'subgenres', 'genres', 'top_films'];
+    const tasteBytes = () => new TextEncoder().encode(JSON.stringify(summary)).length;
+    let guard = 0;
+    while (tasteBytes() > 11 * 1024 && guard < 400) {
+      guard += 1;
+      const key = keys.find((name) => Array.isArray(summary[name]) && summary[name].length);
+      if (!key) break;
+      summary[key].pop();
+      if (!summary[key].length) delete summary[key];
+    }
+    return summary;
+  }
+
+  function tasteWhen(iso, withTime) {
+    const date = new Date(iso);
+    if (Number.isNaN(date.getTime())) return '';
+    const day = date.toLocaleDateString('de-CH');
+    if (!withTime) return day;
+    const clock = date.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+    return `${day}, ${clock}`;
+  }
+
+  function tasteErrorText(error) {
+    console.error('[taste]', error);
+    const code = error && error.code;
+    if (code === 'not_configured') return 'Die KI ist noch nicht eingerichtet.';
+    if (code === 'cooldown') {
+      const clock = error.retryAt ? new Date(error.retryAt).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : '';
+      return clock ? `Neu erstellen geht wieder ab ${clock}.` : 'Hat nicht geklappt. Bitte später nochmals versuchen.';
+    }
+    if (code === 'quota') return 'Für heute ist das KI-Kontingent aufgebraucht. Morgen wieder.';
+    if (code === 'too_few') return 'Zu wenige Bewertungen (mindestens 15).';
+    if (code === 'too_large' || code === 'bad_input') return 'Die Daten sind zu gross oder ungültig.';
+    if (code === 'network') return 'Keine Verbindung.';
+    return 'Hat nicht geklappt. Bitte später nochmals versuchen.';
+  }
+
+  function tasteCloudReady() {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.tasteOf || !account || !account.id) return false;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+    return true;
+  }
+
+  function tasteView(taste) {
+    const block = el('section', 'taste-block');
+    if (taste.title) block.append(el('h2', 'taste-title', taste.title));
+    if (taste.taste) block.append(el('p', 'taste-copy', taste.taste));
+    if (taste.character) block.append(el('p', 'taste-character', taste.character));
+    if (Array.isArray(taste.tags) && taste.tags.length) {
+      const tags = el('div', 'taste-tags');
+      taste.tags.slice(0, 3).forEach((tag) => {
+        if (tag) tags.append(el('span', 'taste-tag', String(tag)));
+      });
+      if (tags.childNodes.length) block.append(tags);
+    }
+    return block;
+  }
+
+  let tasteBusy = false;
+  let tasteSerial = 0;
+
+  function paintOwnTaste(slot, taste, options) {
+    const opts = options || {};
+    slot._taste = taste || null;
+    slot.replaceChildren();
+    if (!tasteCloudReady()) return;
+    const count = ratedTasteFilms().length;
+    const block = taste && taste.title ? tasteView(taste) : el('section', 'taste-block');
+    if (count < 15) {
+      const line = el('p', 'taste-quiet', `Ab 15 bewerteten Filmen kann dein Filmprofil erstellt werden (noch ${15 - count}).`);
+      slot.append(line);
+      if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
+      return;
+    }
+    if (!taste || !taste.title) {
+      const button = el('button', 'text-line', opts.busy ? 'Wird erstellt …' : 'Filmprofil erstellen');
+      button.type = 'button';
+      button.disabled = Boolean(opts.busy);
+      button.addEventListener('click', () => makeTaste(slot));
+      block.append(button, el('p', 'taste-quiet', 'Deine Bewertungen werden dafür an Google Gemini geschickt, ohne Namen und Notizen.'));
+      slot.append(block);
+      if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
+      return;
+    }
+    const made = Date.parse(taste.created_at);
+    const open = !Number.isFinite(made) || Date.now() - made >= 20 * 60 * 60 * 1000;
+    const actions = el('div', 'taste-actions');
+    const again = el('button', 'text-line', opts.busy ? 'Wird erstellt …' : 'Neu erstellen');
+    again.type = 'button';
+    again.disabled = Boolean(opts.busy) || !open;
+    if (!open && !opts.busy) {
+      const when = tasteWhen(new Date(made + 20 * 60 * 60 * 1000).toISOString(), true);
+      if (when) again.textContent = `Neu erstellen · wieder ab ${when}`;
+    }
+    again.addEventListener('click', () => makeTaste(slot));
+    actions.append(again);
+    if (count >= Number(taste.rated_count || 0) + 10) {
+      actions.append(el('span', 'taste-quiet', 'Dein Geschmack hat sich verändert'));
+    }
+    const hidden = Boolean(account && account.taste_hidden);
+    const eye = el('button', 'text-line', hidden ? 'Für Freunde einblenden' : 'Für Freunde ausblenden');
+    eye.type = 'button';
+    eye.disabled = Boolean(opts.busy);
+    eye.addEventListener('click', () => toggleTasteHidden(slot));
+    actions.append(eye);
+    actions.append(tasteDeleteButton(slot, opts.busy));
+    block.append(el('p', 'taste-meta', `Erstellt am ${tasteWhen(taste.created_at, false)} · aus ${Number(taste.rated_count) || 0} Bewertungen`));
+    block.append(actions);
+    if (hidden) block.append(el('p', 'taste-quiet', 'nur für dich sichtbar'));
+    slot.append(block);
+    if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
+  }
+
+  function tasteDeleteButton(slot, busy) {
+    const bar = el('div', 'wish-bar');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'wish-x';
+    button.disabled = Boolean(busy);
+    button.setAttribute('aria-label', 'Filmprofil löschen');
+    button.append(el('span', 'wish-sure', 'sure?'));
+    button.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>');
+    let timer = 0;
+    const calm = () => {
+      window.clearTimeout(timer);
+      bar.classList.remove('is-sure');
+    };
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      if (button.disabled || tasteBusy) return;
+      if (!bar.classList.contains('is-sure')) {
+        bar.classList.add('is-sure');
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          endTransient(button);
+          calm();
+        }, 4000);
+        openTransient(button, calm);
+        return;
+      }
+      endTransient(button);
+      window.clearTimeout(timer);
+      calm();
+      const cloud = globalThis.Cloud;
+      if (!cloud || !cloud.deleteTaste) return;
+      tasteBusy = true;
+      button.disabled = true;
+      try {
+        await cloud.deleteTaste();
+        const live = profileRoot() && profileRoot().querySelector('.taste-slot');
+        if (live) paintOwnTaste(live, null);
+      } catch (error) {
+        const live = profileRoot() && profileRoot().querySelector('.taste-slot');
+        if (live) paintOwnTaste(live, live._taste || slot._taste || null, { error });
+      } finally {
+        tasteBusy = false;
+      }
+    });
+    bar.append(button);
+    return bar;
+  }
+
+  async function makeTaste(slot) {
+    if (tasteBusy) return;
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.createTaste) return;
+    tasteBusy = true;
+    try {
+      paintOwnTaste(slot, slot._taste || null, { busy: true });
+      const saved = await cloud.createTaste(tasteSummary());
+      const live = profileRoot() && profileRoot().querySelector('.taste-slot');
+      if (live) paintOwnTaste(live, saved || null);
+    } catch (error) {
+      const live = profileRoot() && profileRoot().querySelector('.taste-slot');
+      if (live) paintOwnTaste(live, live._taste || null, { error });
+    } finally {
+      tasteBusy = false;
+    }
+  }
+
+  async function toggleTasteHidden(slot) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.setTasteHidden || tasteBusy || !account) return;
+    const next = !account.taste_hidden;
+    try {
+      await cloud.setTasteHidden(next);
+      account.taste_hidden = next;
+      const live = profileRoot() && profileRoot().querySelector('.taste-slot');
+      if (live) paintOwnTaste(live, (live._taste || slot._taste) || null);
+    } catch (error) {
+      const live = profileRoot() && profileRoot().querySelector('.taste-slot');
+      if (live) paintOwnTaste(live, live._taste || null, { error });
+    }
+  }
+
+  function loadOwnTaste(slot) {
+    if (!tasteCloudReady()) return;
+    const serial = ++tasteSerial;
+    slot.dataset.serial = String(serial);
+    globalThis.Cloud.tasteOf(account.id).then((taste) => {
+      if (!slot.isConnected || slot.dataset.serial !== String(serial)) return;
+      paintOwnTaste(slot, taste || null);
+    }).catch((error) => {
+      console.error('[taste]', error);
+    });
+  }
+
+  function loadTheirTaste(root, personId) {
+    if (!personId || !globalThis.Cloud || !globalThis.Cloud.tasteOf || !account || !account.id) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const serial = ++tasteSerial;
+    root.dataset.theirTaste = String(serial);
+    const token = otherToken;
+    globalThis.Cloud.tasteOf(personId).then((taste) => {
+      if (!root.isConnected || root.dataset.theirTaste !== String(serial)) return;
+      if (token !== otherToken || viewingId !== personId) return;
+      if (!taste || !taste.title) return;
+      const head = root.querySelector('.profile-head');
+      if (!head || root.querySelector('.taste-block')) return;
+      head.insertAdjacentElement('afterend', tasteView(taste));
+    }).catch((error) => {
+      console.error('[taste]', error);
+    });
+  }
+
   function paintProfile() {
     if (document.querySelector('.profile-avatar.is-dirty')) return;
     const root = profileRoot();
@@ -6868,6 +7221,8 @@
     const head = el('div', 'profile-head');
     head.append(paintOwnAvatar(56), el('h1', null, name));
     root.append(head);
+    const tasteSlot = el('div', 'taste-slot');
+    root.append(tasteSlot);
     const stats = el('div', 'profile-stats');
     stats.append(
       statNode(films, 'Filme'),
@@ -6886,6 +7241,7 @@
     right.append(paintPeople('directors', 'Lieblingsregie', people.directors), paintSettings());
     split.append(left, right);
     root.append(split);
+    loadOwnTaste(tasteSlot);
   }
 
   function renderProfile() {

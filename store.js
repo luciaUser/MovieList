@@ -364,6 +364,12 @@
     if (notes.error) throw notes.error;
     const entries = await client.from('entries').delete().eq('user_id', userId);
     if (entries.error) throw entries.error;
+    const taste = await client.rpc('clear_taste');
+    if (taste.error) {
+      const missing = taste.error.code === 'PGRST202'
+        || /clear_taste|schema cache/i.test(taste.error.message || '');
+      if (!missing) throw taste.error;
+    }
     wipe = false;
     lastAck = {};
   }

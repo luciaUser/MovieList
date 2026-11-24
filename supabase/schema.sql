@@ -16,6 +16,8 @@ create table if not exists public.profiles (
   top_films text[] not null default '{}',
   pinned_people jsonb not null default '{"actors":[],"directors":[]}'::jsonb,
   avatar jsonb,
+  taste jsonb,
+  taste_hidden boolean not null default false,
   created_at timestamptz not null default now()
 );
 
@@ -111,6 +113,8 @@ create table if not exists public.recovery_emails (
 -- ---------------------------------------------------------------------------
 
 alter table public.profiles add column if not exists avatar jsonb;
+alter table public.profiles add column if not exists taste jsonb;
+alter table public.profiles add column if not exists taste_hidden boolean not null default false;
 
 alter table public.wishlists add column if not exists color text;
 alter table public.wishlists drop constraint if exists wishlists_color_hex;
@@ -480,13 +484,26 @@ $$;
 -- Sucht öffentliche Profilfelder. Schließt einen selbst aus, höchstens 10 Treffer.
 drop function if exists public.search_profiles(text);
 create function public.search_profiles(query text)
-returns table (id uuid, username text, display_name text, is_private boolean, avatar jsonb)
+returns table (
+  id uuid,
+  username text,
+  display_name text,
+  is_private boolean,
+  avatar jsonb,
+  taste_hidden boolean
+)
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select p.id, p.username, p.display_name, p.is_private, p.avatar
+  select
+    p.id,
+    p.username,
+    p.display_name,
+    p.is_private,
+    p.avatar,
+    p.taste_hidden
   from public.profiles p
   where auth.uid() is not null
     and p.id <> auth.uid()
@@ -497,6 +514,40 @@ as $$
     )
   order by (p.username = lower(btrim(query))) desc, p.username
   limit 10;
+$$;
+
+create or replace function public.clear_taste()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'nicht angemeldet';
+  end if;
+  update public.profiles
+  set taste = null
+  where id = auth.uid();
+end;
+$$;
+
+create or replace function public.profile_taste(uid uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when auth.uid() is null then null
+    when uid = auth.uid() then p.taste
+    when coalesce(p.taste_hidden, false) then null
+    when public.can_view(auth.uid(), uid) then p.taste
+    else null
+  end
+  from public.profiles p
+  where p.id = uid;
 $$;
 
 create or replace function public.username_available(name text)
@@ -690,8 +741,9 @@ revoke all on public.recovery_emails from public, anon, authenticated;
 
 grant usage on schema public to anon, authenticated;
 
-grant select (id, username, display_name, is_private, created_at, avatar) on public.profiles to authenticated;
-grant update (display_name, is_private, top_films, pinned_people, avatar) on public.profiles to authenticated;
+grant select (id, username, display_name, is_private, created_at, avatar, taste_hidden) on public.profiles to authenticated;
+revoke select (taste) on public.profiles from authenticated;
+grant update (display_name, is_private, top_films, pinned_people, avatar, taste_hidden) on public.profiles to authenticated;
 
 grant select, insert, update, delete on public.follows to authenticated;
 grant select, insert, update on public.films to authenticated;
@@ -713,6 +765,8 @@ revoke all on function public.profile_stats(uuid) from public;
 revoke all on function public.profile_sensitive(uuid) from public;
 revoke all on function public.profile_head(uuid) from public;
 revoke all on function public.search_profiles(text) from public;
+revoke all on function public.clear_taste() from public;
+revoke all on function public.profile_taste(uuid) from public;
 revoke all on function public.username_available(text) from public;
 revoke all on function public.delete_my_account() from public;
 revoke all on function public.accept_friend(uuid) from public;
@@ -730,6 +784,8 @@ grant execute on function public.profile_stats(uuid) to authenticated;
 grant execute on function public.profile_sensitive(uuid) to authenticated;
 grant execute on function public.profile_head(uuid) to authenticated;
 grant execute on function public.search_profiles(text) to authenticated;
+grant execute on function public.clear_taste() to authenticated;
+grant execute on function public.profile_taste(uuid) to authenticated;
 grant execute on function public.username_available(text) to anon, authenticated;
 grant execute on function public.delete_my_account() to authenticated;
 grant execute on function public.accept_friend(uuid) to authenticated;
