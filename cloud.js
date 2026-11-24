@@ -437,10 +437,14 @@ function randomAvatar() {
       const requests = rows
         .filter((row) => row.followee === user.id && row.status === 'pending')
         .map((row) => personOf(row.follower));
+      const outgoing = rows
+        .filter((row) => row.follower === user.id && row.status === 'pending')
+        .map((row) => personOf(row.followee));
       return {
         followers: rows.filter((row) => row.followee === user.id && row.status === 'accepted').map((row) => personOf(row.follower)),
         following: rows.filter((row) => row.follower === user.id && row.status === 'accepted').map((row) => personOf(row.followee)),
         requests,
+        outgoing,
         pending: requests.length,
       };
     },

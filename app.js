@@ -69,7 +69,7 @@
   let profileMode = 'home';
   let settingsOpen = false;
   let profileStats = null;
-  let profileLists = { followers: [], following: [], requests: [] };
+  let profileLists = { followers: [], following: [], requests: [], outgoing: [] };
   let profileMail = null;
   let profileStatus = '';
   let followChannel = null;
@@ -3346,7 +3346,7 @@
     const message = String(error.message || error.error_description || error.msg || '');
     if (error.name === 'TypeError' || /failed to fetch|network|load failed/i.test(message)) return 'Keine Verbindung.';
     if (/vergeben|already registered|already been registered/i.test(message)) return 'Dieser Benutzername ist vergeben.';
-    if (/invalid login|invalid credentials/i.test(message)) return 'Das Passwort ist falsch.';
+    if (/invalid login|invalid credentials/i.test(message)) return 'Name oder Passwort stimmt nicht.';
     if (/at least|too short|weak password|zu kurz/i.test(message)) return 'Das Passwort ist zu kurz.';
     if (/Benutzername|Passwort|stimmen nicht|Verbindung|Zeichen|eingerichtet|ungültig|eintragen/.test(message)) return message;
     return 'Keine Verbindung.';
@@ -3552,6 +3552,7 @@
       followers: names.followers || [],
       following: names.following || [],
       requests: names.requests || [],
+      outgoing: names.outgoing || [],
     };
     followDot = (names.pending || 0) > 0;
     applyProfileDot();
@@ -4187,6 +4188,13 @@
       input.value = '';
       input.placeholder = '';
     }
+    const suggest = host.querySelector('.friend-suggest');
+    if (suggest) {
+      suggest.hidden = true;
+      suggest.replaceChildren();
+    }
+    host._suggest = null;
+    window.clearTimeout(host._suggestTimer);
     const send = host.querySelector('.friend-send');
     if (send) send.innerHTML = friendArrow;
     return true;
@@ -4225,7 +4233,9 @@
     send.innerHTML = friendArrow;
     slot.append(input, send);
     row.append(plus, slot);
-    box.append(row, el('span', null, 'Add Friend'));
+    const suggest = el('div', 'friend-suggest');
+    suggest.hidden = true;
+    box.append(row, el('span', null, 'Add Friend'), suggest);
     const open = () => {
       box.classList.add('is-open');
       box.classList.remove('is-error', 'is-ok');
@@ -4239,6 +4249,84 @@
       else open();
     });
     let busy = false;
+    let searchToken = 0;
+    const hideSuggest = () => {
+      suggest.hidden = true;
+      suggest.replaceChildren();
+      box._suggest = null;
+    };
+    const bestProfile = (query, rows) => {
+      const needle = String(query || '').trim().toLowerCase();
+      let best = null;
+      let bestRank = 0;
+      let bestLength = Infinity;
+      (rows || []).forEach((row) => {
+        if (!row || (account && row.id === account.id)) return;
+        [row.username, row.display_name].forEach((value) => {
+          const name = String(value || '').trim().toLowerCase();
+          if (!name) return;
+          let rank = 0;
+          if (name === needle) rank = 3;
+          else if (name.startsWith(needle)) rank = 2;
+          else if (name.includes(needle)) rank = 1;
+          if (!rank) return;
+          if (rank > bestRank || (rank === bestRank && name.length < bestLength)) {
+            best = row;
+            bestRank = rank;
+            bestLength = name.length;
+          }
+        });
+      });
+      return best;
+    };
+    const suggestState = (person) => {
+      if (!person) return '';
+      if (mutualPeople().some((friend) => friend.id === person.id)) return 'friend';
+      if ((profileLists.outgoing || []).some((friend) => friend.id === person.id)) return 'asked';
+      return '';
+    };
+    const paintSuggest = (person) => {
+      suggest.replaceChildren();
+      suggest.hidden = false;
+      if (!person) {
+        box._suggest = null;
+        suggest.append(el('p', 'friend-suggest-empty', 'niemand gefunden'));
+        return;
+      }
+      const state = suggestState(person);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.append(avatarNode(person.avatar, 28), el('span', null, person.display_name || person.username || 'Profil'));
+      if (state === 'friend' || state === 'asked') {
+        box._suggest = null;
+        button.disabled = true;
+        button.append(el('span', 'friend-suggest-note', state === 'friend' ? 'schon befreundet' : 'angefragt'));
+      } else {
+        box._suggest = person;
+        button.addEventListener('click', () => { submit(); });
+      }
+      suggest.append(button);
+    };
+    const lookUp = () => {
+      window.clearTimeout(box._suggestTimer);
+      const query = input.value.trim();
+      searchToken += 1;
+      hideSuggest();
+      if (query.length < 2) return;
+      const mine = searchToken;
+      box._suggestTimer = window.setTimeout(async () => {
+        const cloud = globalThis.Cloud;
+        if (!cloud || !cloud.searchProfiles) return;
+        try {
+          const rows = await cloud.searchProfiles(query);
+          if (mine !== searchToken || !box.classList.contains('is-open')) return;
+          paintSuggest(bestProfile(query, rows));
+        } catch {
+          if (mine !== searchToken) return;
+          paintSuggest(null);
+        }
+      }, 200);
+    };
     const fail = (reason) => {
       box.classList.add('is-error');
       input.value = '';
@@ -4253,32 +4341,15 @@
     };
     const submit = async () => {
       if (busy || !box.classList.contains('is-open')) return;
-      const name = input.value.trim().toLowerCase();
-      if (!/^[a-z0-9_]{3,20}$/.test(name) || !globalThis.Cloud || !globalThis.Cloud.profileByUsername) {
-        fail('So heisst niemand.');
-        return;
-      }
-      if (account && name === account.username) {
-        fail('Das bist du selbst.');
-        return;
-      }
+      const person = box._suggest;
+      if (!person || !person.id || !globalThis.Cloud || !globalThis.Cloud.follow) return;
+      if (account && person.id === account.id) return;
       busy = true;
       try {
-        const person = await globalThis.Cloud.profileByUsername(name);
-        if (!person) {
-          fail('So heisst niemand.');
-          return;
-        }
-        if (mutualPeople().some((friend) => friend.id === person.id)) {
-          fail('Schon befreundet.');
-          return;
-        }
-        if ((profileLists.requests || []).some((friend) => friend.id === person.id)) {
-          fail('Anfrage offen.');
-          return;
-        }
         await globalThis.Cloud.follow(person.id);
         await refreshFollowLists();
+        input.value = '';
+        hideSuggest();
         succeed();
       } catch (error) {
         const duplicate = error && (error.code === '23505' || /duplicate/i.test(String(error.message || '')));
@@ -4289,11 +4360,21 @@
     };
     send.addEventListener('click', submit);
     input.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        if (!suggest.hidden) {
+          event.stopPropagation();
+          hideSuggest();
+        }
+        return;
+      }
       if (event.key !== 'Enter') return;
       event.preventDefault();
       submit();
     });
-    input.addEventListener('input', () => box.classList.remove('is-error'));
+    input.addEventListener('input', () => {
+      box.classList.remove('is-error');
+      lookUp();
+    });
     return box;
   }
 
@@ -4985,6 +5066,16 @@
         saveName.hidden = true;
       }, 1400);
     };
+    const showLoginNow = (name) => {
+      const old = stack.querySelector('.login-now');
+      if (old) old.remove();
+      const note = el('p', 'login-now', `Login ab jetzt mit: ${name}`);
+      nameField.after(note);
+      window.setTimeout(() => {
+        if (note.isConnected) note.remove();
+        if (nameField.isConnected) paintProfile();
+      }, 2500);
+    };
     nameInput.addEventListener('input', syncSave);
     saveName.addEventListener('click', async () => {
       const displayName = nameInput.value.trim();
@@ -5010,10 +5101,11 @@
         mark.classList.add('name-check');
         mark.innerHTML = '<path d="M5 12.5 10 17.5 19 7" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>';
         nameField.append(mark);
-        window.setTimeout(() => {
-          if (nameField.isConnected) paintProfile();
-        }, 700);
+        const sync = stack.querySelector('.login-sync');
+        if (sync) sync.remove();
+        showLoginNow(account.username);
       } catch (error) {
+        console.error('[rename]', error);
         const message = error && error.message;
         if (message === 'Name vergeben' || message === 'Nur Buchstaben, Ziffern und _' || message === '3 bis 20 Zeichen' || message === 'Höchstens 5 pro Stunde.' || message === 'Keine Verbindung.') {
           showNameMessage(message);
@@ -5025,6 +5117,40 @@
     });
     nameField.append(nameInput, saveName);
     stack.append(nameField);
+    const displayName = String((account && account.display_name) || '');
+    const loginName = String((account && account.username) || '');
+    if (displayName && loginName !== displayName.toLowerCase()) {
+      const hint = el('p', 'login-sync');
+      hint.append(document.createTextNode(`Login-Name: ${loginName}`));
+      const align = document.createElement('button');
+      align.type = 'button';
+      align.className = 'text-line';
+      align.textContent = 'angleichen';
+      align.addEventListener('click', async () => {
+        if (!globalThis.Cloud || !globalThis.Cloud.renameAccount) return;
+        align.disabled = true;
+        try {
+          const result = await globalThis.Cloud.renameAccount(displayName);
+          account.display_name = result.display_name || displayName;
+          account.username = result.username || displayName.toLowerCase();
+          nameInput.dataset.saved = account.display_name;
+          nameInput.value = account.display_name;
+          hint.remove();
+          showLoginNow(account.username);
+        } catch (error) {
+          console.error('[rename]', error);
+          align.disabled = false;
+          const message = error && error.message;
+          if (message === 'Name vergeben' || message === 'Nur Buchstaben, Ziffern und _' || message === '3 bis 20 Zeichen' || message === 'Höchstens 5 pro Stunde.' || message === 'Keine Verbindung.') {
+            showNameMessage(message);
+          } else {
+            showNameMessage(message || 'Das hat nicht geklappt.');
+          }
+        }
+      });
+      hint.append(align);
+      stack.append(hint);
+    }
     if (recoveryOn) stack.append(paintRecovery());
     stack.append(paintDanger(), paintSignOut());
     return stack;
@@ -7507,7 +7633,7 @@
     }
     followChannel = null;
     profileStats = null;
-    profileLists = { followers: [], following: [], requests: [] };
+    profileLists = { followers: [], following: [], requests: [], outgoing: [] };
     otherCache = new Map();
     followedCache = null;
     viewingId = null;
