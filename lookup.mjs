@@ -185,22 +185,33 @@ function lightFilm(hit, director, fact) {
 
 async function upcomingFacts(hits) {
   const facts = new Map();
-  let checked = 0;
-  for (const hit of hits) {
-    if (!hit || checked >= 10) break;
+  const today = todayIso();
+  const open = hits.filter((hit) => {
+    if (!hit) return false;
     const known = dateOnly(hit.releaseDate);
-    if (known && known <= todayIso()) continue;
-    checked += 1;
-    const payload = await details(hit.mediaType, hit.id);
+    return !known || known > today;
+  }).slice(0, 10);
+  // Details parallel statt nacheinander abrufen, damit die Suche schnell bleibt.
+  const rows = await Promise.all(open.map(async (hit) => {
+    const known = dateOnly(hit.releaseDate);
+    let payload = null;
+    try {
+      payload = await details(hit.mediaType, hit.id);
+    } catch {
+      payload = null;
+    }
     const releaseDate = dateOnly(payload?.release_date || payload?.first_air_date) || known;
     const status = payload && payload.status ? String(payload.status) : '';
+    return { hit, releaseDate, status };
+  }));
+  rows.forEach(({ hit, releaseDate, status }) => {
     const key = `${hit.mediaType}:${hit.id}`;
     if (isUpcomingRelease(releaseDate, status)) {
       facts.set(key, { release_date: releaseDate || null, status: status || null });
     } else {
       facts.set(key, false);
     }
-  }
+  });
   return facts;
 }
 

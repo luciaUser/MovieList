@@ -5515,8 +5515,9 @@
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     if (day <= start) {
-      const fresh = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 14);
-      return day >= fresh ? 'NEU' : '';
+      const added = localDay(String(film.addedAt || '').slice(0, 10));
+      if (!added || added >= day) return '';
+      return `${day.getDate()}.${day.getMonth() + 1}.${String(day.getFullYear()).slice(2)}`;
     }
     const soon = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 60);
     if (day <= soon) return `${day.getDate()}.${day.getMonth() + 1}.`;
@@ -5558,6 +5559,12 @@
   }
 
   function wishFilmObject(item) {
+    const film = wishFilmObjectBase(item);
+    if (film && item && item.createdAt) film.addedAt = item.createdAt;
+    return film;
+  }
+
+  function wishFilmObjectBase(item) {
     const remote = item.film ? filmFromCatalog(item.film) : null;
     const local = byId.get(item.filmId);
     if (local) {

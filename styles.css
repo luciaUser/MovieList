@@ -1785,6 +1785,7 @@ body.is-network {
 
 @media (min-width: 721px) {
   body.has-selection #wall,
+  body.has-selection #wish-board,
   body.is-wish-search #wish-board { margin-right: min(360px, 100vw); }
   body.has-selection.is-network #network { right: min(360px, 100vw); }
   body.has-selection header,
@@ -2179,7 +2180,7 @@ body.is-network {
 .poster > .wish-when {
   position: absolute;
   top: 6px;
-  right: 6px;
+  left: 6px;
   z-index: 3;
   padding: 2px 4px;
   background: rgba(0, 0, 0, 0.55);
@@ -2584,6 +2585,7 @@ body.is-wish .poster.is-blank { filter: none; }
   }
 
   body.has-selection #wall,
+  body.has-selection #wish-board,
   body.is-wish-search #wish-board { margin-bottom: 48vh; }
   body.has-selection.is-network #network { bottom: 48vh; }
 }
