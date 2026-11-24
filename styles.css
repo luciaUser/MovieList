@@ -3038,11 +3038,14 @@ button.profile-stat { cursor: pointer; }
     align-items: start;
   }
 
-  #profile .top-row { flex-wrap: nowrap; }
+  #profile .top-row {
+    width: 100%;
+    flex-wrap: nowrap;
+  }
 
   #profile .top-card {
-    flex: 0 0 94px;
-    width: 94px;
+    flex: 1 1 0;
+    min-width: 0;
   }
 }
 

@@ -3177,9 +3177,7 @@
 
   function topCap() {
     if (window.innerWidth < 1000) return 5;
-    const root = profileRoot();
-    const width = root && root.clientWidth > 200 ? root.clientWidth - 56 : window.innerWidth - 56;
-    return Math.max(1, Math.min(10, Math.floor((width + 8) / 102)));
+    return 10;
   }
 
   function defaultTopFilms() {
