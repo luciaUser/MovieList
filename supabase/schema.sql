@@ -741,6 +741,13 @@ revoke all on public.recovery_emails from public, anon, authenticated;
 
 grant usage on schema public to anon, authenticated;
 
+-- Der Server (api/*.js) arbeitet mit dem Service-Role-Key. Neue Supabase-Projekte
+-- vergeben dieser Rolle nicht mehr automatisch Rechte auf neue Tabellen.
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
+grant execute on all functions in schema public to service_role;
+
 grant select (id, username, display_name, is_private, created_at, avatar, taste_hidden) on public.profiles to authenticated;
 revoke select (taste) on public.profiles from authenticated;
 grant update (display_name, is_private, top_films, pinned_people, avatar, taste_hidden) on public.profiles to authenticated;
