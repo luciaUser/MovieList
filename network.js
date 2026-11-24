@@ -42,6 +42,8 @@
     let suppressClick = false;
     let focus = { lit: null, edges: [], hot: null };
     let motion = 0;
+    let lens = null;
+    let lensToken = 0;
 
     const lines = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     lines.setAttribute('class', 'net-lines');
@@ -152,6 +154,7 @@
         button.style.left = `${at.x}px`;
         button.style.top = `${at.y}px`;
       });
+      if (lens) paintLensMembers();
     }
 
     function refit(source) {
@@ -446,6 +449,7 @@
       ty = py - wy * scale;
       clampPan();
       applyTransform();
+      scheduleLens();
     }
 
     function settle() {
@@ -467,8 +471,9 @@
 
     function placeButton(id, point) {
       const button = buttons.get(id);
-      if (!button) return;
-      const at = worldOf(point);
+      const real = point || points.get(id);
+      if (!button || !real) return;
+      const at = worldOf(real);
       button.style.left = `${at.x}px`;
       button.style.top = `${at.y}px`;
     }
@@ -514,11 +519,15 @@
         const ease = 1 - ((1 - t) ** 3);
         to.forEach((point, id) => {
           const origin = from.get(id);
-          placeButton(id, {
+          points.set(id, {
             x: origin.x + ((point.x - origin.x) * ease),
             y: origin.y + ((point.y - origin.y) * ease),
           });
+          if (lens && lens.ids.has(id)) return;
+          placeButton(id);
         });
+        if (lens) paintLensMembers();
+        else drawEdges();
         if (t < 1) {
           requestAnimationFrame(step);
           return;
@@ -550,11 +559,178 @@
       }));
     }
 
+    function displayWorld(id) {
+      const real = worldPoint(id);
+      if (!real || !lens || !lens.slots || !(lens.amount > 0) || !lens.slots.has(id)) return real;
+      const pull = lens.slots.get(id);
+      return {
+        x: real.x + ((pull.x - real.x) * lens.amount),
+        y: real.y + ((pull.y - real.y) * lens.amount),
+      };
+    }
+
+    function lensBlend() {
+      const span = limits.nearFrom - minScale;
+      if (span <= 0.0001) return scale >= limits.nearFrom ? 1 : 0;
+      const raw = Math.min(1, Math.max(0, (scale - minScale) / span));
+      return raw * raw * (3 - (2 * raw));
+    }
+
+    function computeSlots(center, radius) {
+      const map = new Map();
+      map.set(lens.centerId, center);
+      const items = lens.neighbors.map((item, index) => {
+        const at = worldPoint(item.id);
+        const spread = Math.hypot(at ? at.x - center.x : 0, at ? at.y - center.y : 0);
+        const angle = at && spread >= 1
+          ? Math.atan2(at.y - center.y, at.x - center.x)
+          : (index / Math.max(lens.neighbors.length, 1)) * Math.PI * 2;
+        return { id: item.id, score: Number(item.score) || 0, angle };
+      });
+      const tight = items.length > 1 && (2 * Math.PI * radius) / items.length < 52;
+      const ranked = items.slice().sort((a, b) => b.score - a.score);
+      const outer = new Set();
+      if (tight) ranked.slice(Math.ceil(ranked.length / 2)).forEach((item) => outer.add(item.id));
+      const scores = items.map((item) => item.score);
+      const max = Math.max(...scores, 1e-6);
+      const min = Math.min(...scores);
+      items.forEach((item) => {
+        const likeness = (item.score - min) / Math.max(max - min, 1e-6);
+        const ring = outer.has(item.id) ? 1.22 : 0.86;
+        const dist = radius * ring * (1.06 - (0.18 * likeness));
+        map.set(item.id, {
+          x: center.x + (Math.cos(item.angle) * dist),
+          y: center.y + (Math.sin(item.angle) * dist),
+        });
+      });
+      return map;
+    }
+
+    function paintLensMembers() {
+      if (!lens) return;
+      const center = worldPoint(lens.centerId);
+      if (!center) return;
+      const rect = viewSize();
+      const radius = (0.3 * Math.min(rect.width, rect.height)) / Math.max(scale, 1e-4);
+      lens.slots = computeSlots(center, radius);
+      lens.amount = lensBlend() * lens.anim;
+      lens.ids.forEach((id) => {
+        const at = displayWorld(id);
+        const button = buttons.get(id);
+        if (!button || !at) return;
+        button.style.left = `${at.x}px`;
+        button.style.top = `${at.y}px`;
+      });
+      drawEdges();
+    }
+
+    function scheduleLens() {
+      if (!lens || lens.scheduled) return;
+      lens.scheduled = true;
+      requestAnimationFrame(() => {
+        if (!lens) return;
+        lens.scheduled = false;
+        paintLensMembers();
+      });
+    }
+
+    function snapLensHome() {
+      const ids = lens ? [...lens.ids] : [];
+      lens = null;
+      lensToken += 1;
+      ids.forEach((id) => placeButton(id));
+    }
+
+    function animateLens(from, to) {
+      const token = lensToken + 1;
+      lensToken = token;
+      if (!lens) return;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce) {
+        lens.anim = to;
+        paintLensMembers();
+        return;
+      }
+      const started = performance.now();
+      const step = (now) => {
+        if (token !== lensToken || !lens) return;
+        if (stage.hidden || viewSize().width < 50) {
+          snapLensHome();
+          return;
+        }
+        const t = Math.min(1, (now - started) / 400);
+        const ease = 1 - ((1 - t) ** 3);
+        lens.anim = from + ((to - from) * ease);
+        paintLensMembers();
+        if (t < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
+    }
+
+    function sameLens(next) {
+      if (!lens || lens.centerId !== next.centerId) return false;
+      if (lens.neighbors.length !== next.neighbors.length) return false;
+      const ids = new Set(lens.neighbors.map((item) => item.id));
+      return next.neighbors.every((item) => ids.has(item.id));
+    }
+
+    function beginLens(next) {
+      if (lens && sameLens(next)) {
+        lens.neighbors = next.neighbors;
+        paintLensMembers();
+        return;
+      }
+      if (lens) snapLensHome();
+      lens = {
+        centerId: next.centerId,
+        neighbors: next.neighbors,
+        ids: new Set([next.centerId].concat(next.neighbors.map((item) => item.id))),
+        anim: 0,
+        amount: 0,
+        slots: null,
+        scheduled: false,
+      };
+      animateLens(0, 1);
+    }
+
+    function endLens() {
+      if (!lens) return;
+      const token = lensToken + 1;
+      lensToken = token;
+      const from = lens.anim;
+      const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduce || from <= 0) {
+        snapLensHome();
+        return;
+      }
+      const started = performance.now();
+      const step = (now) => {
+        if (token !== lensToken || !lens) return;
+        if (stage.hidden || viewSize().width < 50) {
+          snapLensHome();
+          drawEdges();
+          return;
+        }
+        const t = Math.min(1, (now - started) / 400);
+        const ease = 1 - ((1 - t) ** 3);
+        lens.anim = from * (1 - ease);
+        paintLensMembers();
+        if (t < 1) {
+          requestAnimationFrame(step);
+          return;
+        }
+        if (token !== lensToken) return;
+        snapLensHome();
+        drawEdges();
+      };
+      requestAnimationFrame(step);
+    }
+
     function drawEdges() {
       lines.replaceChildren();
       (focus.edges || []).forEach((edge) => {
-        const from = worldPoint(edge.source);
-        const to = worldPoint(edge.target);
+        const from = displayWorld(edge.source);
+        const to = displayWorld(edge.target);
         if (!from || !to) return;
         const hot = focus.hot === edge.target || focus.hot === edge.source;
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -586,6 +762,14 @@
         };
       }
       world.classList.toggle('is-focus', Boolean(focus.lit && focus.lit.size));
+      const nextLens = spec && !spec.star && spec.edges && spec.edges.length
+        ? {
+          centerId: spec.edges[0].source,
+          neighbors: spec.edges.map((edge) => ({ id: edge.target, score: edge.score || 0 })),
+        }
+        : null;
+      if (nextLens) beginLens(nextLens);
+      else endLens();
       drawEdges();
       paint();
     }
@@ -644,6 +828,7 @@
         scale = start.scale + (target.scale - start.scale) * ease;
         clampPan();
         applyTransform();
+        if (lens) paintLensMembers();
         if (t < 1) {
           requestAnimationFrame(step);
           return;
@@ -654,7 +839,8 @@
         clampPan();
         applyClass();
         applyTransform();
-        drawEdges();
+        if (lens) paintLensMembers();
+        else drawEdges();
         requestAnimationFrame(() => collideLabels());
       };
       requestAnimationFrame(step);
@@ -848,10 +1034,14 @@
     window.addEventListener('pointerup', endPointer);
     window.addEventListener('pointercancel', endPointer);
     stage.addEventListener('click', (event) => {
-      if (!suppressClick) return;
-      event.preventDefault();
-      event.stopPropagation();
-    }, true);
+      if (suppressClick) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (event.target.closest('.net-film, #net-bar, button, a, input')) return;
+      if (options.onBlank) options.onBlank();
+    });
 
     stage.addEventListener('wheel', (event) => {
       event.preventDefault();
@@ -875,6 +1065,9 @@
       paint,
       setFocus,
       frame,
+      stopMotion() {
+        motion += 1;
+      },
       nearScale() {
         return limits.nearFrom;
       },

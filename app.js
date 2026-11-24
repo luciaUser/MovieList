@@ -641,9 +641,10 @@
   async function highlight(spec) {
     const ids = (spec.ids || []).filter((id) => byId.has(id));
     if (!ids.length) return;
+    if (mode !== 'network') await setMode('network');
+    else resetView();
     spotlight = { title: spec.title, ids, style: spec.style || 'content' };
     renderBar();
-    if (mode !== 'network') await setMode('network');
     applyNetworkFocus();
     if (network) network.frame(ids);
   }
@@ -662,12 +663,8 @@
     applyNetworkFocus();
     paint();
     if (mode === 'network' && network) {
-      const ids = focus === 'near'
-        ? [film.id]
-        : [film.id].concat(links.slice(0, 8).map((link) => link.id));
-      const minScale = focus === 'near' ? network.nearScale() : 0;
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => network.frame(ids, { minScale }));
+        requestAnimationFrame(() => network.frame([film.id], { minScale: network.nearScale() }));
       });
       return;
     }
@@ -691,6 +688,7 @@
   }
 
   function clearSelection() {
+    editDraft = null;
     closeWishSearch();
     panelFilm = null;
     selectedId = null;
@@ -961,10 +959,17 @@
     pick.hidden = true;
     wish.addEventListener('click', (event) => {
       event.stopPropagation();
-      const willOpen = pick.hidden;
-      pick.hidden = !willOpen;
-      wish.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-      if (willOpen) fillWishPick(pick, film);
+      if (!pick.hidden) {
+        closeTransient();
+        return;
+      }
+      pick.hidden = false;
+      wish.setAttribute('aria-expanded', 'true');
+      fillWishPick(pick, film);
+      openTransient(pick, () => {
+        pick.hidden = true;
+        wish.setAttribute('aria-expanded', 'false');
+      }, (target) => wish.contains(target));
     });
     const full = fullOf(film);
     const head = el('div', 'panel-head');
@@ -1378,12 +1383,18 @@
     }
   }
 
-  function closeSortMenu() {
+  function hideSortMenu() {
     const modes = modeDirector && modeDirector.closest('.modes');
     const pop = document.getElementById('sort-pop');
     if (modes) modes.classList.remove('is-sort-open');
     if (pop) pop.setAttribute('aria-hidden', 'true');
     if (modeDirector) modeDirector.setAttribute('aria-expanded', 'false');
+  }
+
+  function closeSortMenu() {
+    const pop = document.getElementById('sort-pop');
+    if (transient && pop && transient.element === pop) return closeTransient();
+    hideSortMenu();
   }
 
   function paintSortMenu() {
@@ -1404,6 +1415,7 @@
       entry: (id) => viewEntry(id),
       selectedId: () => selectedId,
       onChoose: choose,
+      onBlank: blankNetwork,
     });
     return network;
   }
@@ -1426,6 +1438,7 @@
 
   async function openTheirView(id, kind) {
     if (!id || !account || id === account.id) return;
+    resetView();
     const next = kind === 'rating' ? 'rating' : 'network';
     lensId = id;
     lensPack = null;
@@ -1510,8 +1523,71 @@
     buildWall();
   }
 
+  let transient = null;
+
+  function closeTransient() {
+    if (!transient) return false;
+    const done = transient.onClose;
+    transient = null;
+    done();
+    return true;
+  }
+
+  function endTransient(element) {
+    if (!transient) return;
+    if (!element || transient.element === element) transient = null;
+  }
+
+  function openTransient(element, onClose, keep) {
+    if (!element) return;
+    if (transient && transient.element === element) return;
+    if (transient) closeTransient();
+    transient = {
+      element,
+      onClose,
+      keep: typeof keep === 'function' ? keep : null,
+    };
+  }
+
+  function transientHolds(target) {
+    if (!transient) return false;
+    if (transient.element && transient.element.contains(target)) return true;
+    return Boolean(transient.keep && transient.keep(target));
+  }
+
+  function resetView() {
+    closeTransient();
+    editDraft = null;
+    spotlight = null;
+    renderBar();
+    closeWishSearch();
+    panelFilm = null;
+    selectedId = null;
+    links = [];
+    activeLinkId = null;
+    panel.hidden = true;
+    panel.replaceChildren();
+    document.body.classList.remove('has-selection', 'is-wish-search');
+    if (network) {
+      if (network.stopMotion) network.stopMotion();
+      network.setFocus(null);
+    }
+    stopCompare();
+    paint();
+  }
+
+  function blankNetwork() {
+    if (spotlight) {
+      spotlight = null;
+      renderBar();
+    }
+    if (selectedId || !panel.hidden) clearSelection();
+    else applyNetworkFocus();
+  }
+
   function setMode(next) {
     clearLens();
+    resetView();
     return applyMode(next);
   }
 
@@ -1708,6 +1784,7 @@
     modes.classList.add('is-sort-open');
     pop.setAttribute('aria-hidden', 'false');
     modeDirector.setAttribute('aria-expanded', 'true');
+    openTransient(pop, hideSortMenu, (target) => modeDirector.contains(target));
   });
   function pinPhoneBar() {
     const bar = document.querySelector('.modes');
@@ -1737,14 +1814,16 @@
     rememberWallSort(wallSort);
     paintSortMenu();
     closeSortMenu();
+    resetView();
     if (mode === 'director') showWall();
     else setMode('director');
   });
   document.addEventListener('click', (event) => {
-    if (event.target.closest('#mode-director') || event.target.closest('#sort-pop button')) return;
-    closeSortMenu();
-    const pick = document.querySelector('#panel .wish-pick');
-    if (pick && !pick.hidden && !event.target.closest('.panel-wish-wrap')) pick.hidden = true;
+    if (event.target.closest('button, a, input, textarea, select, .poster, .genre-bar, .wish-invite, .wish-undo, .net-film')) return;
+    const board = event.target.closest('#wall, #wish-board, .their-wall');
+    if (!board) return;
+    if (!selectedId && panel.hidden) return;
+    clearSelection();
   });
   modeRating.addEventListener('click', () => setMode('rating'));
   if (modeWish) modeWish.addEventListener('click', () => setMode('wish'));
@@ -1769,8 +1848,10 @@
       const pop = document.getElementById('compare-pop');
       if (!pop) return;
       if (!pop.hidden) {
-        pop.hidden = true;
-        netCompare.setAttribute('aria-expanded', 'false');
+        if (!closeTransient()) {
+          pop.hidden = true;
+          netCompare.setAttribute('aria-expanded', 'false');
+        }
         return;
       }
       openCompareMenu();
@@ -1824,7 +1905,7 @@
   const searchForm = document.getElementById('search-form');
   const searchOpen = document.getElementById('search-open');
 
-  function closeAdd() {
+  function resetAdd() {
     addFilm.classList.remove('is-open');
     addButton.setAttribute('aria-expanded', 'false');
     addQuery.disabled = true;
@@ -1835,6 +1916,12 @@
     addShownFor = '';
     addHits.replaceChildren();
     addHits.hidden = true;
+    addQuery.value = '';
+  }
+
+  function closeAdd() {
+    if (transient && transient.element === addFilm) return closeTransient();
+    resetAdd();
   }
 
   function addQueryIsLink(query) {
@@ -1962,14 +2049,20 @@
     addQuery.focus();
     const query = addQuery.value.trim();
     if (query.length >= 2 && !addQueryIsLink(query)) refreshAddHits(query);
+    openTransient(addFilm, resetAdd);
   }
 
-  function closeSearch() {
+  function resetSearch() {
     searchForm.classList.remove('is-open');
     searchOpen.setAttribute('aria-expanded', 'false');
     results.hidden = true;
     search.value = '';
     search.disabled = true;
+  }
+
+  function closeSearch() {
+    if (transient && transient.element === searchForm) return closeTransient();
+    resetSearch();
   }
 
   function openSearch() {
@@ -1978,6 +2071,7 @@
     searchForm.classList.add('is-open');
     searchOpen.setAttribute('aria-expanded', 'true');
     search.focus();
+    openTransient(searchForm, resetSearch);
   }
 
   function normTitle(value) {
@@ -2102,25 +2196,7 @@
   });
 
   document.addEventListener('pointerdown', (event) => {
-    const pop = document.getElementById('compare-pop');
-    if (pop && !pop.hidden && !pop.contains(event.target) && event.target !== netCompare) {
-      pop.hidden = true;
-      if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
-    }
-    const invite = document.querySelector('.friend-invite.is-open');
-    if (invite && !invite.contains(event.target)) closeFriendInvite();
-    const memberLine = document.querySelector('.wish-by.is-inviting');
-    if (memberLine && !memberLine.contains(event.target)) closeWishMemberLine(memberLine);
-    const hue = document.querySelector('.genre-name.is-hue');
-    if (hue && !hue.contains(event.target)) hue.classList.remove('is-hue');
-    const avatar = document.querySelector('.profile-avatar.is-armed, .profile-avatar.is-dirty');
-    if (avatar && !avatar.contains(event.target) && avatar._commitAvatar) {
-      avatar.classList.remove('is-armed');
-      avatar._commitAvatar();
-    }
-    if (document.querySelector('header').contains(event.target)) return;
-    if (addFilm.classList.contains('is-open')) closeAdd();
-    if (searchForm.classList.contains('is-open')) closeSearch();
+    if (transient && !transientHolds(event.target)) closeTransient();
   }, true);
 
   addQuery.addEventListener('input', () => {
@@ -2165,28 +2241,13 @@
         closeSheet();
         return;
       }
-      if (closeWishMemberLine()) return;
-      if (closeWishHue()) return;
-      const sureBar = document.querySelector('.wish-bar.is-sure');
-      if (sureBar) {
-        sureBar.classList.remove('is-sure');
-        return;
-      }
-      if (searchForm.classList.contains('is-open')) {
-        closeSearch();
-        return;
-      }
+      if (closeTransient()) return;
       if (editDraft) {
         const film = byId.get(editDraft.id);
         editDraft = null;
         if (film && selectedId === film.id) renderPanel(film);
         return;
       }
-      if (addFilm.classList.contains('is-open')) {
-        closeAdd();
-        return;
-      }
-      if (closeFriendInvite()) return;
       if (profileMode === 'list' && listKind === 'friends') {
         closeFriends();
         return;
@@ -3488,6 +3549,7 @@
 
   function showOther(id) {
     if (!id) return;
+    resetView();
     if (mode !== 'profile') {
       skipProfileHome = true;
       setMode('profile');
@@ -3634,20 +3696,26 @@
   const friendArrow = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 17.5 17.5 6.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path><path d="M10 6.5h7.5V14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
   const friendCheck = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5 10.2 16.5 18 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
 
-  function closeFriendInvite() {
-    const box = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
-    if (!box) return false;
-    box.classList.remove('is-open', 'is-error', 'is-ok');
-    const plus = box.querySelector('.friend-plus');
+  function resetFriendInvite(box) {
+    const host = box || document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
+    if (!host) return false;
+    host.classList.remove('is-open', 'is-error', 'is-ok');
+    const plus = host.querySelector('.friend-plus');
     if (plus) plus.setAttribute('aria-expanded', 'false');
-    const input = box.querySelector('input');
+    const input = host.querySelector('input');
     if (input) {
       input.value = '';
       input.placeholder = '';
     }
-    const send = box.querySelector('.friend-send');
+    const send = host.querySelector('.friend-send');
     if (send) send.innerHTML = friendArrow;
     return true;
+  }
+
+  function closeFriendInvite() {
+    const box = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
+    if (transient && box && transient.element === box) return closeTransient();
+    return resetFriendInvite(box);
   }
 
   function friendInviteNode() {
@@ -3684,6 +3752,7 @@
       plus.setAttribute('aria-expanded', 'true');
       input.placeholder = '';
       requestAnimationFrame(() => input.focus());
+      openTransient(box, () => resetFriendInvite(box));
     };
     plus.addEventListener('click', () => {
       if (box.classList.contains('is-open')) closeFriendInvite();
@@ -3860,6 +3929,10 @@
     }
     pop.hidden = false;
     netCompare.setAttribute('aria-expanded', 'true');
+    openTransient(pop, () => {
+      pop.hidden = true;
+      if (netCompare) netCompare.setAttribute('aria-expanded', 'false');
+    }, (target) => netCompare && netCompare.contains(target));
   }
 
   async function applyCompare(person) {
@@ -3874,6 +3947,7 @@
       });
     }
     ensureNetwork();
+    endTransient(document.getElementById('compare-pop'));
     if (network && network.setCompare) network.setCompare(map);
     if (netCompare) {
       netCompare.setAttribute('aria-pressed', 'true');
@@ -4018,18 +4092,26 @@
         wish.disabled = false;
       }
     });
+    const calmRemove = () => {
+      window.clearTimeout(timer);
+      remove.classList.remove('is-confirm');
+      remove.textContent = '';
+      remove.setAttribute('aria-label', 'Freundschaft entfernen');
+      remove.innerHTML = friendGlyph('remove').innerHTML;
+    };
     remove.addEventListener('click', async () => {
       if (!remove.classList.contains('is-confirm')) {
         remove.classList.add('is-confirm');
         remove.textContent = 'Entfernen?';
         window.clearTimeout(timer);
         timer = window.setTimeout(() => {
-          remove.classList.remove('is-confirm');
-          remove.setAttribute('aria-label', 'Freundschaft entfernen');
-          remove.innerHTML = friendGlyph('remove').innerHTML;
+          endTransient(remove);
+          calmRemove();
         }, 4000);
+        openTransient(remove, calmRemove);
         return;
       }
+      endTransient(remove);
       window.clearTimeout(timer);
       remove.disabled = true;
       try {
@@ -4533,13 +4615,18 @@
       status.textContent = '';
       confirm.hidden = false;
       input.focus();
+      openTransient(wrap, close);
     };
     input.addEventListener('input', () => {
       const word = open === 'reset' ? 'zurücksetzen' : 'löschen';
       go.disabled = input.value.trim().toLocaleLowerCase('de') !== word;
     });
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') close();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeTransient();
+      }
     });
     go.addEventListener('click', async () => {
       if (open === 'reset') {
@@ -4899,6 +4986,7 @@
   function closeWishHue() {
     const open = document.querySelector('.genre-name.is-hue');
     if (!open) return false;
+    if (transient && transient.element === open) return closeTransient();
     open.classList.remove('is-hue');
     return true;
   }
@@ -4988,12 +5076,15 @@
       event.stopPropagation();
       event.preventDefault();
       if (cell.classList.contains('is-hue')) {
-        cell.classList.remove('is-hue');
+        closeWishHue();
         return;
       }
-      document.querySelectorAll('.genre-name.is-hue').forEach((node) => node.classList.remove('is-hue'));
+      document.querySelectorAll('.genre-name.is-hue').forEach((node) => {
+        if (node !== cell) node.classList.remove('is-hue');
+      });
       cell.classList.add('is-hue');
       place(list.color || color);
+      openTransient(cell, () => cell.classList.remove('is-hue'));
     });
     bar.addEventListener('pointerdown', (event) => {
       if (!cell.classList.contains('is-hue')) return;
@@ -5067,12 +5158,23 @@
       window.clearTimeout(timer);
       timer = window.setTimeout(commit, 2000);
     });
+    const armAvatar = () => {
+      wrap.classList.add('is-armed');
+      openTransient(wrap, () => {
+        wrap.classList.remove('is-armed');
+        commit();
+      });
+    };
     wrap.addEventListener('click', (event) => {
       if (event.target.closest('.avatar-roll')) return;
-      if (phone && !wrap.classList.contains('is-armed')) wrap.classList.add('is-armed');
+      if (phone && !wrap.classList.contains('is-armed')) armAvatar();
+    });
+    roll.addEventListener('pointerdown', () => {
+      if (!phone) armAvatar();
     });
     wrap.addEventListener('mouseleave', () => {
       if (phone) return;
+      wrap.classList.remove('is-armed');
       commit();
     });
     return wrap;
@@ -5259,12 +5361,9 @@
       closed = true;
       label.replaceChildren(document.createTextNode(text));
     };
+    openTransient(input, () => restore(current));
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        restore(current);
-      } else if (event.key === 'Enter') {
+      if (event.key === 'Enter') {
         event.preventDefault();
         event.stopPropagation();
         input.blur();
@@ -5272,6 +5371,7 @@
     });
     input.addEventListener('blur', async () => {
       if (closed) return;
+      endTransient(input);
       const next = input.value.trim();
       if (!next || next === current) {
         restore(current);
@@ -5289,7 +5389,7 @@
     });
   }
 
-  function closeWishMemberLine(cell) {
+  function resetWishMemberLine(cell) {
     const host = cell || document.querySelector('.wish-by.is-inviting');
     if (!host) return false;
     host.classList.remove('is-inviting');
@@ -5300,6 +5400,14 @@
     const names = host.querySelector('.wish-by-names');
     if (names) names.hidden = false;
     return true;
+  }
+
+  function closeWishMemberLine(cell) {
+    const host = cell || (transient && transient.element && transient.element.classList.contains('is-inviting')
+      ? transient.element
+      : document.querySelector('.wish-by.is-inviting'));
+    if (transient && host && transient.element === host) return closeTransient();
+    return resetWishMemberLine(host);
   }
 
   function wishFriendChoices(list, query) {
@@ -5383,6 +5491,7 @@
     cell.append(input, pop);
     paintChoices();
     input.focus();
+    openTransient(cell, () => resetWishMemberLine(cell));
   }
 
   function wishMemberPlus(list, cell) {
@@ -5408,14 +5517,23 @@
     button.append(sure);
     button.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>');
     let timer = 0;
+    const calmSure = () => {
+      window.clearTimeout(timer);
+      bar.classList.remove('is-sure');
+    };
     button.addEventListener('click', async (event) => {
       event.stopPropagation();
       if (!bar.classList.contains('is-sure')) {
         bar.classList.add('is-sure');
         window.clearTimeout(timer);
-        timer = window.setTimeout(() => bar.classList.remove('is-sure'), 4000);
+        timer = window.setTimeout(() => {
+          endTransient(button);
+          calmSure();
+        }, 4000);
+        openTransient(button, calmSure);
         return;
       }
+      endTransient(button);
       window.clearTimeout(timer);
       button.disabled = true;
       try {
@@ -5504,6 +5622,13 @@
     };
     let commitTimer = 0;
     name.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        name.value = '';
+        name.blur();
+        return;
+      }
       if (event.key !== 'Enter') return;
       event.preventDefault();
       window.clearTimeout(commitTimer);
