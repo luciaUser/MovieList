@@ -2035,8 +2035,12 @@ body.is-network {
 .wish-find-head input {
   flex: 1;
   min-width: 0;
-  padding: 0;
+  padding: 0 0 6px;
   border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  outline: none;
+  cursor: text;
+  transition: border-color 0.15s ease;
   background: transparent;
   color: #fff;
   font: inherit;
@@ -2132,9 +2136,20 @@ body.is-network {
   transition: border-color 0.15s ease;
 }
 
-.wish-upcoming:hover { border-bottom-color: rgba(255, 255, 255, 0.6); }
+.wish-upcoming,
+.wish-find-head input { box-sizing: border-box; }
 
-.wish-upcoming:focus { border-bottom-color: #fff; }
+.wish-upcoming { margin-top: 44px; }
+
+.wish-upcoming + .wish-kicker { margin: 14px 0 0; }
+
+.wish-upcoming:hover,
+.wish-find-head input:hover { border-bottom-color: rgba(255, 255, 255, 0.6); }
+
+.wish-upcoming:focus,
+.wish-find-head input:focus { border-bottom-color: #fff; }
+
+
 
 .wish-year {
   width: 88px;

@@ -6660,7 +6660,7 @@
     upcomingInput.autocomplete = 'off';
     upcomingInput.spellcheck = false;
     const upcomingHits = el('div', 'wish-hits');
-    box.append(upcomingTitle, upcomingInput, upcomingHits);
+    box.append(upcomingInput, upcomingTitle, upcomingHits);
     panel.append(box);
     let token = 0;
     let cursor = 0;
