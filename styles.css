@@ -1249,15 +1249,21 @@ body.is-wish .poster.is-selected .tint { opacity: 0; }
   inset: 0;
   opacity: 0;
   pointer-events: none;
+  --inner: 60%;
+  --inner-soft: 40%;
 }
 
 .grime-layer {
   position: absolute;
   inset: 0;
+  opacity: 1;
   background-repeat: no-repeat;
   background-size: 100% 100%;
   mix-blend-mode: multiply;
   pointer-events: none;
+  --p: 1;
+  -webkit-mask-image: radial-gradient(ellipse closest-side at 50% 50%, rgba(0, 0, 0, var(--p)) 0%, rgba(0, 0, 0, var(--p)) var(--inner-soft), #000 var(--inner), #000 100%);
+  mask-image: radial-gradient(ellipse closest-side at 50% 50%, rgba(0, 0, 0, var(--p)) 0%, rgba(0, 0, 0, var(--p)) var(--inner-soft), #000 var(--inner), #000 100%);
 }
 
 .grime-layer[data-level="1"] { background-image: url('textures/DirtLvlNew1.png'); }

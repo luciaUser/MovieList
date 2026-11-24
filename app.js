@@ -598,10 +598,9 @@
       const opacity = grimeLayerOpacity(rating, level);
       if (opacity <= 0) {
         layer.style.display = 'none';
-        layer.style.opacity = '0';
       } else {
         layer.style.display = '';
-        layer.style.opacity = String(Math.round(opacity * 1000) / 1000);
+        layer.style.setProperty('--p', String(Math.round(opacity * 1000) / 1000));
       }
     }
     const low = typeof rating === 'number' && rating <= 5 && !profileColorOn();
