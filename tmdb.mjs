@@ -30,6 +30,11 @@ function yearOf(item) {
   return String(item?.release_date || item?.first_air_date || '').slice(0, 4);
 }
 
+function releaseOf(item) {
+  const text = String(item?.release_date || item?.first_air_date || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+}
+
 function shape(item, yearMatch) {
   if (!item) return null;
   return {
@@ -40,6 +45,7 @@ function shape(item, yearMatch) {
     year: yearOf(item),
     posterPath: item.poster_path || null,
     yearMatch: Boolean(yearMatch),
+    releaseDate: releaseOf(item),
   };
 }
 

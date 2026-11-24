@@ -870,6 +870,10 @@
     lastTapAt = now;
     lastTapId = film.id;
     if (again) {
+      if (isUnreleased(film)) {
+        if (selectedId !== film.id) openFilm(film, false);
+        return;
+      }
       if (lensPack) {
         openFilm(film, mode === 'network' ? 'near' : false);
         return;
@@ -1476,7 +1480,7 @@
     followed.hidden = true;
     panel.append(followed);
     fillFollowed(film.id, followed);
-    if (!mine) {
+    if (!mine && !isUnreleased(film)) {
       const addMine = el('button', 'text-line', 'Zu meinem Archiv hinzufügen');
       addMine.type = 'button';
       addMine.addEventListener('click', () => addForeignFilm(film));
@@ -1485,7 +1489,8 @@
 
     const field = el('div', 'block');
     const shared = panelList && panelList.members && panelList.members.length > 1 ? panelList : null;
-    field.append(shared ? sharedRateBlock(film, shared, row) : ownRateBlock(film, row));
+    if (isUnreleased(film)) field.append(el('p', 'release-note', releaseLine(film)));
+    else field.append(shared ? sharedRateBlock(film, shared, row) : ownRateBlock(film, row));
     const memoLabel = el('label', null, 'Notiz');
     memoLabel.htmlFor = 'own-memo';
     memoLabel.style.marginTop = '16px';
@@ -1497,6 +1502,7 @@
     memo.addEventListener('input', () => writeEntry(film.id, { memo: memo.value }));
     field.append(memoLabel, memo);
     panel.append(field);
+    if (isCustomFilm(film)) suggestCustomLink(film);
     appendTraits(film, full);
 
     [
@@ -2616,6 +2622,10 @@
   }
 
   function placeFilm(film, facets) {
+    if (isUnreleased(film)) {
+      addStatus.textContent = releaseLine(film);
+      return;
+    }
     film = withCanonicalId(film, facets);
     const existing = findExisting(film, facets);
     if (existing) {
@@ -3628,7 +3638,10 @@
       original: row.original_title || null,
       year: row.year || '',
       yearNum: Number.isFinite(yearNum) ? yearNum : null,
-      kind: row.kind === 'tv' ? 'serie' : 'film',
+      kind: row.kind === 'custom' ? 'custom' : (row.kind === 'tv' ? 'serie' : 'film'),
+      release_date: row.release_date || null,
+      status: row.status || null,
+      checked_at: row.checked_at || null,
       genres,
       cluster: genres[0] || '',
       director: facets.director || '',
@@ -4379,7 +4392,7 @@
   }
 
   function addForeignFilm(film) {
-    if (!globalThis.Store || !film) return;
+    if (!globalThis.Store || !film || isUnreleased(film)) return;
     if (!archive) {
       adoptArchive(globalThis.Store.create('leer'));
       closeSheet();
@@ -5450,23 +5463,97 @@
     return null;
   }
 
+  function posterHue(id) {
+    let hash = 0;
+    const text = String(id || '');
+    for (let index = 0; index < text.length; index += 1) {
+      hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+    }
+    return hash % 360;
+  }
+
+  function localDay(iso) {
+    const match = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  }
+
+  function isCustomFilm(film) {
+    if (!film) return false;
+    return film.kind === 'custom' || String(film.id || '').indexOf('custom:') === 0;
+  }
+
+  function filmReleaseIso(film) {
+    if (!film) return '';
+    const match = String(film.release_date || film.releaseDate || '').match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+
+  function isUpcomingFilm(film) {
+    if (!film || isCustomFilm(film)) return false;
+    const day = localDay(filmReleaseIso(film));
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (day) return day > start;
+    const status = String(film.status || '');
+    if (!status) return false;
+    return status !== 'Released' && status !== 'Canceled';
+  }
+
+  function isUnreleased(film) {
+    return isCustomFilm(film) || isUpcomingFilm(film);
+  }
+
+  function releaseStamp(film) {
+    if (!film) return '';
+    if (isCustomFilm(film)) {
+      const year = String(film.year || '').slice(0, 4);
+      return /^\d{4}$/.test(year) ? year : 'UPCOMING';
+    }
+    const day = localDay(filmReleaseIso(film));
+    if (!day) return isUpcomingFilm(film) ? 'UPCOMING' : '';
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    if (day <= start) {
+      const fresh = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 14);
+      return day >= fresh ? 'NEU' : '';
+    }
+    const soon = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 60);
+    if (day <= soon) return `${day.getDate()}.${day.getMonth() + 1}.`;
+    const far = new Date(start.getFullYear(), start.getMonth() + 18, start.getDate());
+    if (day > far) return String(day.getFullYear());
+    const names = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'];
+    return `${names[day.getMonth()]} ${String(day.getFullYear()).slice(2)}`;
+  }
+
+  function releaseLine(film) {
+    const day = localDay(filmReleaseIso(film));
+    if (!day) return 'Erscheinungsdatum noch offen';
+    return `Erscheint am ${day.getDate()}.${day.getMonth() + 1}.${day.getFullYear()}`;
+  }
+
   function filmCatalogPayload(film, facets) {
     const base = facets && typeof facets === 'object' ? facets : null;
     const score = base && typeof base.tmdbRating === 'number'
       ? base.tmdbRating
       : (typeof film.imdb === 'number' ? film.imdb : null);
     const votes = base && typeof base.tmdbVotes === 'number' ? base.tmdbVotes : null;
+    const custom = isCustomFilm(film);
+    const release = filmReleaseIso(film);
     return {
       id: film.id,
       imdb_id: base && base.imdbId ? base.imdbId : null,
       title: film.title || 'Film',
       original_title: film.original || null,
       year: film.year ? String(film.year) : null,
-      kind: /^tmdb:tv:/.test(film.id) || film.kind === 'serie' ? 'tv' : 'movie',
-      poster: (base && base.poster) || film.poster || null,
+      kind: custom ? 'custom' : (/^tmdb:tv:/.test(film.id) || film.kind === 'serie' ? 'tv' : 'movie'),
+      poster: custom ? null : ((base && base.poster) || film.poster || null),
       tmdb_rating: score,
       tmdb_votes: Number.isFinite(votes) ? votes : null,
       facets: base,
+      release_date: custom || !release ? null : release,
+      status: custom ? null : (film.status || null),
+      checked_at: new Date().toISOString(),
     };
   }
 
@@ -5478,7 +5565,14 @@
         local.poster = remote.poster;
         posters.set(local.id, remote.poster);
       }
-      return local;
+      return {
+        ...local,
+        poster: knownPoster(local) || local.poster || '',
+        release_date: local.release_date || (remote && remote.release_date) || null,
+        status: local.status || (remote && remote.status) || null,
+        checked_at: local.checked_at || (remote && remote.checked_at) || null,
+        kind: isCustomFilm(local) || (remote && isCustomFilm(remote)) ? 'custom' : local.kind,
+      };
     }
     if (remote) {
       if (remote.poster) posters.set(remote.id, remote.poster);
@@ -5920,6 +6014,36 @@
     });
   }
 
+  function paintWishCover(button, film) {
+    const poster = knownPoster(film);
+    const image = button.querySelector('img');
+    let title = button.querySelector('.poster-title');
+    if (poster) {
+      button.classList.remove('is-blank');
+      button.style.removeProperty('--blank');
+      if (image) {
+        image.hidden = false;
+        image.src = poster;
+      }
+      if (title) title.remove();
+    } else {
+      button.classList.add('is-blank');
+      button.style.setProperty('--blank', `hsl(${posterHue(film.id)} 25% 14%)`);
+      if (image) image.hidden = true;
+      if (!title) {
+        title = el('span', 'poster-title', film.title || 'Film');
+        button.append(title);
+      } else title.textContent = film.title || 'Film';
+    }
+    let stamp = button.querySelector('.wish-when');
+    const label = releaseStamp(film);
+    if (!label) {
+      if (stamp) stamp.remove();
+    } else if (!stamp) {
+      button.append(el('span', 'wish-when', label));
+    } else stamp.textContent = label;
+  }
+
   function wishPoster(film, rating) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -5930,7 +6054,6 @@
     image.alt = '';
     image.draggable = false;
     image.decoding = 'async';
-    image.src = posterSrc(film);
     const tint = document.createElement('span');
     tint.className = 'tint';
     tint.style.background = rating == null ? '' : coverTint(rating);
@@ -5938,8 +6061,136 @@
     score.className = 'poster-score';
     score.textContent = rating == null ? '' : `★  ${Number(rating).toFixed(1).replace('.', ',')}`;
     button.append(image, tint, score);
+    paintWishCover(button, film);
     paintWear(button, rating);
     return button;
+  }
+
+  function bestCustomMatch(film, rows) {
+    const title = String(film.title || '').trim().toLocaleLowerCase('de');
+    const year = String(film.year || '').slice(0, 4);
+    const wantYear = /^\d{4}$/.test(year);
+    let best = null;
+    let bestRank = 0;
+    (rows || []).forEach((row) => {
+      const other = row && row.film;
+      if (!other || !other.title) return;
+      const name = String(other.title).trim().toLocaleLowerCase('de');
+      const otherYear = String(other.release_date || other.year || '').slice(0, 4);
+      if (wantYear && otherYear !== year) return;
+      let rank = 0;
+      if (name === title) rank = 2;
+      else if (title && (name.includes(title) || title.includes(name))) rank = 1;
+      if (rank > bestRank) {
+        best = row;
+        bestRank = rank;
+      }
+    });
+    return best;
+  }
+
+  async function linkCustomFilm(film, match, button) {
+    if (!globalThis.Cloud || !globalThis.Cloud.replaceCustomFilm) return;
+    button.disabled = true;
+    try {
+      const resolved = await completeWishHit({
+        film: { ...match.film, fromCatalog: false },
+        facets: match.facets || null,
+        source: 'tmdb',
+      });
+      const next = resolved.film || match.film;
+      next.release_date = next.release_date || match.film.release_date || null;
+      next.status = next.status || match.film.status || null;
+      next.checked_at = new Date().toISOString();
+      const payload = filmCatalogPayload(next, resolved.facets || match.facets || null);
+      await globalThis.Cloud.replaceCustomFilm(film.id, payload);
+      if (payload.poster) posters.set(payload.id, payload.poster);
+      await loadWishlists({ quiet: true });
+      if (mode === 'wish') await paintWishBoard();
+      openFilm(withCanonicalId({ ...next, id: payload.id }, resolved.facets || null));
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = wishFail(error);
+    }
+  }
+
+  function suggestCustomLink(film) {
+    const title = String(film && film.title || '').trim();
+    if (title.length < 2) return;
+    fetch(`/api/film?q=${encodeURIComponent(title)}&list=1&upcoming=1`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!panelFilm || panelFilm.id !== film.id || panel.hidden) return;
+        const match = bestCustomMatch(film, data && data.films);
+        if (!match || !match.film) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'text-line';
+        button.textContent = `Auf TMDB gefunden: ${match.film.title} – verknüpfen`;
+        button.addEventListener('click', () => linkCustomFilm(film, match, button));
+        const line = el('p', 'custom-link');
+        line.append(button);
+        const note = panel.querySelector('.release-note');
+        if (note) note.before(line);
+        else panel.append(line);
+      })
+      .catch(() => {});
+  }
+
+  async function pullUpcomingFilm(film) {
+    const ref = String(film.id || '').match(/^tmdb:(movie|tv):(\d+)$/);
+    if (!ref || !globalThis.Cloud || !globalThis.Cloud.upsertFilm) return;
+    try {
+      const response = await fetch(`/api/film?q=${encodeURIComponent(`https://www.themoviedb.org/${ref[1]}/${ref[2]}`)}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.film) return;
+      const next = withCanonicalId(data.film, data.facets || {});
+      next.release_date = data.film.release_date || null;
+      next.status = data.film.status || null;
+      next.checked_at = new Date().toISOString();
+      if (!next.poster && film.poster) next.poster = film.poster;
+      const payload = filmCatalogPayload(next, data.facets || {});
+      if (!payload.poster && film.poster) payload.poster = film.poster;
+      await globalThis.Cloud.upsertFilm(payload);
+      const shown = {
+        ...next,
+        id: film.id,
+        title: payload.title,
+        poster: payload.poster || '',
+        release_date: payload.release_date,
+        status: payload.status,
+        checked_at: payload.checked_at,
+        year: payload.year || next.year || '',
+      };
+      if (payload.poster) posters.set(film.id, payload.poster);
+      document.querySelectorAll(`#wish-board [data-id="${CSS.escape(film.id)}"]`).forEach((button) => {
+        if (!button.classList.contains('poster')) return;
+        paintWishCover(button, shown);
+      });
+    } catch {
+      /* der nächste Film bleibt dran */
+    }
+  }
+
+  function refreshUpcomingFilms(films, token) {
+    const queue = [];
+    const seen = new Set();
+    (films || []).forEach((film) => {
+      if (!film || !film.id || seen.has(film.id) || isCustomFilm(film)) return;
+      if (!/^tmdb:(movie|tv):\d+$/.test(film.id) || !isUpcomingFilm(film)) return;
+      const checked = Date.parse(film.checked_at || '');
+      if (Number.isFinite(checked) && Date.now() - checked < 24 * 60 * 60 * 1000) return;
+      seen.add(film.id);
+      queue.push(film);
+    });
+    let chain = Promise.resolve();
+    queue.forEach((film) => {
+      chain = chain.then(() => {
+        if (token !== wishBoardToken) return null;
+        return pullUpcomingFilm(film);
+      });
+    });
+    return chain;
   }
 
   function openListedFilm(film, list) {
@@ -6371,6 +6622,9 @@
         film.poster = poster;
         if (data.facets && !data.facets.poster) data.facets.poster = poster;
       }
+      film.release_date = data.film.release_date || (row.film && row.film.release_date) || null;
+      film.status = data.film.status || (row.film && row.film.status) || null;
+      film.checked_at = new Date().toISOString();
       return { ...row, film: { ...film, fromCatalog: false }, facets: data.facets || null, fromCatalog: false };
     } catch {
       return row;
@@ -6398,6 +6652,15 @@
     const note = el('p', 'wish-find-note', 'Titel eingeben');
     const hits = el('div', 'wish-hits');
     box.append(head, note, hits);
+    const upcomingTitle = el('h2', 'wish-kicker', 'Upcoming');
+    const upcomingInput = document.createElement('input');
+    upcomingInput.className = 'wish-upcoming';
+    upcomingInput.type = 'text';
+    upcomingInput.setAttribute('aria-label', 'Upcoming');
+    upcomingInput.autocomplete = 'off';
+    upcomingInput.spellcheck = false;
+    const upcomingHits = el('div', 'wish-hits');
+    box.append(upcomingTitle, upcomingInput, upcomingHits);
     panel.append(box);
     let token = 0;
     let cursor = 0;
@@ -6425,6 +6688,9 @@
         button.addEventListener('click', () => chooseHit(row));
         hits.append(button);
       });
+      if (rows.hasUpcoming) {
+        hits.append(el('p', 'wish-upcoming-hint', 'Noch nicht erschienen? Unter UPCOMING hinzufügen.'));
+      }
       const current = hits.querySelector('.wish-hit.is-current');
       if (current) current.scrollIntoView({ block: 'nearest' });
     };
@@ -6471,12 +6737,149 @@
         cursor = 0;
         if (!rows.length) {
           hits.replaceChildren();
-          note.textContent = 'Nichts gefunden – mit Jahr versuchen, z. B. The Invisible Man (2020)';
+          if (found.hasUpcoming) {
+            hits.append(el('p', 'wish-upcoming-hint', 'Noch nicht erschienen? Unter UPCOMING hinzufügen.'));
+            note.textContent = '';
+          } else note.textContent = 'Nichts gefunden – mit Jahr versuchen, z. B. The Invisible Man (2020)';
           return;
         }
         note.textContent = '';
         paintHits();
       }, 250);
+    });
+    let upcomingToken = 0;
+    let upcomingCursor = 0;
+    let upcomingRows = [];
+    let upcomingQuery = '';
+    const paintUpcoming = () => {
+      upcomingHits.replaceChildren();
+      upcomingRows.forEach((row, index) => {
+        const film = row.film;
+        const have = wishOnList(currentWishSearchList(), film.id);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wish-hit wish-hit-plain';
+        if (index === upcomingCursor) button.classList.add('is-current');
+        if (have) button.classList.add('is-have');
+        button.disabled = have;
+        button.append(el('span', 'wish-hit-title', film.title || 'Film'));
+        button.append(el('span', 'wish-when', releaseStamp(film) || 'UPCOMING'));
+        button.addEventListener('click', () => takeUpcoming(row));
+        upcomingHits.append(button);
+      });
+      if (upcomingQuery.length < 2) return;
+      const custom = document.createElement('button');
+      custom.type = 'button';
+      custom.className = 'wish-hit wish-custom-hit';
+      if (upcomingCursor === upcomingRows.length) custom.classList.add('is-current');
+      custom.textContent = `„${upcomingQuery}“ als eigenen Eintrag`;
+      custom.addEventListener('click', () => openCustomYear());
+      upcomingHits.append(custom);
+    };
+    const takeUpcoming = (row) => {
+      upcomingInput.value = '';
+      upcomingQuery = '';
+      upcomingRows = [];
+      upcomingCursor = 0;
+      upcomingHits.replaceChildren();
+      chooseHit(row);
+    };
+    const openCustomYear = () => {
+      const title = upcomingQuery;
+      if (title.length < 2) return;
+      upcomingHits.replaceChildren();
+      const year = document.createElement('input');
+      year.type = 'text';
+      year.className = 'wish-year';
+      year.inputMode = 'numeric';
+      year.maxLength = 4;
+      year.placeholder = 'Jahr';
+      year.setAttribute('aria-label', 'Jahr');
+      year.autocomplete = 'off';
+      upcomingHits.append(year);
+      year.focus();
+      year.addEventListener('keydown', async (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        const digits = year.value.replace(/\D/g, '');
+        if (digits.length > 0 && digits.length < 4) return;
+        const live = currentWishSearchList();
+        if (!live) return;
+        year.disabled = true;
+        const film = {
+          id: `custom:${crypto.randomUUID()}`,
+          title,
+          year: digits,
+          kind: 'custom',
+          poster: null,
+          genres: [],
+          director: '',
+          imdb: null,
+          imdbLabel: '',
+          fromCatalog: false,
+        };
+        upcomingInput.value = '';
+        upcomingQuery = '';
+        upcomingRows = [];
+        upcomingHits.replaceChildren();
+        const message = await addFilmToList(live.id, film, null);
+        if (message) {
+          note.textContent = message;
+          return;
+        }
+        markWishFilm(film.id);
+        showWishPosterNow(live, film);
+      });
+    };
+    upcomingInput.addEventListener('input', () => {
+      upcomingQuery = upcomingInput.value.trim();
+      window.clearTimeout(upcomingInput._timer);
+      upcomingRows = [];
+      upcomingCursor = 0;
+      if (upcomingQuery.length < 2) {
+        upcomingHits.replaceChildren();
+        return;
+      }
+      upcomingInput._timer = window.setTimeout(async () => {
+        const mine = upcomingToken + 1;
+        upcomingToken = mine;
+        let found = [];
+        try {
+          const response = await fetch(`/api/film?q=${encodeURIComponent(upcomingQuery)}&list=1&upcoming=1`);
+          const data = await response.json().catch(() => null);
+          const films = response.ok && data && Array.isArray(data.films) ? data.films : [];
+          found = films.filter((item) => item && item.film && item.film.title).map((item) => ({
+            film: { ...item.film, fromCatalog: false },
+            facets: item.facets || null,
+            source: 'tmdb',
+          }));
+        } catch {
+          found = [];
+        }
+        if (mine !== upcomingToken || !wishSearchList) return;
+        upcomingRows = found;
+        upcomingCursor = 0;
+        paintUpcoming();
+      }, 250);
+    });
+    upcomingInput.addEventListener('keydown', (event) => {
+      const total = upcomingRows.length + (upcomingQuery.length >= 2 ? 1 : 0);
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!total) return;
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        upcomingCursor = Math.max(0, Math.min(total - 1, upcomingCursor + step));
+        paintUpcoming();
+        return;
+      }
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      if (!upcomingRows.length || upcomingCursor >= upcomingRows.length) {
+        if (upcomingQuery.length >= 2) openCustomYear();
+        return;
+      }
+      const row = upcomingRows[upcomingCursor];
+      if (row) takeUpcoming(row);
     });
     input.addEventListener('keydown', (event) => {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -6511,7 +6914,7 @@
     bar.append(title, by, side);
     if (invited) {
       board.append(bar);
-      return;
+      return [];
     }
     side.classList.add('has-remove');
     side.addEventListener('click', (event) => {
@@ -6535,14 +6938,14 @@
     } catch {
       items = [];
     }
-    if (token !== wishBoardToken) return;
+    if (token !== wishBoardToken) return [];
     sideText.textContent = wishCountLabel(items.length);
     const filmIds = items.map((item) => item.filmId).filter(Boolean);
     let ratings = [];
     if (list.members.length > 1 && filmIds.length && globalThis.Cloud.memberRatings) {
       ratings = await globalThis.Cloud.memberRatings(list.members.map((person) => person.id), filmIds).catch(() => []);
     }
-    if (token !== wishBoardToken) return;
+    if (token !== wishBoardToken) return [];
     const byFilm = new Map();
     ratings.forEach((row) => {
       const rating = Number(row.rating);
@@ -6577,6 +6980,7 @@
     });
     board.append(grid);
     schedulePosterFill(items);
+    return items;
     if (list.members.length > 1 && averages.length) {
       const avg = averages.reduce((sum, value) => sum + value, 0) / averages.length;
       sideText.append(document.createTextNode(`  ★ ${avg.toFixed(1).replace('.', ',')}`));
@@ -6594,10 +6998,13 @@
       const input = board.querySelector('.wish-name');
       if (input) input.focus();
     }
+    const stale = [];
     for (const list of wishLists) {
-      await paintWishGroup(board, list, token);
+      const items = await paintWishGroup(board, list, token);
       if (token !== wishBoardToken) return;
+      (items || []).forEach((item) => stale.push(wishFilmObject(item)));
     }
+    refreshUpcomingFilms(stale, token);
   }
 
   function paintWishHome() {
@@ -7067,15 +7474,23 @@
       const response = await fetch(`/api/film?q=${encodeURIComponent(q)}&list=1`);
       const data = await response.json().catch(() => null);
       const films = response.ok && data && Array.isArray(data.films) ? data.films : [];
+      let sawUpcoming = Boolean(data && data.hasUpcoming);
       films.forEach((item, order) => {
         if (!item || !item.film) return;
+        if (isUpcomingFilm(item.film)) {
+          sawUpcoming = true;
+          return;
+        }
         add({ ...item.film, fromCatalog: false }, 'tmdb', item.facets || null, false, 0, Math.max(48 - order * 3, 12));
       });
+      rows.hasUpcoming = sawUpcoming;
     } catch {
       /* TMDB bleibt aus */
     }
     rows.sort((a, b) => (b.score + b.bonus) - (a.score + a.bonus) || a.order - b.order);
-    return rows.slice(0, 12);
+    const listed = rows.slice(0, 12);
+    listed.hasUpcoming = Boolean(rows.hasUpcoming);
+    return listed;
   }
 
   async function openNewWishlist() {

@@ -656,14 +656,20 @@ function randomAvatar() {
       const rows = items.data || [];
       const filmIds = [...new Set(rows.map((row) => row.film_id))];
       const itemIds = rows.map((row) => row.id);
-      const [films, votes] = await Promise.all([
+      const [filmResult, votes] = await Promise.all([
         filmIds.length
-          ? client.from('films').select('id, title, original_title, year, poster, kind, facets').in('id', filmIds)
+          ? client.from('films').select('id, title, original_title, year, poster, kind, facets, release_date, status, checked_at').in('id', filmIds)
           : Promise.resolve({ data: [], error: null }),
         itemIds.length
           ? client.from('wishlist_votes').select('item_id, user_id').in('item_id', itemIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
+      let films = filmResult;
+      if (films.error && /release_date|checked_at|schema cache|column/i.test(films.error.message || '')) {
+        films = filmIds.length
+          ? await client.from('films').select('id, title, original_title, year, poster, kind, facets').in('id', filmIds)
+          : { data: [], error: null };
+      }
       if (films.error) throw films.error;
       if (votes.error) throw votes.error;
       const peopleIds = [...new Set(rows.map((row) => row.added_by).concat((votes.data || []).map((row) => row.user_id)).filter(Boolean))];
@@ -745,8 +751,30 @@ function randomAvatar() {
       return rows.map((row) => ({ id: row.id, filmId: row.film_id, film: byId.get(row.film_id) || null }));
     },
     async upsertFilm(row) {
-      const { error } = await client.from('films').upsert(row, { onConflict: 'id' });
-      if (error) throw error;
+      let result = await client.from('films').upsert(row, { onConflict: 'id' });
+      if (result.error && /release_date|checked_at|schema cache|column/i.test(result.error.message || '')) {
+        const plain = { ...row };
+        delete plain.release_date;
+        delete plain.status;
+        delete plain.checked_at;
+        result = await client.from('films').upsert(plain, { onConflict: 'id' });
+      }
+      if (result.error) throw result.error;
+    },
+    async replaceCustomFilm(customId, row) {
+      await this.upsertFilm(row);
+      const items = await client.from('wishlist_items').select('id').eq('film_id', customId);
+      if (items.error) throw items.error;
+      for (const item of items.data || []) {
+        const updated = await client.from('wishlist_items').update({ film_id: row.id }).eq('id', item.id);
+        if (!updated.error) continue;
+        const duplicate = updated.error.code === '23505' || /duplicate|wishlist_items_film_key/i.test(updated.error.message || '');
+        if (!duplicate) throw updated.error;
+        const removed = await client.from('wishlist_items').delete().eq('id', item.id);
+        if (removed.error) throw removed.error;
+      }
+      const deleted = await client.from('films').delete().eq('id', customId);
+      if (deleted.error) throw deleted.error;
     },
     async createWishlist(title, memberIds) {
       const user = await currentUser();

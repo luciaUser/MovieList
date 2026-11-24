@@ -40,20 +40,41 @@ function parseQuery(raw) {
   return { kind: 'text', text: query };
 }
 
+function dateOnly(value) {
+  const text = String(value || '').slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : '';
+}
+
+function todayIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isUpcomingRelease(releaseDate, status) {
+  const date = dateOnly(releaseDate);
+  if (date && date > todayIso()) return true;
+  if (!date) {
+    const state = String(status || '');
+    if (!state) return false;
+    return state !== 'Released' && state !== 'Canceled';
+  }
+  return false;
+}
+
 function hitFromPayload(payload, type) {
   if (!payload?.id) return null;
-  const date = payload.release_date || payload.first_air_date || '';
+  const date = dateOnly(payload.release_date || payload.first_air_date);
   return {
     id: payload.id,
     mediaType: type === 'tv' ? 'tv' : 'movie',
     title: payload.title || payload.name || '',
     originalTitle: payload.original_title || payload.original_name || '',
-    year: String(date).slice(0, 4),
+    year: date.slice(0, 4),
     posterPath: payload.poster_path || null,
+    releaseDate: date,
   };
 }
 
-function filmRecord(hit, facets) {
+function filmRecord(hit, facets, extra) {
   const year = String(hit.year || '');
   const yearNum = Number(year.slice(0, 4));
   const rating = typeof facets.tmdbRating === 'number' ? facets.tmdbRating : null;
@@ -82,6 +103,8 @@ function filmRecord(hit, facets) {
     director: facets.director || null,
     franchise: facets.franchise || null,
     poster: facets.poster || (hit.posterPath ? `https://image.tmdb.org/t/p/w500${hit.posterPath}` : null),
+    release_date: extra && extra.release_date ? extra.release_date : null,
+    status: extra && extra.status ? extra.status : null,
   };
 }
 
@@ -90,10 +113,20 @@ export async function lookupFilm(raw) {
   if (!parsed) throw fail(400, 'Titel oder Link eintragen.');
   if (!configured()) throw fail(503, 'TMDB ist nicht eingerichtet');
   let hit = null;
+  let detailPayload = null;
   try {
     if (parsed.kind === 'imdb') hit = await findByImdb(parsed.id);
-    else if (parsed.kind === 'tmdb') hit = hitFromPayload(await details(parsed.type, parsed.id), parsed.type);
-    else hit = await search(parsed.text, parsed.year);
+    else if (parsed.kind === 'tmdb') {
+      detailPayload = await details(parsed.type, parsed.id);
+      hit = hitFromPayload(detailPayload, parsed.type);
+    } else hit = await search(parsed.text, parsed.year);
+    if (hit?.id && !detailPayload) {
+      try {
+        detailPayload = await details(hit.mediaType === 'tv' ? 'tv' : 'movie', hit.id);
+      } catch {
+        detailPayload = null;
+      }
+    }
   } catch {
     throw fail(502, 'Der Abruf ist gerade nicht möglich.');
   }
@@ -112,12 +145,18 @@ export async function lookupFilm(raw) {
   }
   const facets = enriched?.facets || {};
   if (!facets.tmdbId) throw fail(404, 'Dazu finde ich keinen Film.');
-  return { film: filmRecord(hit, facets), facets };
+  const releaseDate = dateOnly(detailPayload?.release_date || detailPayload?.first_air_date || hit.releaseDate);
+  const status = detailPayload && detailPayload.status ? String(detailPayload.status) : '';
+  return {
+    film: filmRecord(hit, facets, { release_date: releaseDate || null, status: status || null }),
+    facets,
+  };
 }
 
-function lightFilm(hit, director) {
+function lightFilm(hit, director, fact) {
   const kind = hit.mediaType === 'tv' ? 'tv' : 'movie';
   const poster = hit.posterPath ? `https://image.tmdb.org/t/p/w342${hit.posterPath}` : null;
+  const extra = fact && typeof fact === 'object' ? fact : null;
   return {
     film: {
       id: `tmdb:${kind}:${hit.id}`,
@@ -132,6 +171,8 @@ function lightFilm(hit, director) {
       kind: kind === 'tv' ? 'serie' : 'film',
       imdb: null,
       imdbLabel: '',
+      release_date: (extra && extra.release_date) || dateOnly(hit.releaseDate) || null,
+      status: (extra && extra.status) || null,
     },
     facets: {
       tmdbId: hit.id,
@@ -142,39 +183,89 @@ function lightFilm(hit, director) {
   };
 }
 
-export async function lookupFilms(raw) {
+async function upcomingFacts(hits) {
+  const facts = new Map();
+  let checked = 0;
+  for (const hit of hits) {
+    if (!hit || checked >= 10) break;
+    const known = dateOnly(hit.releaseDate);
+    if (known && known <= todayIso()) continue;
+    checked += 1;
+    const payload = await details(hit.mediaType, hit.id);
+    const releaseDate = dateOnly(payload?.release_date || payload?.first_air_date) || known;
+    const status = payload && payload.status ? String(payload.status) : '';
+    const key = `${hit.mediaType}:${hit.id}`;
+    if (isUpcomingRelease(releaseDate, status)) {
+      facts.set(key, { release_date: releaseDate || null, status: status || null });
+    } else {
+      facts.set(key, false);
+    }
+  }
+  return facts;
+}
+
+function listRow(one, upcomingOnly) {
+  const film = one && one.film;
+  const upcoming = Boolean(film && isUpcomingRelease(film.release_date, film.status));
+  if (upcomingOnly) return { films: upcoming && one ? [one] : [], hasUpcoming: upcoming };
+  return { films: upcoming || !one ? [] : [one], hasUpcoming: upcoming };
+}
+
+export async function lookupFilms(raw, options) {
+  const upcomingOnly = Boolean(options && options.upcoming);
   const parsed = parseQuery(raw);
-  if (!parsed || !configured()) return [];
+  if (!parsed || !configured()) return { films: [], hasUpcoming: false };
   if (parsed.kind !== 'text') {
-    const one = await lookupFilm(raw);
-    return one ? [one] : [];
+    try {
+      return listRow(await lookupFilm(raw), upcomingOnly);
+    } catch {
+      return { films: [], hasUpcoming: false };
+    }
   }
   let hits = [];
   try {
-    hits = await searchHits(parsed.text, parsed.year, 8);
+    hits = await searchHits(parsed.text, parsed.year, upcomingOnly ? 20 : 8);
   } catch {
-    return [];
+    return { films: [], hasUpcoming: false };
   }
-  const films = await Promise.all(hits.map(async (hit) => {
+  const facts = await upcomingFacts(hits);
+  let hasUpcoming = false;
+  const kept = [];
+  hits.forEach((hit) => {
+    const fact = facts.get(`${hit.mediaType}:${hit.id}`);
+    if (fact) {
+      hasUpcoming = true;
+      if (upcomingOnly) kept.push({ hit, fact });
+      return;
+    }
+    if (!upcomingOnly) kept.push({ hit, fact: null });
+  });
+  const films = await Promise.all(kept.map(async ({ hit, fact }) => {
     let director = '';
     try {
       director = await directorName(hit.mediaType, hit.id);
     } catch {
       director = '';
     }
-    return lightFilm(hit, director);
+    return lightFilm(hit, director, fact);
   }));
-  return films.filter((row) => row.film && row.film.title);
+  return {
+    films: films.filter((row) => row.film && row.film.title),
+    hasUpcoming,
+  };
 }
 
 export async function filmResponse(raw, options) {
   try {
     if (options && options.list) {
-      const films = await lookupFilms(raw);
+      const found = await lookupFilms(raw, { upcoming: Boolean(options && options.upcoming) });
+      const body = options && options.upcoming
+        ? { films: found.films }
+        : { films: found.films, hasUpcoming: Boolean(found.hasUpcoming) };
       return {
         status: 200,
-        body: JSON.stringify({ films }),
-        cache: films.length ? 's-maxage=3600' : 'no-store',
+        body: JSON.stringify(body),
+        cache: found.films.length ? 's-maxage=3600' : 'no-store',
       };
     }
     const result = await lookupFilm(raw);

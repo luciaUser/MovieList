@@ -112,6 +112,10 @@ create table if not exists public.recovery_emails (
 -- Constraints (beim zweiten Lauf erst entfernen, dann neu anlegen)
 -- ---------------------------------------------------------------------------
 
+alter table public.films add column if not exists release_date date;
+alter table public.films add column if not exists status text;
+alter table public.films add column if not exists checked_at timestamptz;
+
 alter table public.profiles add column if not exists avatar jsonb;
 alter table public.profiles add column if not exists taste jsonb;
 alter table public.profiles add column if not exists taste_hidden boolean not null default false;
@@ -754,6 +758,7 @@ grant update (display_name, is_private, top_films, pinned_people, avatar, taste_
 
 grant select, insert, update, delete on public.follows to authenticated;
 grant select, insert, update on public.films to authenticated;
+grant delete on public.films to authenticated;
 grant select, insert, update, delete on public.entries to authenticated;
 grant select, insert, update, delete on public.notes to authenticated;
 grant select, insert, update, delete on public.wishlists to authenticated;
@@ -909,6 +914,11 @@ create policy films_update on public.films
   for update to authenticated
   using (auth.uid() is not null)
   with check (auth.uid() is not null);
+
+drop policy if exists films_delete on public.films;
+create policy films_delete on public.films
+  for delete to authenticated
+  using (auth.uid() is not null and id like 'custom:%');
 
 drop policy if exists wishlists_select on public.wishlists;
 create policy wishlists_select on public.wishlists
