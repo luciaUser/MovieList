@@ -471,12 +471,13 @@
     return button;
   }
 
-  function grimeLevel(rating) {
-    if (typeof rating !== 'number' || !(rating <= 4)) return 0;
-    if (rating <= 1) return 4;
-    if (rating <= 2) return 3;
-    if (rating <= 3) return 2;
-    return 1;
+  function grimeLayerOpacity(rating, level) {
+    if (typeof rating !== 'number') return 0;
+    const start = 5 - level;
+    const end = start - 1;
+    if (rating > start) return 0;
+    if (rating <= end) return 1;
+    return 0.4 + (0.6 * (start - rating));
   }
 
   function grimeTurn(id) {
@@ -585,8 +586,24 @@
       if (tint) tint.after(grime);
       else host.append(grime);
     }
-    grime.dataset.grime = String(grimeLevel(rating));
     grime.dataset.turn = String(grimeTurn(host.dataset.id));
+    for (let level = 1; level <= 4; level += 1) {
+      let layer = grime.querySelector(':scope > .grime-layer[data-level="' + level + '"]');
+      if (!layer) {
+        layer = document.createElement('span');
+        layer.className = 'grime-layer';
+        layer.dataset.level = String(level);
+        grime.append(layer);
+      }
+      const opacity = grimeLayerOpacity(rating, level);
+      if (opacity <= 0) {
+        layer.style.display = 'none';
+        layer.style.opacity = '0';
+      } else {
+        layer.style.display = '';
+        layer.style.opacity = String(Math.round(opacity * 1000) / 1000);
+      }
+    }
     const low = typeof rating === 'number' && rating <= 5 && !profileColorOn();
     host.classList.toggle('is-low', low);
     if (!low) {
@@ -601,7 +618,7 @@
   function preloadGrime() {
     [1, 2, 3, 4].forEach((level) => {
       const image = new Image();
-      image.src = 'textures/DirtLvl' + level + '.png';
+      image.src = 'textures/DirtLvlNew' + level + '.png';
     });
   }
 
@@ -1211,7 +1228,13 @@
     const amount = value == null ? 0 : Math.max(0, Math.min(10, Number(value)));
     wrap.style.setProperty('--p', `${amount * 10}%`);
     applyScoreBar(wrap, avatar);
-    wrap.append(el('span', 'score-fill'), el('span', 'score-dirt'), el('span', 'score-dim'), el('span', 'score-grip'));
+    wrap.append(el('span', 'score-fill'));
+    for (let level = 1; level <= 4; level += 1) {
+      const dirt = el('span', 'score-dirt');
+      dirt.dataset.level = String(level);
+      wrap.append(dirt);
+    }
+    wrap.append(el('span', 'score-dim'), el('span', 'score-grip'));
     if (editable) {
       const range = document.createElement('input');
       range.id = 'own-rate';

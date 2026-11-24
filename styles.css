@@ -1249,15 +1249,21 @@ body.is-wish .poster.is-selected .tint { opacity: 0; }
   inset: 0;
   opacity: 0;
   pointer-events: none;
+}
+
+.grime-layer {
+  position: absolute;
+  inset: 0;
   background-repeat: no-repeat;
   background-size: 100% 100%;
   mix-blend-mode: multiply;
+  pointer-events: none;
 }
 
-.grime[data-grime="1"] { background-image: url('textures/DirtLvl1.png'); }
-.grime[data-grime="2"] { background-image: url('textures/DirtLvl2.png'); }
-.grime[data-grime="3"] { background-image: url('textures/DirtLvl3.png'); }
-.grime[data-grime="4"] { background-image: url('textures/DirtLvl4.png'); }
+.grime-layer[data-level="1"] { background-image: url('textures/DirtLvlNew1.png'); }
+.grime-layer[data-level="2"] { background-image: url('textures/DirtLvlNew2.png'); }
+.grime-layer[data-level="3"] { background-image: url('textures/DirtLvlNew3.png'); }
+.grime-layer[data-level="4"] { background-image: url('textures/DirtLvlNew4.png'); }
 .grime[data-turn="1"] { transform: scaleX(-1); }
 .grime[data-turn="2"] { transform: scaleY(-1); }
 .grime[data-turn="3"] { transform: rotate(180deg); }
@@ -2192,10 +2198,34 @@ body.is-network {
 
 .score-dirt {
   inset: 0;
-  background: url('textures/DirtLvl4.png') center / 100% 100% no-repeat;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
   mix-blend-mode: multiply;
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, transparent 40%);
-  mask-image: linear-gradient(90deg, #000 0%, transparent 40%);
+}
+
+.score-dirt[data-level="1"] {
+  background-image: url('textures/DirtLvlNew1.png');
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 30%, rgba(0, 0, 0, 0.4) 40%, transparent 40%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 30%, rgba(0, 0, 0, 0.4) 40%, transparent 40%);
+}
+
+.score-dirt[data-level="2"] {
+  background-image: url('textures/DirtLvlNew2.png');
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 20%, rgba(0, 0, 0, 0.4) 30%, transparent 30%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 20%, rgba(0, 0, 0, 0.4) 30%, transparent 30%);
+}
+
+.score-dirt[data-level="3"] {
+  background-image: url('textures/DirtLvlNew3.png');
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 10%, rgba(0, 0, 0, 0.4) 20%, transparent 20%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 10%, rgba(0, 0, 0, 0.4) 20%, transparent 20%);
+}
+
+.score-dirt[data-level="4"] {
+  background-image: url('textures/DirtLvlNew4.png');
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.4) 10%, transparent 10%);
+  mask-image: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.4) 10%, transparent 10%);
 }
 
 .score-bar.is-profile .score-dirt { display: none; }
