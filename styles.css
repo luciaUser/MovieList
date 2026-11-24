@@ -987,6 +987,12 @@ button.wish-swatch { cursor: pointer; }
 
 #wish-board .poster.is-fresh { box-shadow: inset 0 0 0 1px #fff; }
 
+#wish-board .poster.is-leaving,
+.wish-film.is-leaving {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
 .wish-create { display: flex; cursor: pointer; }
 
 .profile-head {

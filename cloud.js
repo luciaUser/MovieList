@@ -5,6 +5,7 @@ const domain = typeof config.AUTH_DOMAIN === 'string' && config.AUTH_DOMAIN.trim
   ? config.AUTH_DOMAIN.trim()
   : 'users.invalid';
 const namePattern = /^[a-z0-9_]{3,20}$/;
+let warnedFilmColumns = false;
 
 function normalize(username) {
   return String(username || '').trim().toLowerCase();
@@ -753,6 +754,10 @@ function randomAvatar() {
     async upsertFilm(row) {
       let result = await client.from('films').upsert(row, { onConflict: 'id' });
       if (result.error && /release_date|checked_at|schema cache|column/i.test(result.error.message || '')) {
+        if (!warnedFilmColumns) {
+          warnedFilmColumns = true;
+          console.warn('[upcoming] Spalten release_date/status fehlen in films – supabase/schema.sql ausführen');
+        }
         const plain = { ...row };
         delete plain.release_date;
         delete plain.status;
