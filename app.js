@@ -984,13 +984,21 @@
     selectedId = film.id;
     links = linksFor(film);
     activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
+    const sheetOpening = phoneSheet() && mode === 'network' && panel.hidden;
     renderPanel(film);
     applyNetworkFocus();
     paint();
     if (mode === 'network' && network) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => network.frame([film.id], { minScale: network.nearScale() }));
-      });
+      const run = () => {
+        if (selectedId !== film.id || !network) return;
+        network.frame([film.id], { minScale: network.nearScale() });
+      };
+      if (sheetOpening) window.setTimeout(run, 260);
+      else {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(run);
+        });
+      }
       return;
     }
     if (focus) {
@@ -1016,9 +1024,27 @@
   let panelSheetToken = 0;
   let panelClosing = false;
   let panelDragging = false;
+  let sheetPlace = 'half';
+  let sheetFollow = 0;
 
   function phoneSheet() {
     return window.matchMedia('(max-width: 720px)').matches;
+  }
+
+  function networkHalf() {
+    return phoneSheet() && mode === 'network';
+  }
+
+  function sheetOffset() {
+    return Math.round((panel.offsetHeight || window.innerHeight) * 0.5);
+  }
+
+  function queueSheetFollow() {
+    if (sheetFollow || mode !== 'network' || !network || !network.followPanel) return;
+    sheetFollow = window.requestAnimationFrame(() => {
+      sheetFollow = 0;
+      if (mode === 'network' && network && network.followPanel && !panel.hidden) network.followPanel();
+    });
   }
 
   function lockPanelScroll() {
@@ -1056,6 +1082,7 @@
     panel.style.transform = '';
     panelDragging = false;
     panelClosing = false;
+    sheetPlace = 'half';
     unlockPanelScroll();
   }
 
@@ -1068,12 +1095,22 @@
     if (panelClosing) return;
     panelClosing = true;
     const token = ++panelSheetToken;
-    panel.style.transition = 'transform 260ms ease-out';
+    const ms = networkHalf() ? 240 : 260;
+    panel.style.transition = `transform ${ms}ms ease-out`;
     panel.style.transform = 'translateY(100%)';
     window.setTimeout(() => {
       if (token !== panelSheetToken) return;
       hidePanelNow();
-    }, 260);
+    }, ms);
+  }
+
+  function settleSheet(place) {
+    sheetPlace = place === 'full' ? 'full' : 'half';
+    const y = sheetPlace === 'full' ? 0 : sheetOffset();
+    panel.style.transition = 'transform 240ms ease-out';
+    panel.style.transform = `translateY(${y}px)`;
+    queueSheetFollow();
+    window.setTimeout(queueSheetFollow, 240);
   }
 
   function revealPanel() {
@@ -1090,11 +1127,15 @@
       return;
     }
     panel.classList.add('is-sheet');
+    const peek = networkHalf();
     if (!opening) {
       panel.hidden = false;
       if (!panelDragging) {
-        panel.style.transition = 'transform 260ms ease-out';
-        panel.style.transform = 'translateY(0)';
+        if (peek) settleSheet(sheetPlace);
+        else {
+          panel.style.transition = 'transform 260ms ease-out';
+          panel.style.transform = 'translateY(0)';
+        }
       }
       return;
     }
@@ -1102,9 +1143,14 @@
     panel.style.transition = 'none';
     panel.style.transform = 'translateY(100%)';
     panel.hidden = false;
+    if (peek) sheetPlace = 'half';
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         if (panel.hidden || panelDragging) return;
+        if (peek) {
+          settleSheet('half');
+          return;
+        }
         panel.style.transition = 'transform 260ms ease-out';
         panel.style.transform = 'translateY(0)';
       });
@@ -1117,12 +1163,27 @@
     let drag = null;
     const finish = (event) => {
       if (!drag || event.pointerId !== drag.id) return;
-      const pull = drag.pull;
-      const moved = drag.active;
+      const info = drag;
       drag = null;
       panelDragging = false;
-      if (!moved) return;
-      if (pull >= 90) {
+      try { panel.releasePointerCapture(event.pointerId); } catch { /* schon losgelassen */ }
+      if (!info.active) return;
+      if (info.peek) {
+        const height = panel.offsetHeight || window.innerHeight;
+        const half = height * 0.5;
+        const y = info.yNow;
+        if (info.place === 'half') {
+          if (y >= half + 90) {
+            clearSelection();
+            return;
+          }
+          settleSheet(y <= half - 70 ? 'full' : 'half');
+          return;
+        }
+        settleSheet(y >= 70 ? 'half' : 'full');
+        return;
+      }
+      if (info.pull >= 90) {
         clearSelection();
         return;
       }
@@ -1135,32 +1196,47 @@
       if (event.target.closest('button, a, input, textarea, select')) return;
       const onGrab = Boolean(event.target.closest('.panel-bar'));
       if (!onGrab && panel.scrollTop > 0) return;
+      const peek = networkHalf();
       drag = {
         id: event.pointerId,
         y: event.clientY,
         pull: 0,
         onGrab,
         active: false,
+        peek,
+        place: sheetPlace,
+        start: peek && sheetPlace === 'half' ? sheetOffset() : 0,
+        yNow: peek && sheetPlace === 'half' ? sheetOffset() : 0,
       };
     });
     panel.addEventListener('pointermove', (event) => {
       if (!drag || event.pointerId !== drag.id) return;
       const delta = event.clientY - drag.y;
       if (!drag.active) {
-        if (delta <= 0) return;
-        if (!drag.onGrab && (delta < 8 || panel.scrollTop > 0)) return;
+        if (drag.peek && drag.onGrab) {
+          if (Math.abs(delta) < 4) return;
+        } else if (delta <= 0) return;
+        else if (!drag.onGrab && (delta < 8 || panel.scrollTop > 0)) return;
         drag.active = true;
+        try { panel.setPointerCapture(event.pointerId); } catch { /* kein Capture */ }
       }
-      if (delta <= 0) {
+      if (!drag.peek && delta <= 0) {
         drag.pull = 0;
+        panelDragging = false;
         panel.style.transition = 'none';
         panel.style.transform = 'translateY(0)';
         return;
       }
+      const height = panel.offsetHeight || window.innerHeight;
+      const next = drag.peek
+        ? Math.max(0, Math.min(height, drag.start + delta))
+        : Math.max(0, delta);
       panelDragging = true;
-      drag.pull = delta;
+      drag.pull = drag.peek ? Math.abs(next - drag.start) : next;
+      drag.yNow = next;
       panel.style.transition = 'none';
-      panel.style.transform = `translateY(${Math.round(delta)}px)`;
+      panel.style.transform = `translateY(${Math.round(next)}px)`;
+      if (drag.peek) queueSheetFollow();
       event.preventDefault();
     }, { passive: false });
     panel.addEventListener('pointerup', finish);
@@ -1887,10 +1963,27 @@
         button.className = 'link';
         button.dataset.id = other.id;
         if (other.id === activeLinkId) button.classList.add('is-active');
-        button.append(
+        const cover = el('span', 'link-poster');
+        const known = knownPoster(other);
+        if (known) {
+          const image = document.createElement('img');
+          image.alt = '';
+          image.draggable = false;
+          image.decoding = 'async';
+          image.loading = 'lazy';
+          image.src = posterSrc(other);
+          cover.append(image);
+        } else {
+          cover.classList.add('is-blank');
+          cover.style.setProperty('--blank', `hsl(${posterHue(other.id)} 25% 14%)`);
+          cover.append(el('span', 'poster-title', other.title || 'Film'));
+        }
+        const copy = el('span', 'link-copy');
+        copy.append(
           el('span', 'link-title', other.title),
           el('span', 'link-meta', link.reason),
         );
+        button.append(cover, copy);
         button.addEventListener('pointerenter', (event) => {
           if (event.pointerType === 'touch') return;
           setActiveLink(other.id);

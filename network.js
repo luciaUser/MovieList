@@ -589,7 +589,7 @@
       const stageBox = stage.getBoundingClientRect();
       const panelLeft = box.left - stageBox.left;
       const panelTop = box.top - stageBox.top;
-      const phone = panelTop > rect.height * 0.35 && box.width > rect.width * 0.75;
+      const phone = box.width > rect.width * 0.75;
       if (phone) {
         return {
           open: true,
@@ -1088,6 +1088,21 @@
       requestAnimationFrame(() => collideLabels());
     }
 
+    function followPanel() {
+      const free = panelFree();
+      if (!free.open) return;
+      const id = lens && lens.centerId;
+      const center = id ? worldPoint(id) : null;
+      if (center) {
+        if (free.axis === 'y') ty = ((free.top + free.bottom) / 2) - (center.y * scale);
+        else tx = ((free.left + free.right) / 2) - (center.x * scale);
+        clampPan();
+        applyTransform();
+      }
+      if (lens) paintLensMembers();
+      else drawEdges();
+    }
+
     function resize() {
       refit();
       const previous = minScale;
@@ -1205,6 +1220,7 @@
       paint,
       setFocus,
       frame,
+      followPanel,
       stopMotion() {
         motion += 1;
       },
