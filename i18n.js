@@ -76,6 +76,7 @@
     'Language:': 'Sprache:',
     'Remove from {name}': 'Aus {name} entfernen',
     'Leave list': 'Liste verlassen',
+    'Leave Plotline': 'Plotline verlassen',
     'Letters, digits and _ only': 'Nur Buchstaben, Ziffern und _',
     'Link copied.': 'Link kopiert.',
     'List': 'Liste',

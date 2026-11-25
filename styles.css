@@ -1935,7 +1935,10 @@ body.is-network {
   body.is-wish-search #wish-board { margin-right: min(360px, 100vw); }
   body.has-selection.is-network #network { right: min(360px, 100vw); }
   body.has-selection header,
-  body.is-wish-search header { right: min(360px, 100vw); }
+  body.is-wish-search header,
+  body.is-path-panel header { right: min(360px, 100vw); }
+
+  body.is-path-panel #path-view { right: min(360px, 100vw); }
 
   .panel-hero { grid-template-columns: min(40%, 140px) minmax(0, 1fr); }
 }
@@ -4655,17 +4658,67 @@ body.is-profile .their-wall .poster.is-rated { filter: none; }
 #path-view {
   position: fixed;
   z-index: 6;
-  top: 0;
+  top: 52px;
   left: 0;
-  right: min(360px, 100vw);
+  right: 0;
   bottom: 0;
+  display: flex;
+  flex-direction: column;
   background: #000;
   color: #fff;
   user-select: none;
 }
 
+.path-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: none;
+  height: 44px;
+  padding: 0 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.path-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #fff;
+}
+
+.path-mark svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.path-name {
+  font-size: 12px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.path-leave {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.path-leave svg { display: block; width: 18px; height: 18px; }
+
 .path-scroll {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
@@ -4694,7 +4747,10 @@ body.is-profile .their-wall .poster.is-rated { filter: none; }
   justify-content: center;
 }
 
-.path-step { height: 100%; }
+.path-step {
+  height: 100%;
+  overflow: visible;
+}
 
 .path-track {
   display: flex;
@@ -4702,9 +4758,10 @@ body.is-profile .their-wall .poster.is-rated { filter: none; }
   align-items: center;
   gap: 16px;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
   scrollbar-width: none;
-  touch-action: pan-y;
+  touch-action: pan-x;
+  scroll-behavior: auto;
 }
 
 .path-track::-webkit-scrollbar { display: none; }
@@ -4745,19 +4802,31 @@ body.is-profile .their-wall .poster.is-rated { filter: none; }
 
 .path-cover.is-wait { cursor: default; }
 
-.path-step.is-set .path-cover:not(.is-pick) img,
-.path-step.is-set .path-cover.is-blank:not(.is-pick) {
+.path-step.is-set:not(.is-latest) .path-cover:not(.is-pick) img,
+.path-step.is-set:not(.is-latest) .path-cover.is-blank:not(.is-pick) {
   filter: grayscale(1) brightness(0.62);
 }
 
-.path-step.is-set .path-link {
+.path-step.is-latest .path-cover { opacity: 0.6; }
+
+.path-link {
   position: absolute;
   z-index: 0;
-  top: 50%;
-  right: 50%;
-  width: 100%;
+  display: none;
+  width: 1px;
   height: 1px;
   background: #fff;
+  pointer-events: none;
+}
+
+.path-link.is-on { display: block; }
+
+.path-link.is-dash {
+  background: repeating-linear-gradient(90deg, #fff 0 4px, transparent 4px 8px);
+}
+
+.path-link.is-dash.is-upright {
+  background: repeating-linear-gradient(180deg, #fff 0 4px, transparent 4px 8px);
 }
 
 .path-step.is-entering { animation: path-in 220ms ease; }
@@ -4863,18 +4932,19 @@ body.is-profile .their-wall .poster.is-rated { filter: none; }
 
 @media (max-width: 720px) {
   #path-view {
+    top: calc(48px + env(safe-area-inset-top, 0px));
     right: 0;
-    bottom: 50%;
+    bottom: calc(112px + env(safe-area-inset-bottom, 0px));
   }
 
-  .path-scroll {
-    padding-top: 64px;
-    touch-action: pan-y;
-  }
+  .path-head { padding: 0 16px; }
+
+  .path-scroll { touch-action: pan-y; }
 
   .path-row {
     flex-direction: column-reverse;
     align-items: stretch;
+    gap: 36px;
     height: auto;
     min-height: 100%;
     min-width: 0;
@@ -4901,16 +4971,7 @@ body.is-profile .their-wall .poster.is-rated { filter: none; }
     flex-direction: row;
     width: 100%;
     height: 100%;
-    touch-action: pan-x;
-  }
-
-  .path-step.is-set .path-link {
-    top: 50%;
-    right: auto;
-    left: 50%;
-  width: 1px;
-  height: 100%;
-  transform: translateX(-50%);
+    touch-action: pan-y;
   }
 
   .path-routes {

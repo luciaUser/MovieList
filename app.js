@@ -1065,7 +1065,7 @@
   }
 
   function networkHalf() {
-    return phoneSheet() && (mode === 'network' || pathOn);
+    return phoneSheet() && mode === 'network' && !pathOn;
   }
 
   function sheetOffset() {
@@ -1279,8 +1279,6 @@
   bindPanelDrag();
 
   function clearSelection() {
-    const leavingPath = pathOn;
-    if (leavingPath) closePath();
     editDraft = null;
     closeWishSearch();
     panelFilm = null;
@@ -1289,9 +1287,15 @@
     links = [];
     activeLinkId = null;
     hidePanel();
+    document.body.classList.remove('is-path-panel');
+    if (pathOn) {
+      paint();
+      requestAnimationFrame(() => pathLayout());
+      return;
+    }
     applyNetworkFocus();
     paint();
-    if (mode === 'network' && network && !leavingPath) requestAnimationFrame(() => network.resize());
+    if (mode === 'network' && network) requestAnimationFrame(() => network.resize());
   }
 
   function paint() {
@@ -2139,7 +2143,7 @@
     }
     panelList = null;
     renderPanel(film, { quiet: true });
-    if (pathOn) pathFitSheet();
+    if (pathOn) document.body.classList.add('is-path-panel');
     const card = readFilmCard(film.id);
     if (card && card.ready) return;
     const token = (cardTokens.get(film.id) || 0) + 1;
@@ -2170,18 +2174,27 @@
       pathObserver.disconnect();
       pathObserver = null;
     }
-    document.body.classList.remove('is-path');
+    document.body.classList.remove('is-path', 'is-path-panel');
     const node = document.getElementById('path-view');
     if (node) node.remove();
   }
 
-  function pathFitSheet() {
-    if (!phoneSheet() || !pathOn || panel.hidden) return;
-    panel.classList.add('is-sheet');
-    sheetPlace = 'half';
-    const y = Math.round((panel.offsetHeight || window.innerHeight) * 0.5);
-    panel.style.transition = 'transform 240ms ease-out';
-    panel.style.transform = `translateY(${y}px)`;
+  function exitPath() {
+    if (!pathOn) return;
+    const origin = pathState && pathState.origin;
+    closePath();
+    document.body.classList.remove('is-path-panel');
+    if (!origin) {
+      hidePanel();
+      paint();
+      return;
+    }
+    selectedId = origin.id;
+    links = linksFor(origin);
+    activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
+    panelFilm = origin;
+    renderPanel(origin);
+    paint();
   }
 
   function pathRow(film) {
@@ -2290,12 +2303,17 @@
   }
 
   function pathWindow(rows, allow) {
+    const count = 7;
+    const side = 3;
     if (!rows.length) return [];
-    if (allow == null) return rows.slice(0, 5);
+    if (allow == null) return rows.slice(0, count);
     const index = rows.findIndex((row) => Number(row.tmdbId) === allow);
-    if (index < 0) return rows.slice(0, 5);
-    if (index < 5) return rows.slice(0, 5);
-    return rows.slice(Math.max(0, index - 4), index + 1);
+    if (index < 0) return rows.slice(0, count);
+    let start = Math.max(0, index - side);
+    if (start + count > rows.length) start = Math.max(0, rows.length - count);
+    const slice = rows.slice(start, start + count);
+    if (slice.some((row) => Number(row.tmdbId) === allow)) return slice;
+    return rows.slice(Math.max(0, index - side), index + side + 1).slice(0, count);
   }
 
   async function pathCollect(source, chosen) {
@@ -2308,9 +2326,14 @@
     let guard = 0;
     let failed = false;
     while (more && guard < 8) {
-      const ready = pathWindow(pathEligible(map, source, allow), allow);
-      const holds = allow == null || ready.some((row) => Number(row.tmdbId) === allow);
-      if (ready.length >= 5 && holds) break;
+      const eligible = pathEligible(map, source, allow);
+      const ready = pathWindow(eligible, allow);
+      const index = allow == null ? -1 : eligible.findIndex((row) => Number(row.tmdbId) === allow);
+      const before = index < 0 ? 0 : index;
+      const after = index < 0 ? 0 : eligible.length - index - 1;
+      const holds = allow == null || index >= 0;
+      const enough = allow == null ? ready.length >= 7 : holds && before >= 3 && after >= 3;
+      if (enough) break;
       guard += 1;
       page += 1;
       const pack = await pathPull(query, page);
@@ -2326,8 +2349,12 @@
     }
     const rows = pathWindow(pathEligible(map, source, allow), allow);
     if (allow != null && chosen && !rows.some((row) => Number(row.tmdbId) === allow)) {
-      rows.unshift(pathRow(chosen));
-      rows.splice(5);
+      const row = pathRow(chosen);
+      rows.splice(Math.min(3, rows.length), 0, row);
+      while (rows.length > 7) {
+        if (rows[rows.length - 1] === row) rows.shift();
+        else rows.pop();
+      }
     }
     if (!rows.length && failed) throw new Error('load');
     return rows;
@@ -2378,8 +2405,7 @@
       if (step) step.pendingFilm = film;
       return false;
     }
-    const same = step.chosenId === film.id;
-    if (same && index < pathState.steps.length - 1) return false;
+    if (step.chosenId === film.id) return false;
     if (index < pathState.steps.length - 1) {
       pathSaveCurrent();
       step.chosenId = film.id;
@@ -2392,7 +2418,9 @@
     }
     if (!step.candidates) step.candidates = [];
     if (!step.candidates.some((row) => Number(row.tmdbId) === Number(film.tmdbId))) {
-      step.candidates = [pathRow(film), ...step.candidates].slice(0, 5);
+      const next = step.candidates.slice();
+      next.splice(Math.min(3, next.length), 0, pathRow(film));
+      step.candidates = next.slice(0, 7);
     }
     step.chosenId = film.id;
     step.chosenFilm = { ...film };
@@ -2469,6 +2497,16 @@
     if (document.getElementById('path-view')) return;
     const root = el('div', 'path-view');
     root.id = 'path-view';
+    const head = el('div', 'path-head');
+    const mark = el('span', 'path-mark');
+    mark.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="7" cy="12" r="2.25" fill="none" stroke="currentColor" stroke-width="1.6"></circle><circle cx="17" cy="12" r="2.25" fill="none" stroke="currentColor" stroke-width="1.6"></circle><path d="M9.2 12h5.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    mark.append(el('span', 'path-name', 'PLOTLINE'));
+    const leave = el('button', 'path-leave');
+    leave.type = 'button';
+    leave.setAttribute('aria-label', t('Leave Plotline'));
+    leave.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+    leave.addEventListener('click', () => exitPath());
+    head.append(mark, leave);
     const scroller = el('div', 'path-scroll');
     const row = el('div', 'path-row');
     const origin = el('div', 'path-origin');
@@ -2478,7 +2516,7 @@
     origin.append(el('div', 'path-routes'));
     row.append(origin);
     scroller.append(row);
-    root.append(scroller);
+    root.append(head, scroller);
     document.body.append(root);
     pathObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
@@ -2500,19 +2538,87 @@
     }, { passive: false });
   }
 
+  function pathCovers(track) {
+    return [...track.querySelectorAll('.path-cover')];
+  }
+
+  function pathCenter(track, cover, phone) {
+    if (!cover) return 0;
+    if (phone) return Math.max(0, cover.offsetLeft - (track.clientWidth - cover.offsetWidth) / 2);
+    return Math.max(0, cover.offsetTop - (track.clientHeight - cover.offsetHeight) / 2);
+  }
+
+  function pathAnimateScroll(track, axis, target, done) {
+    const start = axis === 'left' ? track.scrollLeft : track.scrollTop;
+    const change = target - start;
+    if (Math.abs(change) < 1) {
+      if (axis === 'left') track.scrollLeft = target;
+      else track.scrollTop = target;
+      if (done) done();
+      return;
+    }
+    const began = performance.now();
+    const frame = (now) => {
+      const progress = Math.min(1, (now - began) / 180);
+      const eased = 1 - (1 - progress) * (1 - progress) * (1 - progress);
+      const value = start + change * eased;
+      if (axis === 'left') track.scrollLeft = value;
+      else track.scrollTop = value;
+      if (progress < 1) {
+        track._pathFrame = requestAnimationFrame(frame);
+        return;
+      }
+      track._pathFrame = 0;
+      if (done) done();
+    };
+    track._pathFrame = requestAnimationFrame(frame);
+  }
+
+  function pathQueueStep(track, dir) {
+    const covers = pathCovers(track);
+    if (covers.length < 2 || !dir) return;
+    const at = track._pathAt || 0;
+    const pending = track._pathPending || 0;
+    const dest = at + pending + dir;
+    if (dest < 0 || dest > covers.length - 1) return;
+    track._pathPending = pending + dir;
+    pathDrain(track);
+  }
+
+  function pathDrain(track) {
+    if (track._pathBusy) return;
+    const pending = track._pathPending || 0;
+    if (!pending) return;
+    const dir = pending > 0 ? 1 : -1;
+    track._pathPending = pending - dir;
+    const covers = pathCovers(track);
+    const next = Math.max(0, Math.min(covers.length - 1, (track._pathAt || 0) + dir));
+    if (!covers.length || next === (track._pathAt || 0)) {
+      track._pathPending = 0;
+      return;
+    }
+    track._pathAt = next;
+    track._pathBusy = true;
+    const phone = phoneSheet();
+    const target = pathCenter(track, covers[next], phone);
+    pathAnimateScroll(track, phone ? 'left' : 'top', target, () => {
+      track._pathBusy = false;
+      pathPlaceLinks();
+      pathDrain(track);
+    });
+  }
+
   function pathBindTrack(track) {
     if (track.dataset.bound === '1') return;
     track.dataset.bound = '1';
     let drag = null;
-    let snapTimer = 0;
     track.addEventListener('pointerdown', (event) => {
       if (event.button != null && event.button !== 0) return;
+      track.dataset.dragged = '';
       drag = {
         id: event.pointerId,
         x: event.clientX,
         y: event.clientY,
-        left: track.scrollLeft,
-        top: track.scrollTop,
         moved: false,
       };
     });
@@ -2520,63 +2626,73 @@
       if (!drag || event.pointerId !== drag.id) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
       drag.moved = true;
-      if (phoneSheet()) track.scrollLeft = drag.left - dx;
-      else track.scrollTop = drag.top - dy;
-    });
+      const phone = phoneSheet();
+      const along = phone ? Math.abs(dx) : Math.abs(dy);
+      const across = phone ? Math.abs(dy) : Math.abs(dx);
+      if (along > across) event.preventDefault();
+    }, { passive: false });
     const end = (event) => {
       if (!drag || event.pointerId !== drag.id) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
       const moved = drag.moved;
       drag = null;
       if (!moved) return;
       track.dataset.dragged = '1';
-      pathSnap(track);
-      window.setTimeout(() => { track.dataset.dragged = ''; }, 40);
+      const phone = phoneSheet();
+      const delta = phone ? dx : dy;
+      const across = phone ? dy : dx;
+      if (Math.abs(delta) < 24 || Math.abs(delta) < Math.abs(across)) return;
+      pathQueueStep(track, delta < 0 ? 1 : -1);
     };
+    track.addEventListener('click', (event) => {
+      if (track.dataset.dragged !== '1') return;
+      track.dataset.dragged = '';
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
     track.addEventListener('pointerup', end);
     track.addEventListener('pointercancel', end);
-    track.addEventListener('wheel', () => {
-      window.clearTimeout(snapTimer);
-      snapTimer = window.setTimeout(() => pathSnap(track), 90);
-    }, { passive: true });
-  }
-
-  function pathSnap(track) {
-    const covers = [...track.querySelectorAll('.path-cover')];
-    if (!covers.length) return;
-    const phone = phoneSheet();
-    let best = covers[0];
-    let bestDist = Infinity;
-    covers.forEach((cover) => {
-      const mid = phone
-        ? track.scrollLeft + track.clientWidth / 2
-        : track.scrollTop + track.clientHeight / 2;
-      const at = phone
-        ? cover.offsetLeft + cover.offsetWidth / 2
-        : cover.offsetTop + cover.offsetHeight / 2;
-      const dist = Math.abs(at - mid);
-      if (dist < bestDist) {
-        best = cover;
-        bestDist = dist;
+    track.addEventListener('wheel', (event) => {
+      if (phoneSheet()) return;
+      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (horizontal) {
+        const scroller = track.closest('.path-scroll');
+        if (scroller) scroller.scrollLeft += event.deltaX;
+        event.preventDefault();
+        return;
       }
-    });
-    if (phone) {
-      const left = best.offsetLeft - (track.clientWidth - best.offsetWidth) / 2;
-      track.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
-      return;
-    }
-    const top = best.offsetTop - (track.clientHeight - best.offsetHeight) / 2;
-    track.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      event.preventDefault();
+      if (event.deltaMode !== 0) {
+        pathQueueStep(track, event.deltaY > 0 ? 1 : event.deltaY < 0 ? -1 : 0);
+        return;
+      }
+      track._pathWheel = (track._pathWheel || 0) + event.deltaY;
+      while (Math.abs(track._pathWheel) >= 60) {
+        const dir = track._pathWheel > 0 ? 1 : -1;
+        track._pathWheel -= dir * 60;
+        pathQueueStep(track, dir);
+      }
+    }, { passive: false });
   }
 
   function pathLayout() {
     const root = document.getElementById('path-view');
     if (!root || !pathOn) return;
     const phone = phoneSheet();
+    pathMarkLatest();
     root.querySelectorAll('.path-track').forEach((track) => {
-      const cover = track.querySelector('.path-cover');
+      const covers = pathCovers(track);
+      const cover = covers[0];
       if (!cover) return;
+      if (track._pathFrame) {
+        cancelAnimationFrame(track._pathFrame);
+        track._pathFrame = 0;
+      }
+      track._pathBusy = false;
+      track._pathPending = 0;
       if (phone) {
         const space = Math.max(0, (track.clientWidth - cover.offsetWidth) / 2);
         track.style.paddingLeft = `${space}px`;
@@ -2590,9 +2706,82 @@
         track.style.paddingLeft = '';
         track.style.paddingRight = '';
       }
-      const pick = track.querySelector('.path-cover.is-pick') || cover;
-      if (phone) track.scrollLeft = Math.max(0, pick.offsetLeft - (track.clientWidth - pick.offsetWidth) / 2);
-      else track.scrollTop = Math.max(0, pick.offsetTop - (track.clientHeight - pick.offsetHeight) / 2);
+      const pick = track.querySelector('.path-cover.is-pick');
+      const index = pick ? covers.indexOf(pick) : Math.floor((covers.length - 1) / 2);
+      const target = covers[index] || cover;
+      track._pathAt = Math.max(0, index);
+      if (phone) track.scrollLeft = pathCenter(track, target, true);
+      else track.scrollTop = pathCenter(track, target, false);
+    });
+    pathPlaceLinks();
+  }
+
+  function pathMarkLatest() {
+    const row = document.querySelector('#path-view .path-row');
+    if (!row) return;
+    const steps = [...row.querySelectorAll('.path-step')].filter((node) => !node.classList.contains('is-leaving'));
+    steps.forEach((node, index) => node.classList.toggle('is-latest', index === steps.length - 1));
+  }
+
+  function pathAnchor(node) {
+    if (!node) return null;
+    const pick = node.querySelector('.path-cover.is-pick');
+    if (pick) return pick;
+    const covers = [...node.querySelectorAll('.path-cover')];
+    if (!covers.length) return null;
+    return covers[Math.floor((covers.length - 1) / 2)];
+  }
+
+  function pathPlaceLinks() {
+    const row = document.querySelector('#path-view .path-row');
+    if (!row) return;
+    const phone = phoneSheet();
+    const steps = [...row.querySelectorAll('.path-step')].filter((node) => !node.classList.contains('is-leaving'));
+    const origin = row.querySelector('.path-origin');
+    steps.forEach((step, index) => {
+      const link = step.querySelector('.path-link');
+      if (!link) return;
+      const current = pathAnchor(step);
+      const prev = pathAnchor(index === 0 ? origin : steps[index - 1]);
+      link.classList.toggle('is-dash', index === steps.length - 1);
+      link.classList.toggle('is-upright', phone);
+      if (!current || !prev) {
+        link.classList.remove('is-on');
+        return;
+      }
+      const stepBox = step.getBoundingClientRect();
+      const here = current.getBoundingClientRect();
+      const there = prev.getBoundingClientRect();
+      const gap = 6;
+      if (phone) {
+        const upper = here.bottom <= there.top ? here : there;
+        const lower = upper === here ? there : here;
+        const top = upper.bottom - stepBox.top + gap;
+        const height = lower.top - upper.bottom - gap * 2;
+        const left = here.left + here.width / 2 - stepBox.left;
+        if (height < 1) {
+          link.classList.remove('is-on');
+          return;
+        }
+        link.style.top = `${top}px`;
+        link.style.left = `${left}px`;
+        link.style.width = '1px';
+        link.style.height = `${height}px`;
+        link.classList.add('is-on');
+        return;
+      }
+      const y = here.top + here.height / 2 - stepBox.top;
+      const left = there.right - stepBox.left + gap;
+      const width = here.left - there.right - gap * 2;
+      if (width < 1) {
+        link.classList.remove('is-on');
+        return;
+      }
+      link.style.top = `${y}px`;
+      link.style.left = `${left}px`;
+      link.style.width = `${width}px`;
+      link.style.height = '1px';
+      link.classList.add('is-on');
     });
   }
 
@@ -2641,7 +2830,7 @@
     node.dataset.mark = mark;
     track.replaceChildren();
     if (step.loading) {
-      for (let i = 0; i < 5; i += 1) track.append(el('span', 'path-cover is-wait'));
+      for (let i = 0; i < 7; i += 1) track.append(el('span', 'path-cover is-wait'));
       return;
     }
     if (step.error || !(step.candidates || []).length) {
@@ -2660,7 +2849,19 @@
         if (track.dataset.dragged === '1') return;
         const index = pathState.steps.indexOf(step);
         if (index < 0) return;
-        if (!pathChoose(index, film)) return;
+        const picked = step.chosenId === film.id;
+        if (phoneSheet()) {
+          if (!picked) {
+            pathChoose(index, film);
+            return;
+          }
+          pathLock = true;
+          showRecommendation(item);
+          pathLock = false;
+          return;
+        }
+        const changed = pathChoose(index, film);
+        if (!changed && !picked) return;
         pathLock = true;
         showRecommendation(item);
         pathLock = false;
@@ -3769,6 +3970,8 @@
   }
 
   function resetView() {
+    if (pathOn) closePath();
+    document.body.classList.remove('is-path-panel');
     closeTransient();
     editDraft = null;
     spotlight = null;
