@@ -1012,6 +1012,162 @@
     document.body.classList.remove('is-wish-search');
   }
 
+  let panelScrollLock = null;
+  let panelSheetToken = 0;
+  let panelClosing = false;
+  let panelDragging = false;
+
+  function phoneSheet() {
+    return window.matchMedia('(max-width: 720px)').matches;
+  }
+
+  function lockPanelScroll() {
+    if (!phoneSheet() || panelScrollLock) return;
+    panelScrollLock = { top: window.scrollY, left: window.scrollX };
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${panelScrollLock.top}px`;
+    document.body.style.left = '0';
+    document.body.style.right = '0';
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function unlockPanelScroll() {
+    if (!panelScrollLock) return;
+    const saved = panelScrollLock;
+    panelScrollLock = null;
+    document.documentElement.style.overflow = '';
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+    window.scrollTo(saved.left, saved.top);
+  }
+
+  function hidePanelNow() {
+    panel.hidden = true;
+    panel.replaceChildren();
+    panel.classList.remove('is-sheet');
+    panel.style.transition = '';
+    panel.style.transform = '';
+    panelDragging = false;
+    panelClosing = false;
+    unlockPanelScroll();
+  }
+
+  function hidePanel() {
+    const phone = phoneSheet() && panel.classList.contains('is-sheet') && !panel.hidden;
+    if (!phone) {
+      hidePanelNow();
+      return;
+    }
+    if (panelClosing) return;
+    panelClosing = true;
+    const token = ++panelSheetToken;
+    panel.style.transition = 'transform 260ms ease-out';
+    panel.style.transform = 'translateY(100%)';
+    window.setTimeout(() => {
+      if (token !== panelSheetToken) return;
+      hidePanelNow();
+    }, 260);
+  }
+
+  function revealPanel() {
+    panelSheetToken += 1;
+    panelClosing = false;
+    const phone = phoneSheet();
+    const opening = panel.hidden;
+    if (!phone) {
+      panel.hidden = false;
+      panel.classList.remove('is-sheet');
+      panel.style.transition = '';
+      panel.style.transform = '';
+      unlockPanelScroll();
+      return;
+    }
+    panel.classList.add('is-sheet');
+    if (!opening) {
+      panel.hidden = false;
+      if (!panelDragging) {
+        panel.style.transition = 'transform 260ms ease-out';
+        panel.style.transform = 'translateY(0)';
+      }
+      return;
+    }
+    lockPanelScroll();
+    panel.style.transition = 'none';
+    panel.style.transform = 'translateY(100%)';
+    panel.hidden = false;
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (panel.hidden || panelDragging) return;
+        panel.style.transition = 'transform 260ms ease-out';
+        panel.style.transform = 'translateY(0)';
+      });
+    });
+  }
+
+  function bindPanelDrag() {
+    if (panel.dataset.drag === '1') return;
+    panel.dataset.drag = '1';
+    let drag = null;
+    const finish = (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const pull = drag.pull;
+      const moved = drag.active;
+      drag = null;
+      panelDragging = false;
+      if (!moved) return;
+      if (pull >= 90) {
+        clearSelection();
+        return;
+      }
+      panel.style.transition = 'transform 260ms ease-out';
+      panel.style.transform = 'translateY(0)';
+    };
+    panel.addEventListener('pointerdown', (event) => {
+      if (!phoneSheet() || panel.hidden || !panel.classList.contains('is-sheet')) return;
+      if (event.button != null && event.button !== 0) return;
+      if (event.target.closest('button, a, input, textarea, select')) return;
+      const onGrab = Boolean(event.target.closest('.panel-bar'));
+      if (!onGrab && panel.scrollTop > 0) return;
+      drag = {
+        id: event.pointerId,
+        y: event.clientY,
+        pull: 0,
+        onGrab,
+        active: false,
+      };
+    });
+    panel.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const delta = event.clientY - drag.y;
+      if (!drag.active) {
+        if (delta <= 0) return;
+        if (!drag.onGrab && (delta < 8 || panel.scrollTop > 0)) return;
+        drag.active = true;
+      }
+      if (delta <= 0) {
+        drag.pull = 0;
+        panel.style.transition = 'none';
+        panel.style.transform = 'translateY(0)';
+        return;
+      }
+      panelDragging = true;
+      drag.pull = delta;
+      panel.style.transition = 'none';
+      panel.style.transform = `translateY(${Math.round(delta)}px)`;
+      event.preventDefault();
+    }, { passive: false });
+    panel.addEventListener('pointerup', finish);
+    panel.addEventListener('pointercancel', finish);
+  }
+
+  bindPanelDrag();
+
   function clearSelection() {
     editDraft = null;
     closeWishSearch();
@@ -1019,8 +1175,7 @@
     selectedId = null;
     links = [];
     activeLinkId = null;
-    panel.hidden = true;
-    panel.replaceChildren();
+    hidePanel();
     applyNetworkFocus();
     paint();
     if (mode === 'network' && network) requestAnimationFrame(() => network.resize());
@@ -1219,6 +1374,13 @@
         if (person.id === account.id) person.avatar = avatar;
       });
     });
+    document.querySelectorAll('#wish-board .wish-creator .avatar').forEach((svg) => {
+      const bar = svg.closest('.wish-bar');
+      const list = bar && (wishLists || []).find((entry) => entry.id === bar.dataset.list);
+      const owner = list && (list.members || []).find((person) => person.role === 'owner');
+      if (!owner || owner.id !== account.id) return;
+      svg.replaceWith(avatarNode(avatar, 22));
+    });
     otherCache.forEach((pack) => {
       if (pack && pack.profile && pack.profile.id === account.id) pack.profile.avatar = avatar;
     });
@@ -1395,12 +1557,11 @@
     const row = entry(film.id);
     const mine = byId.has(film.id);
     panel.replaceChildren();
-    panel.hidden = false;
 
-    const remove = el('button', 'remove-film');
+    const remove = el('button', 'panel-remove');
     remove.type = 'button';
     remove.setAttribute('aria-label', 'Aus meinem Archiv entfernen');
-    remove.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3.4h6v2.2H9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M3.8 6.4h16.4v2.1H3.8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M5.6 8.5h12.8l-.9 12.1H6.5z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M9 11.4v6.2M12 11.4v6.2M15 11.4v6.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg><span>Remove</span>';
     remove.addEventListener('click', () => removeFilm(film.id));
     const closeIcon = el('button', 'panel-close');
     closeIcon.type = 'button';
@@ -1411,7 +1572,7 @@
     wish.type = 'button';
     wish.setAttribute('aria-label', 'Wunschliste');
     wish.setAttribute('aria-expanded', 'false');
-    wish.innerHTML = `<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+    wish.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>Add to wishlist</span>';
     const pick = el('div', 'wish-pick');
     pick.hidden = true;
     wish.addEventListener('click', (event) => {
@@ -1430,27 +1591,46 @@
     });
     const full = fullOf(film);
     const head = el('div', 'panel-head');
-    const titleRow = el('div', 'panel-title');
-    titleRow.append(el('h1', null, film.title), closeIcon);
-    head.append(titleRow);
-    if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
-      head.append(el('p', 'unsynced', 'nicht synchronisiert'));
+    const bar = el('div', 'panel-bar');
+    bar.append(el('span', 'panel-grab'), closeIcon);
+    head.append(bar);
+    const hero = el('div', 'panel-hero');
+    const poster = el('div', 'panel-poster');
+    const known = knownPoster(film);
+    if (known) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.draggable = false;
+      image.decoding = 'async';
+      image.src = known;
+      poster.append(image);
+    } else {
+      poster.classList.add('is-blank');
+      poster.style.setProperty('--blank', `hsl(${posterHue(film.id)} 25% 14%)`);
+      poster.append(el('span', 'poster-title', film.title || 'Film'));
     }
-    if (film.year) head.append(el('p', 'sub', film.year));
+    const copy = el('div', 'panel-copy');
+    if (film.year) copy.append(el('p', 'panel-year', String(film.year)));
+    copy.append(el('h1', null, film.title));
     if (full.director) {
-      const director = el('button', 'credit credit-link', `Regie ${full.director}`);
-      director.type = 'button';
-      director.addEventListener('click', () => highlight({
+      const director = el('p', 'panel-credit');
+      director.append(el('span', 'panel-kicker', 'Director'));
+      const name = el('button', 'credit-link', full.director);
+      name.type = 'button';
+      name.addEventListener('click', () => highlight({
         title: `Regie: ${full.director}`,
         style: 'director',
         ids: filmsWith('director', full.director),
       }));
-      head.append(director);
+      director.append(name);
+      copy.append(director);
     }
     const names = (full.cast || []).slice(0, 3);
     if (names.length) {
-      const row = el('div', 'cast-row');
-      names.forEach((name) => {
+      const cast = el('p', 'panel-credit');
+      cast.append(el('span', 'panel-kicker', 'Cast'));
+      names.forEach((name, index) => {
+        if (index) cast.append(document.createTextNode(', '));
         const person = el('button', 'cast-link', name);
         person.type = 'button';
         person.addEventListener('click', () => highlight({
@@ -1458,23 +1638,34 @@
           style: 'cast',
           ids: filmsWith('cast', name),
         }));
-        row.append(person);
+        cast.append(person);
       });
-      head.append(row);
+      copy.append(cast);
     }
-    const imdb = el('p', 'imdb-line');
-    const wishWrap = el('div', 'panel-wish-wrap');
-    wishWrap.append(wish, pick);
-    imdb.append(el('span', 'star', '★'), el('span', null, film.imdbLabel), wishWrap);
-    head.append(imdb);
-    const genreRow = el('div', 'genre-row');
+    const score = el('p', 'panel-score');
+    const localImdb = (window.FILMS || []).some((row) => row && row.id === film.id);
+    score.append(
+      el('span', 'star', '☆'),
+      el('span', 'panel-score-value', film.imdbLabel || '–'),
+      el('span', 'panel-score-source', localImdb ? 'IMDb' : 'TMDB'),
+    );
+    copy.append(score);
+    hero.append(poster, copy);
+    head.append(hero);
+    if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
+      head.append(el('p', 'unsynced', 'nicht synchronisiert'));
+    }
     if ((film.genres || []).length) {
       const pills = el('ul', 'pills');
       film.genres.forEach((genre) => pills.append(el('li', null, genre)));
-      genreRow.append(pills);
+      head.append(pills);
     }
-    if (mine) genreRow.append(remove);
-    head.append(genreRow);
+    const actions = el('div', 'panel-actions');
+    const wishWrap = el('div', 'panel-wish-wrap');
+    wishWrap.append(wish, pick);
+    actions.append(wishWrap);
+    if (mine) actions.append(remove);
+    head.append(actions);
     panel.append(head);
     const followed = el('div', 'followed-row');
     followed.hidden = true;
@@ -1535,7 +1726,7 @@
       });
       panel.append(group);
     });
-
+    revealPanel();
   }
 
   const TRAIT_FIELDS = [
@@ -2025,8 +2216,7 @@
     selectedId = null;
     links = [];
     activeLinkId = null;
-    panel.hidden = true;
-    panel.replaceChildren();
+    hidePanel();
     document.body.classList.remove('has-selection', 'is-wish-search');
     if (network) {
       if (network.stopMotion) network.stopMotion();
@@ -2065,10 +2255,7 @@
     }
     if (next !== 'wish' && wishSearchList) {
       closeWishSearch();
-      if (!selectedId) {
-        panel.hidden = true;
-        panel.replaceChildren();
-      }
+      if (!selectedId) hidePanel();
     }
     mode = next;
     ratingView = next === 'rating';
@@ -2246,26 +2433,6 @@
     modeDirector.setAttribute('aria-expanded', 'true');
     openTransient(pop, hideSortMenu, (target) => modeDirector.contains(target));
   });
-  function pinPhoneBar() {
-    const bar = document.querySelector('.modes');
-    if (!bar) return;
-    const phone = window.matchMedia('(max-width: 720px)').matches;
-    const viewport = window.visualViewport;
-    if (!phone || !viewport) {
-      bar.style.transform = '';
-      return;
-    }
-    const gap = window.innerHeight - (viewport.offsetTop + viewport.height);
-    bar.style.transform = gap > 0.5 ? `translateY(${-Math.round(gap)}px)` : '';
-  }
-
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener('resize', pinPhoneBar);
-    window.visualViewport.addEventListener('scroll', pinPhoneBar);
-  }
-  window.addEventListener('resize', pinPhoneBar);
-  pinPhoneBar();
-
   document.getElementById('sort-pop').addEventListener('click', (event) => {
     const button = event.target.closest('button');
     if (!button || !button.dataset.sort) return;
@@ -3888,8 +4055,8 @@
       }).slice(0, cap);
     if (!films.length) {
       block.append(el('p', 'profile-note', custom.length
-        ? 'Die ausgewählten Filme sind nicht mehr im Archiv.'
-        : 'Noch zu wenig Wertungen'));
+        ? 'The selected films are no longer in the archive.'
+        : 'Not enough ratings yet'));
       return block;
     }
     const row = el('div', 'top-row');
@@ -3995,12 +4162,12 @@
     back.addEventListener('click', () => renderProfile());
     root.append(back);
     const head = el('div', 'profile-head');
-    head.append(avatarNode(person.avatar, 56), el('h1', null, person.display_name || person.username || 'Profil'));
+    head.append(avatarNode(person.avatar, 84), el('h1', null, person.display_name || person.username || 'Profil'));
     root.append(head);
     const stats = pack.stats || {};
     const numbers = el('div', 'profile-stats');
     numbers.append(
-      statNode(String(Number(stats.films) || 0), 'Filme'),
+      statNode(String(Number(stats.films) || 0), 'Films'),
       statNode(stats.friends == null ? '–' : String(Number(stats.friends) || 0), 'Friends'),
     );
     root.append(numbers);
@@ -4032,8 +4199,8 @@
     const split = el('div', 'profile-split');
     const left = el('div', 'profile-col');
     const right = el('div', 'profile-col');
-    left.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors, { readOnly: true, pins }));
-    right.append(paintPeople('directors', 'Lieblingsregie', people.directors, { readOnly: true, pins }));
+    left.append(paintPeople('actors', 'Favorite actors', people.actors, { readOnly: true, pins }));
+    right.append(paintPeople('directors', 'Favorite directors', people.directors, { readOnly: true, pins }));
     split.append(left, right);
     root.append(split);
     root.append(paintComparison(pack));
@@ -4248,7 +4415,7 @@
     row.append(plus, slot);
     const suggest = el('div', 'friend-suggest');
     suggest.hidden = true;
-    box.append(row, el('span', null, 'Add Friend'), suggest);
+    box.append(row, el('span', null, 'Add friend'), suggest);
     const open = () => {
       box.classList.add('is-open');
       box.classList.remove('is-error', 'is-ok');
@@ -4790,22 +4957,21 @@
     const readOnly = Boolean(source && source.readOnly);
     const shown = rankedPeople(map, pins[kind]);
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', title));
+    block.append(el('h2', 'profile-kicker', title), el('span', 'section-rule'));
     if (!shown.length) {
-      block.append(el('p', 'profile-note', 'Noch zu wenig Wertungen'));
+      block.append(el('p', 'profile-note', 'Not enough ratings yet'));
       return block;
     }
-    shown.forEach((person) => {
+    shown.forEach((person, index) => {
       const line = el('div', 'person-line');
-      const pin = document.createElement(readOnly ? 'span' : 'button');
-      if (!readOnly) pin.type = 'button';
-      pin.className = person.pinned ? 'pin is-on' : 'pin';
-      if (readOnly) pin.style.cursor = 'default';
-      else {
-        pin.setAttribute('aria-label', person.pinned ? `${person.name} lösen` : `${person.name} anpinnen`);
-        pin.addEventListener('click', () => togglePin(kind, person.name, person.pinned));
+      const rank = document.createElement(readOnly ? 'span' : 'button');
+      if (!readOnly) rank.type = 'button';
+      rank.className = 'person-rank';
+      rank.textContent = String(index + 1);
+      if (!readOnly) {
+        rank.setAttribute('aria-label', person.pinned ? `${person.name} lösen` : `${person.name} anpinnen`);
+        rank.addEventListener('click', () => togglePin(kind, person.name, person.pinned));
       }
-      pin.append(document.createElement('i'));
       const name = document.createElement('button');
       name.type = 'button';
       name.className = 'person-name';
@@ -4816,9 +4982,9 @@
         ids: filmsWith(kind === 'directors' ? 'director' : 'cast', person.name),
       }));
       const meta = person.count
-        ? `${scoreText(person.avg)} · ${person.count === 1 ? '1 Film' : `${person.count} Filme`}`
-        : (readOnly ? '' : '0 Filme');
-      line.append(pin, name);
+        ? `Ø ${scoreText(person.avg)} · ${person.count === 1 ? '1 film' : `${person.count} films`}`
+        : (readOnly ? '' : '0 films');
+      line.append(rank, name);
       if (meta) line.append(el('small', null, meta));
       block.append(line);
     });
@@ -4857,7 +5023,7 @@
     block.append(el('span', 'top-rule'));
     const chosen = shownTopFilms();
     if (!chosen.length) {
-      block.append(el('p', 'profile-note', `Bewerte Filme, dann erscheinen hier deine Top ${cap}`));
+      block.append(el('p', 'profile-note', `Rate films, then your top ${cap} show up here`));
     } else {
       const row = el('div', 'top-row');
       chosen.forEach((film, index) => {
@@ -5048,7 +5214,7 @@
   function paintSettings() {
     const stack = el('div', 'profile-settings stack');
     const savedName = (account && (account.display_name || account.username)) || '';
-    stack.append(el('h2', 'profile-kicker', 'Anzeigename'));
+    stack.append(el('h2', 'profile-kicker', 'Account'), el('span', 'section-rule'));
     const nameField = el('div', 'name-field');
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
@@ -5057,10 +5223,11 @@
     nameInput.maxLength = 20;
     nameInput.spellcheck = false;
     nameInput.dataset.saved = savedName;
-    nameInput.setAttribute('aria-label', 'Anzeigename');
+    nameInput.setAttribute('aria-label', 'Display name');
     const saveName = document.createElement('button');
     saveName.type = 'button';
-    saveName.textContent = 'Speichern';
+    saveName.className = 'name-save';
+    saveName.textContent = 'Save';
     saveName.hidden = true;
     const syncSave = () => {
       nameField.classList.remove('is-error');
@@ -5164,18 +5331,29 @@
       hint.append(align);
       stack.append(hint);
     }
+    stack.append(el('p', 'account-caption', 'Display name · visible to friends'));
     if (recoveryOn) stack.append(paintRecovery());
-    stack.append(paintDanger(), paintSignOut());
+    stack.append(paintSignOut(), paintDanger());
     return stack;
   }
 
   function paintSignOut() {
     const out = document.createElement('button');
     out.type = 'button';
-    out.className = 'sign-out';
-    out.textContent = 'Abmelden';
+    out.className = 'account-row';
+    out.append(accountIcon('out'), el('span', null, 'Sign out'));
     out.addEventListener('click', () => { leave(); });
     return out;
+  }
+
+  function accountIcon(kind) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.innerHTML = kind === 'out'
+      ? '<path d="M8 6.2H5.8v11.6H8M8 6.2h3.2M8 17.8h3.2M11.2 12H19M15.4 8.4 19 12l-3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>'
+      : '<path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
+    return svg;
   }
 
   function dangerIcon(kind) {
@@ -5197,7 +5375,6 @@
 
   function paintDanger() {
     const wrap = el('div', 'danger');
-    const row = el('div', 'danger-row');
     let open = '';
     const confirm = el('div', 'danger-confirm');
     confirm.hidden = true;
@@ -5276,16 +5453,15 @@
     });
     const reset = document.createElement('button');
     reset.type = 'button';
-    reset.className = 'danger-item';
-    reset.append(dangerIcon('reset'), el('span', null, 'Archiv zurücksetzen'));
+    reset.className = 'account-row is-danger';
+    reset.append(accountIcon('x'), el('span', null, 'Reset archive'));
     reset.addEventListener('click', () => show('reset'));
     const wipe = document.createElement('button');
     wipe.type = 'button';
-    wipe.className = 'danger-item is-delete';
-    wipe.append(dangerIcon('delete'), el('span', null, 'Konto löschen'));
+    wipe.className = 'account-row is-danger';
+    wipe.append(accountIcon('x'), el('span', null, 'Delete account'));
     wipe.addEventListener('click', () => show('delete'));
-    row.append(reset, wipe);
-    wrap.append(row, confirm);
+    wrap.append(reset, wipe, confirm);
     return wrap;
   }
 
@@ -6360,7 +6536,11 @@
   function fillWishNames(host, list) {
     host.replaceChildren();
     const owner = (list.members || []).find((person) => person.role === 'owner');
-    host.append(document.createTextNode(wishCreatorName(list)));
+    let avatar = owner ? owner.avatar : null;
+    if (owner && account && owner.id === account.id) avatar = account.avatar || avatar;
+    const creator = el('span', 'wish-creator');
+    creator.append(avatarNode(avatar, 22), document.createTextNode(wishCreatorName(list)));
+    host.append(creator);
     (list.members || []).forEach((person) => {
       if (owner && person.id === owner.id) return;
       host.append(document.createTextNode(' / '));
@@ -6770,7 +6950,6 @@
     const list = currentWishSearchList();
     if (!list) return;
     panel.replaceChildren();
-    panel.hidden = false;
     const box = el('div', 'wish-find');
     const head = el('div', 'wish-find-head');
     const input = document.createElement('input');
@@ -6797,6 +6976,7 @@
     const upcomingHits = el('div', 'wish-hits');
     box.append(upcomingInput, upcomingTitle, upcomingHits);
     panel.append(box);
+    revealPanel();
     let token = 0;
     let cursor = 0;
     let rows = [];
@@ -7064,7 +7244,7 @@
     const inviting = bar.querySelector('.wish-by.is-inviting');
     if (names && !inviting) {
       const sign = wishMemberSign(list);
-      if (names.dataset.sign !== sign) {
+      if (names.dataset.sign !== sign || !names.querySelector('.wish-creator .avatar')) {
         names.dataset.sign = sign;
         fillWishNames(names, list);
       }
@@ -8332,8 +8512,17 @@
     return true;
   }
 
-  function tasteView(taste) {
+  function tasteFrame(countText) {
     const block = el('section', 'taste-block');
+    const head = el('div', 'taste-head');
+    head.append(el('h2', 'profile-kicker', 'AI Film Profile'));
+    if (countText) head.append(el('span', 'taste-from', countText));
+    block.append(head, el('span', 'section-rule'));
+    return block;
+  }
+
+  function tasteView(taste) {
+    const block = el('div', 'taste-body');
     if (taste.title) block.append(el('h2', 'taste-title', taste.title));
     if (taste.taste) block.append(el('p', 'taste-copy', taste.taste));
     if (taste.character) block.append(el('p', 'taste-character', taste.character));
@@ -8347,6 +8536,16 @@
     return block;
   }
 
+  function tasteEyeIcon(hidden) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const eye = '<path d="M2.4 12S6.2 6.4 12 6.4 21.6 12 21.6 12 17.8 17.6 12 17.6 2.4 12 2.4 12Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><circle cx="12" cy="12" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6"></circle>';
+    const slash = '<path d="M5 5.2 19 18.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
+    svg.innerHTML = hidden ? eye + slash : eye;
+    return svg;
+  }
+
   let tasteBusy = false;
   let tasteSerial = 0;
 
@@ -8356,32 +8555,33 @@
     slot.replaceChildren();
     if (!tasteCloudReady()) return;
     const count = ratedTasteFilms().length;
-    const block = taste && taste.title ? tasteView(taste) : el('section', 'taste-block');
+    const block = tasteFrame(`From ${count} ratings`);
     if (count < 15) {
-      const line = el('p', 'taste-quiet', `Ab 15 bewerteten Filmen kann dein Filmprofil erstellt werden (noch ${15 - count}).`);
-      slot.append(line);
-      if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
-      return;
-    }
-    if (!taste || !taste.title) {
-      const button = el('button', 'text-line', opts.busy ? 'Wird erstellt …' : 'Filmprofil erstellen');
-      button.type = 'button';
-      button.disabled = Boolean(opts.busy);
-      button.addEventListener('click', () => makeTaste(slot));
-      block.append(button, el('p', 'taste-quiet', 'Deine Bewertungen werden dafür an Google Gemini geschickt, ohne Namen und Notizen.'));
+      block.append(el('p', 'taste-quiet', `A film profile needs 15 rated films (${15 - count} to go).`));
       slot.append(block);
       if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
       return;
     }
+    if (!taste || !taste.title) {
+      const button = el('button', 'text-line', opts.busy ? 'Creating…' : 'Create film profile');
+      button.type = 'button';
+      button.disabled = Boolean(opts.busy);
+      button.addEventListener('click', () => makeTaste(slot));
+      block.append(button, el('p', 'taste-quiet', 'Your ratings are sent to Google Gemini for this, without names or notes.'));
+      slot.append(block);
+      if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
+      return;
+    }
+    block.append(tasteView(taste));
     const made = Date.parse(taste.created_at);
     const open = !Number.isFinite(made) || Date.now() - made >= 20 * 60 * 60 * 1000;
     const hidden = Boolean(account && account.taste_hidden);
     const changed = open && !opts.busy && count >= Number(taste.rated_count || 0) + 10;
-    let label = 'Neu erstellen';
-    if (opts.busy) label = 'Wird erstellt …';
+    let label = 'Regenerate';
+    if (opts.busy) label = 'Creating…';
     else if (!open) {
       const until = new Date(made + 20 * 60 * 60 * 1000);
-      if (!Number.isNaN(until.getTime())) label = `ab ${until.getDate()}.${until.getMonth() + 1}`;
+      if (!Number.isNaN(until.getTime())) label = `from ${until.getDate()}.${until.getMonth() + 1}`;
     }
     const tools = el('div', 'taste-tools');
     const again = document.createElement('button');
@@ -8398,13 +8598,11 @@
     eye.type = 'button';
     eye.className = 'taste-vis';
     eye.disabled = Boolean(opts.busy);
-    eye.append(markBox(hidden, false));
-    eye.append(el('span', null, hidden ? 'unsichtbar für freunde' : 'sichtbar für freunde'));
+    eye.append(tasteEyeIcon(hidden));
+    eye.append(el('span', null, hidden ? 'Hidden from friends' : 'Visible to friends'));
     eye.addEventListener('click', () => toggleTasteHidden(slot));
     tools.append(again, eye);
-    const foot = el('div', 'taste-foot');
-    foot.append(block.querySelector('.taste-tags') || el('div', 'taste-tags'), tools);
-    block.append(foot);
+    block.append(tools);
     slot.append(block);
     if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
   }
@@ -8480,7 +8678,9 @@
       if (token !== otherToken || viewingId !== personId) return;
       const slot = root.querySelector('.taste-slot');
       if (!slot || !taste || !taste.title) return;
-      slot.replaceChildren(tasteView(taste));
+      const frame = tasteFrame(taste.rated_count ? `From ${taste.rated_count} ratings` : '');
+      frame.append(tasteView(taste));
+      slot.replaceChildren(frame);
     }).catch((error) => {
       console.error('[taste]', error);
     });
@@ -8498,11 +8698,11 @@
       : String(mutualPeople().length);
     root.replaceChildren();
     const head = el('div', 'profile-head');
-    head.append(paintOwnAvatar(56), el('h1', null, name));
+    head.append(paintOwnAvatar(84), el('h1', null, name));
     root.append(head);
     const stats = el('div', 'profile-stats');
     stats.append(
-      statNode(films, 'Filme'),
+      statNode(films, 'Films'),
       statNode(friends, 'Friends', paintFriends),
       friendInviteNode(),
     );
@@ -8516,8 +8716,8 @@
     const split = el('div', 'profile-split');
     const left = el('div', 'profile-col');
     const right = el('div', 'profile-col');
-    left.append(paintPeople('actors', 'Lieblingsschauspieler', people.actors));
-    right.append(paintPeople('directors', 'Lieblingsregie', people.directors), paintSettings());
+    left.append(paintPeople('actors', 'Favorite actors', people.actors));
+    right.append(paintPeople('directors', 'Favorite directors', people.directors), paintSettings());
     split.append(left, right);
     root.append(split);
     loadOwnTaste(tasteSlot);
@@ -8590,7 +8790,7 @@
     wall.hidden = true;
     networkEl.hidden = true;
     wishSearchList = null;
-    panel.hidden = true;
+    hidePanelNow();
     document.body.classList.remove('has-selection', 'is-network', 'is-rating', 'is-profile', 'is-wish', 'is-wish-search');
     const wishBoard = document.getElementById('wish-board');
     if (wishBoard) {
