@@ -321,10 +321,16 @@ function randomAvatar() {
       }
       if (result.error) throw result.error;
       const taste = await loadTaste(user.id);
+      let language = '';
+      const langRow = await client.from('profiles').select('language').eq('id', user.id).maybeSingle();
+      if (!langRow.error && langRow.data && (langRow.data.language === 'en' || langRow.data.language === 'de')) {
+        language = langRow.data.language;
+      }
       return Object.assign({}, result.data, {
         avatarKnown,
         taste_hidden: hiddenKnown ? Boolean(result.data.taste_hidden) : false,
         taste,
+        language,
       });
     },
     async createTaste(summary) {

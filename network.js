@@ -40,6 +40,7 @@
     const pointers = new Map();
     let pinch = null;
     let suppressClick = false;
+    let skipClick = false;
     let focus = { lit: null, edges: [], hot: null };
     let motion = 0;
     let lens = null;
@@ -252,6 +253,7 @@
       const image = document.createElement('img');
       image.alt = '';
       image.draggable = false;
+      image.style.setProperty('-webkit-user-drag', 'none');
       image.decoding = 'async';
       image.loading = 'lazy';
       const tint = document.createElement('span');
@@ -260,7 +262,10 @@
       score.className = 'net-score';
       button.append(dot, image, tint, score);
       button.addEventListener('click', () => {
-        if (suppressClick) return;
+        if (suppressClick || skipClick) {
+          skipClick = false;
+          return;
+        }
         options.onChoose(film);
       });
       return button;
@@ -1118,8 +1123,13 @@
       settle();
     }
 
+    stage.addEventListener('selectstart', (event) => event.preventDefault());
+    stage.addEventListener('dragstart', (event) => event.preventDefault());
+
     stage.addEventListener('pointerdown', (event) => {
       if (event.button != null && event.button !== 0) return;
+      const inWorld = event.target.closest && event.target.closest('.net-world');
+      if (inWorld && event.cancelable) event.preventDefault();
       cancelMotion();
       pointers.set(event.pointerId, {
         ox: event.clientX,
@@ -1129,6 +1139,7 @@
         moved: false,
         tx,
         ty,
+        target: event.target,
       });
       if (pointers.size === 2) {
         const pair = [...pointers.values()];
@@ -1146,7 +1157,7 @@
       const dy = event.clientY - pointer.oy;
       pointer.x = event.clientX;
       pointer.y = event.clientY;
-      if (!pointer.moved && Math.hypot(dx, dy) > 6) {
+      if (!pointer.moved && Math.hypot(dx, dy) >= 5) {
         pointer.moved = true;
         suppressClick = true;
         userMoved = true;
@@ -1169,6 +1180,9 @@
     });
 
     function endPointer(event) {
+      const pointer = pointers.get(event.pointerId);
+      const pinching = pointers.size > 1 || Boolean(pinch);
+      const tap = !pinching && pointer && !pointer.moved && event.type === 'pointerup' ? pointer.target : null;
       pointers.delete(event.pointerId);
       if (pointers.size < 2) pinch = null;
       pointers.forEach((pointer) => {
@@ -1182,6 +1196,14 @@
           suppressClick = false;
         }, 0);
       }
+      if (!tap || !tap.closest) return;
+      const filmButton = tap.closest('.net-film');
+      if (!filmButton) return;
+      const film = films.find((item) => item.id === filmButton.dataset.id);
+      if (!film) return;
+      skipClick = true;
+      window.setTimeout(() => { skipClick = false; }, 0);
+      options.onChoose(film);
     }
 
     stage.addEventListener('pointerup', endPointer);

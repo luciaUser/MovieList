@@ -477,7 +477,7 @@
     button.className = 'profile-color';
     const on = profileColorOn();
     button.setAttribute('aria-pressed', on ? 'true' : 'false');
-    button.append(markBox(false, on), el('span', null, 'Profilfarbe'));
+    button.append(markBox(false, on), el('span', null, t('Profile color')));
     button.addEventListener('click', () => {
       const next = !profileColorOn();
       setProfileColor(next);
@@ -1295,13 +1295,17 @@
     document.querySelectorAll('.their-wall .poster').forEach((button) => {
       button.classList.toggle('is-selected', button.dataset.id === selectedId);
     });
+    document.querySelectorAll('#wish-board .poster').forEach((button) => {
+      if (button.classList.contains('wish-plus')) return;
+      button.classList.toggle('is-selected', button.dataset.id === selectedId);
+    });
     wall.querySelectorAll('.genre-bar').forEach((bar) => {
       const films = bar.dataset.ids.split(',').filter(Boolean).map((id) => (
         lensPack ? lensPack.films.find((film) => film.id === id) : byId.get(id)
       )).filter(Boolean);
       const avg = myAverage(films);
       bar.querySelector('.genre-score').textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
-      bar.querySelector('.genre-count').textContent = films.length === 1 ? '1 Film' : `${films.length} Filme`;
+      bar.querySelector('.genre-count').textContent = films.length === 1 ? t('1 film') : t('{n} films', { n: films.length });
     });
     if (network) network.paint();
   }
@@ -1585,14 +1589,14 @@
 
   function sharedRateBlock(film, list, row) {
     const block = el('div', 'member-rates');
-    const average = el('p', 'rate-average', 'Durchschnitt –');
+    const average = el('p', 'rate-average', t('Average –'));
     block.append(average);
     const others = new Map();
     const paintAverage = (mine) => {
       const values = [...others.values()];
       if (mine != null && mine > 0) values.push(mine);
       const avg = values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
-      average.textContent = avg == null ? 'Durchschnitt –' : `Durchschnitt ${formatScore(avg)}`;
+      average.textContent = avg == null ? t('Average –') : t('Average {score}', { score: formatScore(avg) });
       const poster = document.querySelector(`#wish-board [data-id="${film.id}"]`);
       if (!poster) return;
       poster.classList.toggle('is-rated', avg != null);
@@ -1964,16 +1968,10 @@
     });
   }
 
-  function recLine(row) {
-    const mark = `★ ${formatScore(row.vote)}`;
-    const year = row.year ? String(row.year) : '';
-    return year ? `${mark} · ${year}` : mark;
-  }
-
   function recHead(count) {
     const head = el('div', 'section-head');
     const row = el('div', 'rec-kicker');
-    row.append(el('h2', 'profile-kicker', 'Empfehlungen'));
+    row.append(el('h2', 'profile-kicker', t('Recommendations')));
     row.append(el('span', 'rec-count', count > 0 ? String(count) : ''));
     head.append(row, el('span', 'section-rule'));
     return head;
@@ -2225,10 +2223,10 @@
       cover.append(el('span', 'poster-title', row.title || 'Film'));
     }
     const copy = el('span', 'link-copy');
-    copy.append(
-      el('span', 'link-title', row.title),
-      el('span', 'link-meta', recLine(row)),
-    );
+    const foot = el('span', 'rec-foot');
+    if (row.year) foot.append(el('span', 'rec-year', String(row.year)));
+    foot.append(el('span', 'link-meta', `★ ${formatScore(row.vote)}`));
+    copy.append(el('span', 'link-title', row.title), foot);
     open.append(cover, copy);
     open.addEventListener('click', () => showRecommendation(row));
     const plus = el('button', 'rec-add');
@@ -2272,7 +2270,7 @@
     }
     group.append(list);
     if ((ranked.length > state.shown || state.more) && !(state.loading && !shown.length)) {
-      const more = el('button', 'rec-more', 'Mehr anzeigen');
+      const more = el('button', 'rec-more', t('Show more'));
       more.type = 'button';
       if (state.loading) more.disabled = true;
       more.addEventListener('click', () => {
@@ -2343,7 +2341,7 @@
     group.replaceChildren(recHead(0));
     const pending = el('div', 'rec-list');
     pending.append(recSkeleton(), recSkeleton(), recSkeleton());
-    group.append(pending, el('p', 'rec-note', 'Empfehlungen via TMDB'));
+    group.append(pending, el('p', 'rec-note', t('Recommendations via TMDB')));
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (state.token !== recToken || !group.isConnected) return;
@@ -2354,6 +2352,8 @@
 
   function renderPanel(film, options) {
     const quiet = Boolean(options && options.quiet);
+    const stay = Boolean(options && options.stay) && !panel.hidden;
+    const keptScroll = stay ? panel.scrollTop : 0;
     const shownLinks = quiet ? [] : links;
     closeWishSearch();
     panelFilm = film;
@@ -2374,9 +2374,9 @@
     closeIcon.addEventListener('click', clearSelection);
     const wish = el('button', 'panel-wish');
     wish.type = 'button';
-    wish.setAttribute('aria-label', 'Wunschliste');
+    wish.setAttribute('aria-label', 'To list');
     wish.setAttribute('aria-expanded', 'false');
-    wish.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>Add to wishlist</span>';
+    wish.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>To list</span>';
     const pick = el('div', 'wish-pick');
     pick.hidden = true;
     wish.addEventListener('click', (event) => {
@@ -2494,14 +2494,14 @@
     const shared = panelList && panelList.members && panelList.members.length > 1 ? panelList : null;
     const rateSection = el('section', 'group');
     if (isUnreleased(film)) {
-      rateSection.append(sectionHead('Bewertung'));
+      rateSection.append(sectionHead(t('Rating')));
       rateSection.append(el('p', 'release-note', releaseLine(film)));
     } else {
-      rateSection.append(sectionHead('Bewertung', { tag: 'label', htmlFor: 'own-rate' }));
+      rateSection.append(sectionHead(t('Rating'), { tag: 'label', htmlFor: 'own-rate' }));
       rateSection.append(shared ? sharedRateBlock(film, shared, row) : ownRateBlock(film, row));
     }
     const noteSection = el('section', 'group');
-    noteSection.append(sectionHead('Notiz', { tag: 'label', htmlFor: 'own-memo' }));
+    noteSection.append(sectionHead(t('Note'), { tag: 'label', htmlFor: 'own-memo' }));
     const memo = document.createElement('textarea');
     memo.id = 'own-memo';
     memo.className = 'memo';
@@ -2561,7 +2561,8 @@
       });
       panel.append(group);
     });
-    if (quiet && !panel.hidden) panel.scrollTop = 0;
+    if (stay) panel.scrollTop = keptScroll;
+    else if (quiet && !panel.hidden) panel.scrollTop = 0;
     else revealPanel();
     if (cast) requestAnimationFrame(() => fitCastNames(cast));
   }
@@ -2569,9 +2570,9 @@
   const TRAIT_FIELDS = [
     ['genres', 'Genre', 'genre', 3],
     ['subgenres', 'Subgenre', 'subgenre', 2],
-    ['themes', 'Thema', 'theme', 4],
-    ['tone', 'Ton', 'tone', 2],
-    ['narrative', 'Erzählweise', 'narrative', 2],
+    ['themes', 'Theme', 'theme', 4],
+    ['tone', 'Tone', 'tone', 2],
+    ['narrative', 'Narrative', 'narrative', 2],
   ];
 
   function traitChip(label, value, kind) {
@@ -2588,7 +2589,7 @@
 
   function missingChip(label) {
     const node = el('span', 'chip is-missing');
-    node.append(el('small', null, label), el('span', null, 'fehlt'));
+    node.append(el('small', null, label), el('span', null, t('Missing')));
     return node;
   }
 
@@ -2737,7 +2738,7 @@
     const block = el('label', 'facet-block');
     block.append(el('span', 'facet-label', label));
     const select = document.createElement('select');
-    select.append(new Option('fehlt', ''));
+    select.append(new Option(t('Missing'), ''));
     options.forEach((name) => select.append(new Option(name, name)));
     select.value = editDraft[field] || '';
     select.addEventListener('change', () => {
@@ -2749,12 +2750,12 @@
 
   function intensityEditor() {
     const block = el('div', 'facet-block');
-    block.append(el('p', 'facet-label', 'Intensität'));
+    block.append(el('p', 'facet-label', t('Intensity')));
     const row = el('div', 'chips');
     for (let mark = 1; mark <= 5; mark += 1) {
       const button = el('button', editDraft.intensity === mark ? 'chip is-on' : 'chip', String(mark));
       button.type = 'button';
-      button.setAttribute('aria-label', `Intensität ${mark} von 5`);
+      button.setAttribute('aria-label', t('Intensity {n} of 5', { n: mark }));
       button.setAttribute('aria-pressed', editDraft.intensity === mark ? 'true' : 'false');
       button.addEventListener('click', () => {
         editDraft.intensity = editDraft.intensity === mark ? null : mark;
@@ -2770,16 +2771,16 @@
   function traitEditor(film) {
     const form = el('div', 'trait-edit');
     TRAIT_FIELDS.forEach(([field, label, , limit]) => {
-      form.append(facetEditor(field, label, limit));
+      form.append(facetEditor(field, t(label), limit));
     });
     form.append(intensityEditor());
-    form.append(choiceEditor('Epoche', 'epoch', (vocabulary && vocabulary.epoch) || []));
-    form.append(choiceEditor('Ort', 'place', (vocabulary && vocabulary.place) || []));
+    form.append(choiceEditor(t('Era'), 'epoch', (vocabulary && vocabulary.epoch) || []));
+    form.append(choiceEditor(t('Setting'), 'place', (vocabulary && vocabulary.place) || []));
     const actions = el('div', 'trait-actions');
-    const save = el('button', 'text-button', 'Speichern');
+    const save = el('button', 'text-button', t('Save'));
     save.type = 'button';
     save.addEventListener('click', () => saveDraft(film));
-    const cancel = el('button', 'text-button', 'Abbrechen');
+    const cancel = el('button', 'text-button', t('Cancel'));
     cancel.type = 'button';
     cancel.addEventListener('click', () => {
       editDraft = null;
@@ -2794,20 +2795,21 @@
     const list = el('div', 'chips');
     TRAIT_FIELDS.forEach(([field, label, kind]) => {
       const values = full[field] || [];
+      const name = t(label);
       if (!values.length) {
-        list.append(missingChip(label));
+        list.append(missingChip(name));
         return;
       }
-      values.forEach((value) => list.append(traitChip(label, value, kind)));
+      values.forEach((value) => list.append(traitChip(name, value, kind)));
     });
     if (typeof full.intensity === 'number' && full.intensity > 0) {
       const button = el('button', 'chip');
       button.type = 'button';
-      button.setAttribute('aria-label', `Intensität ${full.intensity} von 5`);
+      button.setAttribute('aria-label', t('Intensity {n} of 5', { n: full.intensity }));
       const dots = el('span', 'dots');
       dots.setAttribute('aria-hidden', 'true');
       for (let mark = 1; mark <= 5; mark += 1) dots.append(el('span', mark <= full.intensity ? 'on' : ''));
-      button.append(el('small', null, 'Intensität'), dots);
+      button.append(el('small', null, t('Intensity')), dots);
       button.addEventListener('click', () => highlight({
         title: `Intensität: ${full.intensity}`,
         style: 'content',
@@ -2815,19 +2817,19 @@
       }));
       list.append(button);
     } else {
-      list.append(missingChip('Intensität'));
+      list.append(missingChip(t('Intensity')));
     }
-    if (full.epoch) list.append(traitChip('Epoche', full.epoch, 'epoch'));
-    else list.append(missingChip('Epoche'));
-    if (full.place) list.append(traitChip('Ort', full.place, 'place'));
-    else list.append(missingChip('Ort'));
+    if (full.epoch) list.append(traitChip(t('Era'), full.epoch, 'epoch'));
+    else list.append(missingChip(t('Era')));
+    if (full.place) list.append(traitChip(t('Setting'), full.place, 'place'));
+    else list.append(missingChip(t('Setting')));
     return list;
   }
 
   function appendTraits(film, full) {
     const editing = editDraft && editDraft.id === film.id;
     const section = el('section', 'group');
-    section.append(sectionHead('Merkmale'));
+    section.append(sectionHead(t('Traits')));
     section.append(editing ? traitEditor(film) : traitView(full));
     panel.append(section);
   }
@@ -5483,7 +5485,7 @@
         return;
       }
       node.hidden = false;
-      node.replaceChildren(sectionHead('Gefolgte'));
+      node.replaceChildren(sectionHead(t('Followed')));
       const line = el('p', 'followed-names');
       rows.forEach((person, index) => {
         if (index) line.append(document.createTextNode(' · '));
@@ -6205,10 +6207,65 @@
       stack.append(hint);
     }
     stack.append(el('p', 'account-caption', 'Display name · visible to friends'));
+    stack.append(paintLanguage());
     if (recoveryOn) stack.append(paintRecovery());
     stack.append(paintSignOut(), paintDanger());
     return stack;
   }
+
+  function paintLanguage() {
+    const row = el('div', 'lang-row');
+    row.append(el('span', 'lang-label', t('Language')));
+    const choices = [['en', 'English'], ['de', 'Deutsch']];
+    choices.forEach(([code, label]) => {
+      const button = el('button', 'lang-choice', label);
+      button.type = 'button';
+      button.setAttribute('aria-pressed', uiLang() === code ? 'true' : 'false');
+      button.addEventListener('click', () => chooseLanguage(code));
+      row.append(button);
+    });
+    return row;
+  }
+
+  function chooseLanguage(code) {
+    const next = code === 'de' ? 'de' : 'en';
+    if (uiLang() === next) return;
+    if (globalThis.I18n) globalThis.I18n.set(next);
+    if (account) account.language = next;
+    const cloud = globalThis.Cloud;
+    if (cloud && cloud.updateProfile) cloud.updateProfile({ language: next }).catch(() => {});
+    applyLanguage();
+  }
+
+  function applyChrome() {
+    document.documentElement.lang = uiLang();
+    document.querySelectorAll('[data-i18n]').forEach((node) => {
+      const key = node.getAttribute('data-i18n');
+      const attr = node.getAttribute('data-i18n-attr');
+      if (!key) return;
+      if (attr) node.setAttribute(attr, t(key));
+      else if (!node.querySelector('svg')) node.textContent = t(key);
+    });
+  }
+
+  function applyLanguage() {
+    applyChrome();
+    const profile = document.getElementById('profile');
+    if (profile && !profile.hidden && profileMode === 'home') paintProfile();
+    if (panelFilm && panel && !panel.hidden) {
+      renderPanel(panelFilm, { quiet: !byId.has(panelFilm.id), stay: true });
+    }
+    const board = document.getElementById('wish-board');
+    if (board && !board.hidden && mode === 'wish' && typeof paintWishBoard === 'function') paintWishBoard();
+    wall.querySelectorAll('.genre-bar').forEach((bar) => {
+      const count = bar.querySelector('.genre-count');
+      if (!count || !bar.dataset.ids) return;
+      const films = bar.dataset.ids.split(',').filter(Boolean);
+      count.textContent = films.length === 1 ? t('1 film') : t('{n} films', { n: films.length });
+    });
+  }
+
+  applyChrome();
 
   function paintSignOut() {
     const out = document.createElement('button');
@@ -6925,7 +6982,7 @@
     if (accepted) swatch.type = 'button';
     swatch.className = 'wish-swatch';
     swatch.style.color = color;
-    swatch.innerHTML = '<svg viewBox="0 0 33 31" fill="none" aria-hidden="true"><path d="M26.6986 13.7058V22.0678H5.24023V13.7058" stroke="currentColor"></path><path d="M5.14551 14.0937L9.76053 6.1003" stroke="currentColor"></path><path d="M26.7983 14.0937L22.1833 6.1003" stroke="currentColor"></path><path d="M5.26074 14.0974H22.1887M26.7985 14.0974H21.4141" stroke="currentColor"></path><path d="M9.32764 6.18579H22.6211" stroke="currentColor"></path><path d="M9.76074 11.5291H22.022" stroke="currentColor"></path><path d="M11.0137 9.0127H20.9253" stroke="currentColor"></path></svg>';
+    swatch.innerHTML = '<svg viewBox="4.4 5.4 23.2 17.6" fill="none" aria-hidden="true"><path d="M26.6986 13.7058V22.0678H5.24023V13.7058" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5.14551 14.0937L9.76053 6.1003" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M26.7983 14.0937L22.1833 6.1003" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5.26074 14.0974H22.1887M26.7985 14.0974H21.4141" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9.32764 6.18579H22.6211" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9.76074 11.5291H22.022" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M11.0137 9.0127H20.9253" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     if (accepted) swatch.setAttribute('aria-label', 'Farbe');
     const label = el('span', 'wish-title', list.title || (invited ? 'Liste' : ''));
     label.style.color = color;
@@ -9821,6 +9878,10 @@
     } else if (account && account.avatar && account.avatar.outer) {
       writeAvatarCache(account.id, account.avatar);
     }
+    if (account && (account.language === 'en' || account.language === 'de') && globalThis.I18n && globalThis.I18n.lang() !== account.language) {
+      globalThis.I18n.set(account.language);
+    }
+    applyChrome();
     paintAvatarTab();
     document.body.classList.toggle('is-profile-color', profileColorOn());
     watchFollows(session.user.id);

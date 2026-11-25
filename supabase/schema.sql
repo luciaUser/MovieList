@@ -119,6 +119,7 @@ alter table public.films add column if not exists checked_at timestamptz;
 alter table public.profiles add column if not exists avatar jsonb;
 alter table public.profiles add column if not exists taste jsonb;
 alter table public.profiles add column if not exists taste_hidden boolean not null default false;
+alter table public.profiles add column if not exists language text not null default 'en';
 
 alter table public.wishlists add column if not exists color text;
 alter table public.wishlists drop constraint if exists wishlists_color_hex;
@@ -752,9 +753,9 @@ grant all on all tables in schema public to service_role;
 grant all on all sequences in schema public to service_role;
 grant execute on all functions in schema public to service_role;
 
-grant select (id, username, display_name, is_private, created_at, avatar, taste_hidden) on public.profiles to authenticated;
+grant select (id, username, display_name, is_private, created_at, avatar, taste_hidden, language) on public.profiles to authenticated;
 revoke select (taste) on public.profiles from authenticated;
-grant update (display_name, is_private, top_films, pinned_people, avatar, taste_hidden) on public.profiles to authenticated;
+grant update (display_name, is_private, top_films, pinned_people, avatar, taste_hidden, language) on public.profiles to authenticated;
 
 grant select, insert, update, delete on public.follows to authenticated;
 grant select, insert, update on public.films to authenticated;

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
@@ -14,7 +14,7 @@
     </button>
     <div class="add-film">
       <button type="button" id="add-film" aria-expanded="false" aria-controls="add-form">
-        <span class="sr">Film ablegen</span>
+        <span class="sr" data-i18n="Add a film">Add a film</span>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path class="plus-v" d="M12 4.5v15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
           <path d="M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
@@ -22,19 +22,19 @@
       </button>
       <form id="add-form">
         <div class="line-slot">
-          <label class="sr" for="add-query">Titel, IMDb- oder TMDB-Link</label>
-          <input id="add-query" type="text" placeholder="Titel oder Link" autocomplete="off" enterkeyhint="done" disabled>
+          <label class="sr" for="add-query" data-i18n="Title, IMDb or TMDB link">Title, IMDb or TMDB link</label>
+          <input id="add-query" type="text" placeholder="Title or link" data-i18n="Title or link" data-i18n-attr="placeholder" autocomplete="off" enterkeyhint="done" disabled>
         </div>
         <p id="add-status" role="status"></p>
-        <button type="submit" class="sr">Ablegen</button>
+        <button type="submit" class="sr" data-i18n="Add">Add</button>
       </form>
     </div>
     <div id="lens-bar" hidden>
       <span></span>
-      <button type="button" id="lens-close" aria-label="Zurück zu meiner Ansicht">×</button>
+      <button type="button" id="lens-close" aria-label="Back to my view" data-i18n="Back to my view" data-i18n-attr="aria-label">×</button>
     </div>
-    <div class="modes" role="tablist" aria-label="Ansicht">
-      <button type="button" id="mode-network" class="icon-tab" role="tab" aria-selected="true" aria-label="Netzwerk">
+    <div class="modes" role="tablist" aria-label="View" data-i18n="View" data-i18n-attr="aria-label">
+      <button type="button" id="mode-network" class="icon-tab" role="tab" aria-selected="true" aria-label="Network" data-i18n="Network" data-i18n-attr="aria-label">
         <svg viewBox="6.7 3.5 25.6 22.7" aria-hidden="true">
           <defs>
             <linearGradient id="lit-network" gradientUnits="userSpaceOnUse" x1="0" y1="26.2" x2="0" y2="3.5">
@@ -62,24 +62,25 @@
           <path d="M9.33301 12.4472L12.733 11.0472V21.2472" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"></path>
         </svg>
       </button>
-      <button type="button" id="mode-wish" class="icon-tab" role="tab" aria-selected="false" aria-label="Wunschliste">
-        <svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true">
+      <button type="button" id="mode-wish" class="icon-tab" role="tab" aria-selected="false" aria-label="Wishlist" data-i18n="Wishlist" data-i18n-attr="aria-label">
+        <svg viewBox="4.4 5.4 23.2 17.6" aria-hidden="true">
           <defs>
-            <linearGradient id="lit-wish" gradientUnits="userSpaceOnUse" x1="0" y1="30.1" x2="0" y2="8.9">
+            <linearGradient id="lit-wish" gradientUnits="userSpaceOnUse" x1="0" y1="23" x2="0" y2="5.4">
               <stop offset="0" stop-color="#ffffff"></stop>
               <stop offset="1" stop-color="#8d8d8d"></stop>
             </linearGradient>
           </defs>
-          <path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-          <path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-          <path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-          <path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-          <path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-          <path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M26.6986 13.7058V22.0678H5.24023V13.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M5.14551 14.0937L9.76053 6.1003" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M26.7983 14.0937L22.1833 6.1003" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M5.26074 14.0974H22.1887M26.7985 14.0974H21.4141" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M9.32764 6.18579H22.6211" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M9.76074 11.5291H22.022" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          <path d="M11.0137 9.0127H20.9253" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
       </button>
       <div class="sort-wrap">
-        <button type="button" id="mode-director" class="icon-tab" role="tab" aria-selected="false" aria-expanded="false" aria-haspopup="true" aria-controls="sort-pop" aria-label="Sortierung">
+        <button type="button" id="mode-director" class="icon-tab" role="tab" aria-selected="false" aria-expanded="false" aria-haspopup="true" aria-controls="sort-pop" aria-label="Sort" data-i18n="Sort" data-i18n-attr="aria-label">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <defs>
               <linearGradient id="lit-burger" gradientUnits="userSpaceOnUse" x1="0" y1="24" x2="0" y2="0">
@@ -91,19 +92,19 @@
           </svg>
         </button>
         <div id="sort-pop" aria-hidden="true">
-          <button type="button" data-sort="director" aria-pressed="true">Regie</button>
-          <button type="button" data-sort="genre" aria-pressed="false">Genre</button>
-          <button type="button" data-sort="cast" aria-pressed="false">Schauspieler</button>
+          <button type="button" data-sort="director" aria-pressed="true" data-i18n="Director">Director</button>
+          <button type="button" data-sort="genre" aria-pressed="false" data-i18n="Genre">Genre</button>
+          <button type="button" data-sort="cast" aria-pressed="false" data-i18n="Actors">Actors</button>
         </div>
       </div>
     </div>
     <form id="search-form" role="search">
       <div class="line-slot">
-        <label class="sr" for="search">Film suchen</label>
+        <label class="sr" for="search" data-i18n="Search films">Search films</label>
         <input id="search" type="text" autocomplete="off" enterkeyhint="search" disabled>
       </div>
       <button type="button" id="search-open" aria-expanded="false" aria-controls="search">
-        <span class="sr">Film suchen</span>
+        <span class="sr" data-i18n="Search films">Search films</span>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="5.25" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
           <path d="M14.6 14.6L20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
@@ -113,20 +114,20 @@
     </form>
   </header>
 
-  <div id="gate" hidden aria-label="Anmeldung">
+  <div id="gate" hidden aria-label="Sign in" data-i18n="Sign in" data-i18n-attr="aria-label">
     <div class="gate-card" id="gate-card"></div>
   </div>
-  <section id="profile" hidden aria-label="Profil"></section>
-  <main id="wall" hidden aria-label="Filmcover. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen."></main>
-  <main id="wish-board" hidden aria-label="Wunschlisten"></main>
-  <div id="network" hidden aria-label="Netzwerk. Ziehen verschiebt die Karte, Scrollen zoomt. Ein Klick öffnet einen Film. Ein Doppelklick markiert ihn als gesehen.">
+  <section id="profile" hidden aria-label="Profile" data-i18n="Profile" data-i18n-attr="aria-label"></section>
+  <main id="wall" hidden aria-label="Film covers"></main>
+  <main id="wish-board" hidden aria-label="Wishlists" data-i18n="Wishlists" data-i18n-attr="aria-label"></main>
+  <div id="network" hidden aria-label="Network">
     <div class="net-world"></div>
     <div id="net-bar" hidden></div>
-    <div id="compare-bar" hidden><span></span><button type="button" aria-label="Vergleich beenden">×</button></div>
+    <div id="compare-bar" hidden><span></span><button type="button" aria-label="End comparison" data-i18n="End comparison" data-i18n-attr="aria-label">×</button></div>
     <div id="empty-net" class="empty" hidden>
-      <p>Dein Archiv ist noch leer.</p>
-      <button type="button" data-empty="add">Film hinzufügen</button>
-      <button type="button" data-empty="list">Liste einfügen</button>
+      <p data-i18n="Your archive is still empty.">Your archive is still empty.</p>
+      <button type="button" data-empty="add" data-i18n="Add a film">Add a film</button>
+      <button type="button" data-empty="list" data-i18n="Paste a list">Paste a list</button>
     </div>
   </div>
 
@@ -145,6 +146,7 @@
   <script src="layout.js"></script>
   <script src="store.js"></script>
   <script src="network.js"></script>
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
   <script type="module" src="cloud.js"></script>
 </body>
