@@ -1048,6 +1048,7 @@
   }
 
   function hidePanelNow() {
+    clearGenreFit();
     panel.hidden = true;
     panel.replaceChildren();
     panel.classList.remove('is-sheet');
@@ -1455,8 +1456,6 @@
 
   function ownRateBlock(film, row) {
     const block = document.createDocumentFragment();
-    const rateLabel = el('label', null, 'Bewertung');
-    rateLabel.htmlFor = 'own-rate';
     const rateRow = el('div', 'member-rate');
     rateRow.append(avatarNode(account && account.avatar, 28));
     rateRow.append(el('span', 'member-name', (account && (account.display_name || account.username)) || 'Ich'));
@@ -1473,7 +1472,7 @@
       commitRating(film, rating, previous);
     });
     rateRow.append(bar, value);
-    block.append(rateLabel, rateRow);
+    block.append(rateRow);
     return block;
   }
 
@@ -1552,6 +1551,78 @@
   }
 
   let overviewToken = 0;
+  let genreObserver = null;
+
+  function sectionHead(title, options) {
+    const opts = options || {};
+    const head = el('div', 'section-head');
+    const kicker = el(opts.tag || 'h2', opts.kicker ? `profile-kicker ${opts.kicker}` : 'profile-kicker', title);
+    if (opts.htmlFor) kicker.htmlFor = opts.htmlFor;
+    head.append(kicker, el('span', opts.rule || 'section-rule'));
+    return head;
+  }
+
+  function clearGenreFit() {
+    if (genreObserver) {
+      genreObserver.disconnect();
+      genreObserver = null;
+    }
+  }
+
+  function paintGenrePills(list, names, scale, base) {
+    const shown = names.join('\n');
+    if (list.dataset.shown !== shown) {
+      list.dataset.shown = shown;
+      list.replaceChildren();
+      names.forEach((name) => list.append(el('li', null, name)));
+    }
+    const size = `${Math.round(base.size * scale * 10) / 10}px`;
+    const pad = `${Math.round(base.py * scale * 10) / 10}px ${Math.round(base.px * scale * 10) / 10}px`;
+    list.querySelectorAll('li').forEach((item) => {
+      item.style.fontSize = size;
+      item.style.padding = pad;
+    });
+  }
+
+  function fitGenreRow(meta) {
+    if (!meta || !meta.isConnected || meta.clientWidth < 8) return;
+    const list = meta.querySelector('.pills');
+    if (!list) return;
+    const names = String(list.dataset.genres || '').split('\n').filter(Boolean);
+    if (!names.length) return;
+    if (!list._genreBase) {
+      const sample = list.querySelector('li');
+      const style = getComputedStyle(sample);
+      list._genreBase = {
+        size: parseFloat(style.fontSize) || 13,
+        py: parseFloat(style.paddingTop) || 6,
+        px: parseFloat(style.paddingLeft) || 12,
+      };
+    }
+    const base = list._genreBase;
+    const scales = [1, 0.9, 0.8];
+    let count = names.length;
+    let fitted = false;
+    while (count >= 1 && !fitted) {
+      for (let step = 0; step < scales.length; step += 1) {
+        paintGenrePills(list, names.slice(0, count), scales[step], base);
+        if (list.scrollWidth <= list.clientWidth + 1) {
+          fitted = true;
+          break;
+        }
+      }
+      if (!fitted) count -= 1;
+    }
+    if (!fitted) paintGenrePills(list, names.slice(0, 1), 0.8, base);
+  }
+
+  function bindGenreFit(meta) {
+    clearGenreFit();
+    requestAnimationFrame(() => fitGenreRow(meta));
+    if (typeof ResizeObserver !== 'function') return;
+    genreObserver = new ResizeObserver(() => fitGenreRow(meta));
+    genreObserver.observe(meta);
+  }
 
   function storedOverview(id) {
     try {
@@ -1639,6 +1710,7 @@
     panelFilm = film;
     const row = entry(film.id);
     const mine = byId.has(film.id);
+    clearGenreFit();
     panel.replaceChildren();
 
     const remove = el('button', 'panel-remove');
@@ -1741,10 +1813,13 @@
       el('span', 'panel-score-source', localImdb ? 'IMDb' : 'TMDB'),
     );
     meta.append(score);
-    if ((film.genres || []).length) {
+    const genres = (film.genres || []).filter(Boolean).slice(0, 3);
+    if (genres.length) {
       const pills = el('ul', 'pills');
-      film.genres.forEach((genre) => pills.append(el('li', null, genre)));
+      pills.dataset.genres = genres.join('\n');
+      genres.forEach((genre) => pills.append(el('li', null, genre)));
       meta.append(pills);
+      bindGenreFit(meta);
     }
     head.append(meta);
     const blurb = el('div', 'panel-overview-slot');
@@ -1772,21 +1847,25 @@
       panel.append(addMine);
     }
 
-    const field = el('div', 'block');
     const shared = panelList && panelList.members && panelList.members.length > 1 ? panelList : null;
-    if (isUnreleased(film)) field.append(el('p', 'release-note', releaseLine(film)));
-    else field.append(shared ? sharedRateBlock(film, shared, row) : ownRateBlock(film, row));
-    const memoLabel = el('label', null, 'Notiz');
-    memoLabel.htmlFor = 'own-memo';
-    memoLabel.style.marginTop = '16px';
+    const rateSection = el('section', 'group');
+    if (isUnreleased(film)) {
+      rateSection.append(sectionHead('Bewertung'));
+      rateSection.append(el('p', 'release-note', releaseLine(film)));
+    } else {
+      rateSection.append(sectionHead('Bewertung', { tag: 'label', htmlFor: 'own-rate' }));
+      rateSection.append(shared ? sharedRateBlock(film, shared, row) : ownRateBlock(film, row));
+    }
+    const noteSection = el('section', 'group');
+    noteSection.append(sectionHead('Notiz', { tag: 'label', htmlFor: 'own-memo' }));
     const memo = document.createElement('textarea');
     memo.id = 'own-memo';
     memo.className = 'memo';
     memo.maxLength = 500;
     memo.value = row.memo;
     memo.addEventListener('input', () => writeEntry(film.id, { memo: memo.value }));
-    field.append(memoLabel, memo);
-    panel.append(field);
+    noteSection.append(memo);
+    panel.append(rateSection, noteSection);
     if (isCustomFilm(film)) suggestCustomLink(film);
     appendTraits(film, full);
 
@@ -1799,7 +1878,7 @@
       const items = links.filter((link) => link.group === name).slice(0, 6);
       if (!items.length) return;
       const group = el('section', 'group');
-      group.append(el('h2', null, name));
+      group.append(sectionHead(name));
       items.forEach((link) => {
         const other = byId.get(link.id);
         const button = document.createElement('button');
@@ -2085,9 +2164,7 @@
   function appendTraits(film, full) {
     const editing = editDraft && editDraft.id === film.id;
     const section = el('section', 'group');
-    const heading = el('div', 'trait-head');
-    heading.append(el('h2', null, 'Merkmale'));
-    section.append(heading);
+    section.append(sectionHead('Merkmale'));
     section.append(editing ? traitEditor(film) : traitView(full));
     panel.append(section);
   }
@@ -4138,8 +4215,7 @@
   function paintTheirTop(pack) {
     const block = document.createElement('section');
     const cap = topCap();
-    block.append(el('h2', 'profile-kicker top-kicker', `Top ${cap}`));
-    block.append(el('span', 'top-rule'));
+    block.append(sectionHead(`Top ${cap}`, { kicker: 'top-kicker', rule: 'top-rule' }));
     const custom = pack.sensitive && Array.isArray(pack.sensitive.top_films) ? pack.sensitive.top_films : [];
     const films = custom.length
       ? custom.map((id) => pack.films.find((film) => film.id === id)).filter(Boolean).slice(0, cap)
@@ -4704,7 +4780,7 @@
         return;
       }
       node.hidden = false;
-      node.replaceChildren(el('span', 'profile-kicker', 'Gefolgte'));
+      node.replaceChildren(sectionHead('Gefolgte'));
       const line = el('p', 'followed-names');
       rows.forEach((person, index) => {
         if (index) line.append(document.createTextNode(' · '));
@@ -5052,7 +5128,7 @@
     const readOnly = Boolean(source && source.readOnly);
     const shown = rankedPeople(map, pins[kind]);
     const block = document.createElement('section');
-    block.append(el('h2', 'profile-kicker', title), el('span', 'section-rule'));
+    block.append(sectionHead(title));
     if (!shown.length) {
       block.append(el('p', 'profile-note', 'Not enough ratings yet'));
       return block;
@@ -5114,8 +5190,7 @@
   function paintTop(root) {
     const block = document.createElement('section');
     const cap = topCap();
-    block.append(el('h2', 'profile-kicker top-kicker', `Top ${cap}`));
-    block.append(el('span', 'top-rule'));
+    block.append(sectionHead(`Top ${cap}`, { kicker: 'top-kicker', rule: 'top-rule' }));
     const chosen = shownTopFilms();
     if (!chosen.length) {
       block.append(el('p', 'profile-note', `Rate films, then your top ${cap} show up here`));
@@ -5309,7 +5384,7 @@
   function paintSettings() {
     const stack = el('div', 'profile-settings stack');
     const savedName = (account && (account.display_name || account.username)) || '';
-    stack.append(el('h2', 'profile-kicker', 'Account'), el('span', 'section-rule'));
+    stack.append(sectionHead('Account'));
     const nameField = el('div', 'name-field');
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
@@ -7044,6 +7119,7 @@
   function renderWishSearch() {
     const list = currentWishSearchList();
     if (!list) return;
+    clearGenreFit();
     panel.replaceChildren();
     const box = el('div', 'wish-find');
     const head = el('div', 'wish-find-head');
@@ -8612,7 +8688,9 @@
     const head = el('div', 'taste-head');
     head.append(el('h2', 'profile-kicker', 'AI Film Profile'));
     if (countText) head.append(el('span', 'taste-from', countText));
-    block.append(head, el('span', 'section-rule'));
+    const wrap = el('div', 'section-head');
+    wrap.append(head, el('span', 'section-rule'));
+    block.append(wrap);
     return block;
   }
 
