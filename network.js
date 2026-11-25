@@ -1258,6 +1258,32 @@
       },
       glide,
       addFilm,
+      showFilm(film, point, options) {
+        if (!films.some((item) => item.id === film.id)) films = films.concat(film);
+        if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+          remember(film.id, point);
+          stored[film.id] = { x: point.x, y: point.y };
+        } else if (!points.has(film.id)) seat(film);
+        const fresh = !buttons.has(film.id);
+        let button = buttons.get(film.id);
+        if (!button) {
+          button = buttonFor(film);
+          buttons.set(film.id, button);
+          world.append(button);
+        }
+        placeButton(film.id);
+        if (fresh && !(options && options.fade === false)) {
+          button.classList.add('is-arriving');
+          requestAnimationFrame(() => button.classList.add('is-in'));
+          button.addEventListener('transitionend', () => {
+            button.classList.remove('is-arriving', 'is-in');
+          }, { once: true });
+        }
+        ensureImages();
+      },
+      hasButton(id) {
+        return buttons.has(id);
+      },
       moveFilm,
       dropFilm(id) {
         films = films.filter((film) => film.id !== id);
