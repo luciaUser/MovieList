@@ -135,6 +135,7 @@ async function handle(req, res) {
         list: url.searchParams.get('list') === '1',
         upcoming: url.searchParams.get('upcoming') === '1',
         overview: url.searchParams.get('overview') === '1',
+        card: url.searchParams.get('card') === '1',
       });
       return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);
     }

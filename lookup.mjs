@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { search, searchHits, directorName, findByImdb, details, recommendBundle } from './tmdb.mjs';
+import { search, searchHits, directorName, findByImdb, details, recommendBundle, filmCard } from './tmdb.mjs';
 import { enrichFilm } from './enrich.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -355,8 +355,30 @@ export async function recommendResponse(raw, page) {
   }
 }
 
+export async function cardResponse(raw) {
+  const empty = { director: '', cast: [], overview: '', genres: [] };
+  try {
+    if (!configured()) {
+      return { status: 503, body: JSON.stringify(empty), cache: 'no-store' };
+    }
+    const parsed = parseQuery(raw);
+    if (!parsed || parsed.kind !== 'tmdb') {
+      return { status: 200, body: JSON.stringify(empty), cache: 'no-store' };
+    }
+    const card = await filmCard(parsed.type, parsed.id);
+    return {
+      status: 200,
+      body: JSON.stringify(card || empty),
+      cache: card ? 's-maxage=86400' : 'no-store',
+    };
+  } catch {
+    return { status: 502, body: JSON.stringify(empty), cache: 'no-store' };
+  }
+}
+
 export async function filmResponse(raw, options) {
   try {
+    if (options && options.card) return cardResponse(raw);
     if (options && options.overview) {
       const overview = await filmOverview(raw);
       return {

@@ -116,6 +116,45 @@ export async function findByImdb(imdbId) {
   return shape({ ...hit, media_type: movie ? 'movie' : 'tv' }, false);
 }
 
+const GENRE_NAMES = {
+  28: 'Action',
+  12: 'Abenteuer',
+  16: 'Animation',
+  35: 'Komödie',
+  80: 'Krimi',
+  99: 'Dokumentation',
+  18: 'Drama',
+  10751: 'Familie',
+  14: 'Fantasy',
+  36: 'Historie',
+  27: 'Horror',
+  10402: 'Musik',
+  9648: 'Mystery',
+  10749: 'Romantik',
+  878: 'Science-Fiction',
+  10770: 'TV-Film',
+  53: 'Thriller',
+  10752: 'Krieg',
+  37: 'Western',
+  10759: 'Action & Adventure',
+  10762: 'Kids',
+  10763: 'News',
+  10764: 'Reality',
+  10765: 'Sci-Fi & Fantasy',
+  10766: 'Soap',
+  10767: 'Talk',
+  10768: 'War & Politics',
+};
+
+function genreNames(item) {
+  const named = Array.isArray(item && item.genres)
+    ? item.genres.map((genre) => (genre && genre.name) || '').filter(Boolean)
+    : [];
+  if (named.length) return named.slice(0, 3);
+  const ids = Array.isArray(item && item.genre_ids) ? item.genre_ids : [];
+  return ids.map((id) => GENRE_NAMES[id]).filter(Boolean).slice(0, 3);
+}
+
 function goodMovie(item, type) {
   if (!item || !item.id) return null;
   const kind = type === 'tv' ? 'tv' : 'movie';
@@ -136,6 +175,8 @@ function goodMovie(item, type) {
     poster: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : '',
     vote: Math.round(vote * 10) / 10,
     votes,
+    overview: String(item.overview || '').trim(),
+    genres: genreNames(item),
   };
 }
 
@@ -206,6 +247,8 @@ export async function recommendBundle(kind, id, page) {
     if (!current.sources.includes(source)) current.sources.push(source);
     if (extra && extra.sameDirector) current.sameDirector = true;
     if (extra && extra.castName && !current.cast.includes(extra.castName)) current.cast.push(extra.castName);
+    if (row.overview && !current.overview) current.overview = row.overview;
+    if (row.genres && row.genres.length && (!current.genres || !current.genres.length)) current.genres = row.genres;
   };
   resultList(recs).forEach((item) => add(item, 'recommendations'));
   resultList(sims).forEach((item) => add(item, 'similar'));
@@ -220,6 +263,28 @@ export async function recommendBundle(kind, id, page) {
     more: pageContinues(recs, pageNum) || pageContinues(sims, pageNum),
     director: director && director.name ? director.name : '',
     films: [...map.values()],
+  };
+}
+
+export async function filmCard(type, id) {
+  const kind = type === 'tv' ? 'tv' : 'movie';
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) return null;
+  const payload = await grab(`/${kind}/${numericId}?language=de-DE&append_to_response=credits`);
+  if (!payload) return null;
+  const credits = payload.credits || {};
+  const crew = Array.isArray(credits.crew) ? credits.crew : [];
+  const director = crew.find((person) => person && person.job === 'Director' && person.name);
+  const cast = (Array.isArray(credits.cast) ? credits.cast : [])
+    .filter((person) => person && person.name)
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    .slice(0, 8)
+    .map((person) => person.name);
+  return {
+    director: director && director.name ? director.name : '',
+    cast,
+    overview: String(payload.overview || '').trim(),
+    genres: genreNames(payload),
   };
 }
 

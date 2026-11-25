@@ -1744,7 +1744,7 @@
     return button;
   }
 
-  function paintOverview(film, slot) {
+  function paintOverview(film, slot, defer) {
     const known = String((film && film.overview) || storedOverview(film.id) || '').trim();
     if (known) {
       film.overview = known;
@@ -1752,6 +1752,7 @@
       slot.replaceChildren(overviewNode(known));
       return;
     }
+    if (defer) return;
     const query = overviewQuery(film);
     if (!query) return;
     const token = overviewToken;
@@ -1924,6 +1925,8 @@
     });
     if (row.sameDirector) prev.sameDirector = true;
     if (row.poster && !prev.poster) prev.poster = row.poster;
+    if (row.overview && !prev.overview) prev.overview = row.overview;
+    if (row.genres && row.genres.length && (!prev.genres || !prev.genres.length)) prev.genres = row.genres.slice();
   }
 
   function recRanked(state) {
@@ -1934,13 +1937,10 @@
     });
   }
 
-  function recLine(row, director) {
+  function recLine(row) {
     const mark = `★ ${formatScore(row.vote)}`;
     const year = row.year ? String(row.year) : '';
-    let lead = 'TMDB-Empfehlung';
-    if (row.sameDirector && director) lead = `Gleicher Regisseur: ${director}`;
-    else if (row.cast && row.cast.length) lead = `Mit ${row.cast.join(', ')}`;
-    return year ? `${lead} · ${year} · ${mark}` : `${lead} · ${mark}`;
+    return year ? `${mark} · ${year}` : mark;
   }
 
   function recHead(count) {
@@ -1960,23 +1960,145 @@
     return row;
   }
 
-  async function openRecommendation(row) {
-    const kind = row.type === 'tv' ? 'tv' : 'movie';
-    const query = `https://www.themoviedb.org/${kind}/${row.tmdbId}`;
+  const filmCards = new Map();
+  const cardTokens = new Map();
+
+  function readFilmCard(id) {
+    if (!id) return null;
+    const mem = filmCards.get(id);
+    if (mem) return mem;
     try {
-      const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
-      const data = await response.json().catch(() => null);
-      if (!response.ok || !data || !data.film) return;
-      const film = withCanonicalId(data.film, data.facets || {});
-      if (data.facets) {
-        film.facets = data.facets;
-        if (!globalThis.FILM_FACETS) globalThis.FILM_FACETS = {};
-        if (!globalThis.FILM_FACETS[film.id]) globalThis.FILM_FACETS[film.id] = data.facets;
-      }
-      openFilm(film, false);
+      const row = JSON.parse(localStorage.getItem(`moviebylucia-filmcard:${id}`) || 'null');
+      if (!row || typeof row.at !== 'number' || Date.now() - row.at > REC_WEEK) return null;
+      filmCards.set(id, row);
+      return row;
     } catch {
-      /* das Popup bleibt beim aktuellen Film */
+      return null;
     }
+  }
+
+  function writeFilmCard(id, card) {
+    if (!id) return;
+    const row = {
+      at: Date.now(),
+      ready: true,
+      director: card.director || '',
+      cast: Array.isArray(card.cast) ? card.cast : [],
+      overview: card.overview || '',
+      genres: Array.isArray(card.genres) ? card.genres : [],
+    };
+    filmCards.set(id, row);
+    try {
+      localStorage.setItem(`moviebylucia-filmcard:${id}`, JSON.stringify(row));
+    } catch {
+      /* Speicher voll */
+    }
+  }
+
+  function filmFromRecommendation(row) {
+    const kind = row.type === 'tv' ? 'tv' : 'movie';
+    const id = `tmdb:${kind}:${row.tmdbId}`;
+    const card = readFilmCard(id);
+    const vote = Number(row.vote);
+    const genres = (card && card.genres && card.genres.length) ? card.genres : (row.genres || []);
+    const overview = (card && card.overview) || row.overview || '';
+    return {
+      id,
+      tmdbId: row.tmdbId,
+      tmdbType: kind,
+      title: row.title,
+      original: row.original || null,
+      year: row.year || '',
+      poster: row.poster || '',
+      genres: genres.slice(0, 3),
+      overview,
+      director: (card && card.director) || '',
+      cast: (card && card.cast) || [],
+      imdb: Number.isFinite(vote) ? vote : null,
+      imdbLabel: Number.isFinite(vote) ? formatScore(vote) : '–',
+      kind: kind === 'tv' ? 'serie' : 'film',
+      fromCatalog: false,
+    };
+  }
+
+  function placeFilmCredits(film) {
+    if (!panelFilm || panelFilm.id !== film.id) return;
+    const copy = panel.querySelector('.panel-copy');
+    if (!copy) return;
+    let foot = copy.querySelector('.panel-copy-foot');
+    const hasDirector = Boolean(foot && foot.querySelector('.credit-link'));
+    const hasCast = Boolean(foot && foot.querySelector('.cast-link'));
+    if (!foot && (film.director || (film.cast && film.cast.length))) {
+      foot = el('div', 'panel-copy-foot');
+      copy.append(foot);
+    }
+    if (foot && film.director && !hasDirector) {
+      const director = el('p', 'panel-credit');
+      director.append(el('span', 'panel-kicker', 'Director'));
+      const name = el('button', 'credit-link', film.director);
+      name.type = 'button';
+      name.addEventListener('click', () => highlight({
+        title: `Regie: ${film.director}`,
+        style: 'director',
+        ids: filmsWith('director', film.director),
+      }));
+      director.append(name);
+      foot.prepend(director);
+    }
+    if (foot && film.cast && film.cast.length && !hasCast) {
+      const cast = el('p', 'panel-credit panel-cast');
+      cast.append(el('span', 'panel-kicker', 'Cast'));
+      film.cast.filter(Boolean).forEach((personName, index) => {
+        if (index) cast.append(document.createTextNode(', '));
+        const person = el('button', 'cast-link', personName);
+        person.type = 'button';
+        person.addEventListener('click', () => highlight({
+          title: `Mit: ${personName}`,
+          style: 'cast',
+          ids: filmsWith('cast', personName),
+        }));
+        cast.append(person);
+      });
+      foot.append(cast);
+      requestAnimationFrame(() => fitCastNames(cast));
+    }
+    const slot = panel.querySelector('.panel-overview-slot');
+    if (slot && !slot.childNodes.length && film.overview) {
+      storeOverview(film.id, film.overview);
+      slot.replaceChildren(overviewNode(film.overview));
+    }
+    const meta = panel.querySelector('.panel-meta');
+    if (meta && !meta.querySelector('.pills') && film.genres && film.genres.length) {
+      const pills = el('ul', 'pills');
+      const names = film.genres.filter(Boolean).slice(0, 3);
+      pills.dataset.genres = names.join('\n');
+      names.forEach((name) => pills.append(el('li', null, name)));
+      meta.append(pills);
+      bindGenreFit(meta);
+    }
+  }
+
+  function showRecommendation(row) {
+    const film = filmFromRecommendation(row);
+    renderPanel(film, { quiet: true });
+    const card = readFilmCard(film.id);
+    if (card && card.ready) return;
+    const token = (cardTokens.get(film.id) || 0) + 1;
+    cardTokens.set(film.id, token);
+    const kind = film.tmdbType === 'tv' ? 'tv' : 'movie';
+    const query = `https://www.themoviedb.org/${kind}/${film.tmdbId}`;
+    fetch(`/api/film?q=${encodeURIComponent(query)}&card=1`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data || cardTokens.get(film.id) !== token) return;
+        if (data.director) film.director = data.director;
+        if (Array.isArray(data.cast) && data.cast.length) film.cast = data.cast.filter(Boolean);
+        if (data.overview && !film.overview) film.overview = data.overview;
+        if ((!film.genres || !film.genres.length) && Array.isArray(data.genres)) film.genres = data.genres.slice(0, 3);
+        writeFilmCard(film.id, film);
+        placeFilmCredits(film);
+      })
+      .catch(() => {});
   }
 
   async function addRecommendation(row, director) {
@@ -2035,10 +2157,10 @@
     const copy = el('span', 'link-copy');
     copy.append(
       el('span', 'link-title', row.title),
-      el('span', 'link-meta', recLine(row, state.director)),
+      el('span', 'link-meta', recLine(row)),
     );
     open.append(cover, copy);
-    open.addEventListener('click', () => openRecommendation(row));
+    open.addEventListener('click', () => showRecommendation(row));
     const plus = el('button', 'rec-add', state.added.has(row.tmdbId) ? '✓' : '+');
     plus.type = 'button';
     plus.setAttribute('aria-label', state.added.has(row.tmdbId) ? 'Auf myList' : 'Zu myList');
@@ -2152,12 +2274,22 @@
       loading: false,
     };
     const group = el('section', 'group recs');
-    group.hidden = true;
     panel.append(group);
-    growRec(state, group);
+    group.replaceChildren(recHead(0));
+    const pending = el('div', 'rec-list');
+    pending.append(recSkeleton(), recSkeleton(), recSkeleton());
+    group.append(pending, el('p', 'rec-note', 'Empfehlungen via TMDB'));
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (state.token !== recToken || !group.isConnected) return;
+        growRec(state, group);
+      });
+    });
   }
 
-  function renderPanel(film) {
+  function renderPanel(film, options) {
+    const quiet = Boolean(options && options.quiet);
+    const shownLinks = quiet ? [] : links;
     closeWishSearch();
     panelFilm = film;
     const row = entry(film.id);
@@ -2277,7 +2409,7 @@
     const blurb = el('div', 'panel-overview-slot');
     head.append(blurb);
     overviewToken += 1;
-    paintOverview(film, blurb);
+    paintOverview(film, blurb, quiet);
     if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
       head.append(el('p', 'unsynced', 'nicht synchronisiert'));
     }
@@ -2291,7 +2423,7 @@
     const followed = el('div', 'followed-row');
     followed.hidden = true;
     panel.append(followed);
-    fillFollowed(film.id, followed);
+    if (!(quiet && !mine)) fillFollowed(film.id, followed);
     if (!mine && !isUnreleased(film)) {
       const addMine = el('button', 'text-line', 'Zu meinem Archiv hinzufügen');
       addMine.type = 'button';
@@ -2320,6 +2452,7 @@
     panel.append(rateSection, noteSection);
     if (isCustomFilm(film)) suggestCustomLink(film);
     appendTraits(film, full);
+    mountRecommendations(film);
 
     [
       'Gleiche Handschrift',
@@ -2327,7 +2460,7 @@
       'Ähnliche Stimmung',
       'Gleiche Welt',
     ].forEach((name) => {
-      const items = links.filter((link) => link.group === name).slice(0, 6);
+      const items = shownLinks.filter((link) => link.group === name).slice(0, 6);
       if (!items.length) return;
       const group = el('section', 'group');
       group.append(sectionHead(name));
@@ -2368,8 +2501,8 @@
       });
       panel.append(group);
     });
-    mountRecommendations(film);
-    revealPanel();
+    if (quiet && !panel.hidden) panel.scrollTop = 0;
+    else revealPanel();
     if (cast) requestAnimationFrame(() => fitCastNames(cast));
   }
 
