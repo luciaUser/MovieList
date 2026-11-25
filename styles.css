@@ -694,10 +694,12 @@ button.wish-swatch { cursor: pointer; }
 }
 
 .wish-by-names {
+  display: flex;
+  align-items: center;
+  gap: 20px;
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -886,22 +888,34 @@ button.wish-swatch { cursor: pointer; }
 
 .wish-by .avatar { width: 18px; height: 18px; flex: none; }
 
-.wish-creator {
+.wish-person {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  min-width: 0;
+  gap: 8px;
+  flex: none;
   max-width: 100%;
-  vertical-align: middle;
+  color: #fff;
 }
 
-.wish-creator .avatar {
+.wish-person[hidden] { display: none; }
+
+.wish-by .wish-person .avatar {
   width: 22px;
   height: 22px;
   flex: none;
 }
 
-.wish-by .is-invited { color: rgba(255, 255, 255, 0.42); }
+.wish-person-name,
+.wish-more {
+  font-size: 22px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.wish-more { flex: none; color: var(--dim); }
+
+.wish-person.is-invited,
+.wish-person.is-invited .wish-person-name { color: rgba(255, 255, 255, 0.42); }
 
 .wish-invite {
   grid-column: 1 / -1;
@@ -1902,10 +1916,13 @@ body.is-network {
 
   .wish-x svg { margin-right: 0; }
 
-  .wish-creator .avatar {
+  .wish-by .wish-person .avatar {
     width: 18px;
     height: 18px;
   }
+
+  .wish-person-name,
+  .wish-more { font-size: 18px; }
 
   .wish-bar.is-sure .wish-x { justify-content: flex-end; }
 
@@ -2245,7 +2262,9 @@ body.is-network {
 .panel-score {
   display: flex;
   align-items: baseline;
-  flex: none;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
   gap: 6px;
   margin: 0;
   color: #fff;
@@ -2261,19 +2280,30 @@ body.is-network {
 }
 
 .panel-meta .pills {
+  --pill-scale: 1;
+  display: flex;
   flex: 1 1 auto;
   flex-wrap: nowrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: calc(8px * var(--pill-scale));
   min-width: 0;
   margin: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .panel-meta .pills li {
+  display: inline-flex;
+  align-items: center;
   flex: none;
+  box-sizing: border-box;
+  height: calc(28px * var(--pill-scale));
+  padding: 0 calc(12px * var(--pill-scale));
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: transparent;
   color: #fff;
+  font-size: calc(13px * var(--pill-scale));
+  line-height: 1;
   white-space: nowrap;
 }
 

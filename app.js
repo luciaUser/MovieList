@@ -1375,12 +1375,11 @@
         if (person.id === account.id) person.avatar = avatar;
       });
     });
-    document.querySelectorAll('#wish-board .wish-creator .avatar').forEach((svg) => {
-      const bar = svg.closest('.wish-bar');
-      const list = bar && (wishLists || []).find((entry) => entry.id === bar.dataset.list);
-      const owner = list && (list.members || []).find((person) => person.role === 'owner');
-      if (!owner || owner.id !== account.id) return;
-      svg.replaceWith(avatarNode(avatar, 22));
+    const wishSize = window.matchMedia('(max-width: 720px)').matches ? 18 : 22;
+    document.querySelectorAll('#wish-board .wish-person').forEach((node) => {
+      if (node.dataset.id !== account.id) return;
+      const svg = node.querySelector('.avatar');
+      if (svg) svg.replaceWith(avatarNode(avatar, wishSize));
     });
     otherCache.forEach((pack) => {
       if (pack && pack.profile && pack.profile.id === account.id) pack.profile.avatar = avatar;
@@ -1569,56 +1568,58 @@
     }
   }
 
-  function paintGenrePills(list, names, scale, base) {
+  function paintGenrePills(list, names, scale) {
     const shown = names.join('\n');
     if (list.dataset.shown !== shown) {
       list.dataset.shown = shown;
       list.replaceChildren();
       names.forEach((name) => list.append(el('li', null, name)));
     }
-    const size = `${Math.round(base.size * scale * 10) / 10}px`;
-    const pad = `${Math.round(base.py * scale * 10) / 10}px ${Math.round(base.px * scale * 10) / 10}px`;
-    list.querySelectorAll('li').forEach((item) => {
-      item.style.fontSize = size;
-      item.style.padding = pad;
-    });
+    list.style.setProperty('--pill-scale', String(scale));
+  }
+
+  function genreFits(list) {
+    if (list.scrollWidth > list.clientWidth + 1) return false;
+    const items = list.querySelectorAll('li');
+    if (!items.length) return true;
+    const host = list.getBoundingClientRect();
+    const start = items[0].getBoundingClientRect();
+    const end = items[items.length - 1].getBoundingClientRect();
+    return start.left >= host.left - 1 && end.right <= host.right + 1;
   }
 
   function fitGenreRow(meta) {
     if (!meta || !meta.isConnected || meta.clientWidth < 8) return;
     const list = meta.querySelector('.pills');
-    if (!list) return;
+    if (!list || list.clientWidth < 8) return;
     const names = String(list.dataset.genres || '').split('\n').filter(Boolean);
     if (!names.length) return;
-    if (!list._genreBase) {
-      const sample = list.querySelector('li');
-      const style = getComputedStyle(sample);
-      list._genreBase = {
-        size: parseFloat(style.fontSize) || 13,
-        py: parseFloat(style.paddingTop) || 6,
-        px: parseFloat(style.paddingLeft) || 12,
-      };
-    }
-    const base = list._genreBase;
-    const scales = [1, 0.9, 0.8];
+    const scales = [];
+    for (let step = 100; step >= 70; step -= 5) scales.push(step / 100);
     let count = names.length;
     let fitted = false;
     while (count >= 1 && !fitted) {
       for (let step = 0; step < scales.length; step += 1) {
-        paintGenrePills(list, names.slice(0, count), scales[step], base);
-        if (list.scrollWidth <= list.clientWidth + 1) {
+        paintGenrePills(list, names.slice(0, count), scales[step]);
+        if (genreFits(list)) {
           fitted = true;
           break;
         }
       }
       if (!fitted) count -= 1;
     }
-    if (!fitted) paintGenrePills(list, names.slice(0, 1), 0.8, base);
+    if (!fitted) paintGenrePills(list, names.slice(0, 1), 0.7);
   }
 
   function bindGenreFit(meta) {
     clearGenreFit();
-    requestAnimationFrame(() => fitGenreRow(meta));
+    const run = () => fitGenreRow(meta);
+    requestAnimationFrame(run);
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+      document.fonts.ready.then(() => {
+        if (meta.isConnected) fitGenreRow(meta);
+      }).catch(() => {});
+    }
     if (typeof ResizeObserver !== 'function') return;
     genreObserver = new ResizeObserver(() => fitGenreRow(meta));
     genreObserver.observe(meta);
@@ -6696,28 +6697,59 @@
     window.setTimeout(() => cell.classList.remove('is-hot'), 700);
   }
 
-  function wishCreatorName(list) {
-    const owner = (list.members || []).find((person) => person.role === 'owner') || (list.members || [])[0];
-    if (!owner) return '';
-    if (account && owner.id === account.id) return account.username || owner.username || '';
-    return owner.username || 'Profil';
+  function wishPersonLabel(person) {
+    const invited = person.status === 'invited';
+    const name = account && person.id === account.id
+      ? (account.username || person.username || 'Profil')
+      : (person.username || 'Profil');
+    return invited ? `${name} (eingeladen)` : name;
+  }
+
+  function wishPersonNode(person) {
+    const node = el('span', person.status === 'invited' ? 'wish-person is-invited' : 'wish-person');
+    node.dataset.id = person.id || '';
+    const avatar = account && person.id === account.id ? (account.avatar || person.avatar) : person.avatar;
+    const size = window.matchMedia('(max-width: 720px)').matches ? 18 : 22;
+    node.append(avatarNode(avatar, size), el('span', 'wish-person-name', wishPersonLabel(person)));
+    return node;
+  }
+
+  function fitWishNames(host) {
+    if (!host || !host.isConnected || host.clientWidth < 8) return;
+    const people = [...host.querySelectorAll('.wish-person')];
+    const previous = host.querySelector('.wish-more');
+    if (previous) previous.remove();
+    people.forEach((node) => { node.hidden = false; });
+    if (!people.length || host.scrollWidth <= host.clientWidth + 1) return;
+    const more = el('span', 'wish-more', '');
+    host.append(more);
+    let hidden = 0;
+    for (let index = people.length - 1; index >= 0; index -= 1) {
+      hidden += 1;
+      people[index].hidden = true;
+      more.textContent = `+${hidden}`;
+      if (host.scrollWidth <= host.clientWidth + 1) return;
+    }
+  }
+
+  function bindWishNameFit(host) {
+    const run = () => fitWishNames(host);
+    requestAnimationFrame(run);
+    if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+      document.fonts.ready.then(() => {
+        if (host.isConnected) fitWishNames(host);
+      }).catch(() => {});
+    }
+    if (typeof ResizeObserver !== 'function') return;
+    if (host._wishFit) host._wishFit.disconnect();
+    host._wishFit = new ResizeObserver(() => fitWishNames(host));
+    host._wishFit.observe(host);
   }
 
   function fillWishNames(host, list) {
     host.replaceChildren();
-    const owner = (list.members || []).find((person) => person.role === 'owner');
-    let avatar = owner ? owner.avatar : null;
-    if (owner && account && owner.id === account.id) avatar = account.avatar || avatar;
-    const creator = el('span', 'wish-creator');
-    creator.append(avatarNode(avatar, 22), document.createTextNode(wishCreatorName(list)));
-    host.append(creator);
-    (list.members || []).forEach((person) => {
-      if (owner && person.id === owner.id) return;
-      host.append(document.createTextNode(' / '));
-      const invited = person.status === 'invited';
-      const label = invited ? `${person.username || 'Profil'} (eingeladen)` : (person.username || 'Profil');
-      host.append(el('span', invited ? 'is-invited' : '', label));
-    });
+    (list.members || []).forEach((person) => host.append(wishPersonNode(person)));
+    bindWishNameFit(host);
   }
 
   function beginWishRename(label, list) {
@@ -7388,7 +7420,7 @@
 
   function wishMemberSign(list) {
     return (list.members || []).map((person) => (
-      `${person.id}:${person.role || ''}:${person.status || ''}:${person.username || ''}`
+      `${person.id}:${person.role || ''}:${person.status || ''}:${person.username || ''}:${person.avatar ? JSON.stringify(person.avatar) : ''}`
     )).join('|');
   }
 
@@ -7415,7 +7447,7 @@
     const inviting = bar.querySelector('.wish-by.is-inviting');
     if (names && !inviting) {
       const sign = wishMemberSign(list);
-      if (names.dataset.sign !== sign || !names.querySelector('.wish-creator .avatar')) {
+      if (names.dataset.sign !== sign || names.querySelectorAll('.wish-person').length !== (list.members || []).length) {
         names.dataset.sign = sign;
         fillWishNames(names, list);
       }

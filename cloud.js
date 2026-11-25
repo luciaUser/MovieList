@@ -578,7 +578,10 @@ function randomAvatar() {
     },
     async wishOverview() {
       const user = await currentUser();
-      let members = await client.from('wishlist_members').select('wishlist_id, user_id, role, status');
+      let members = await client.from('wishlist_members').select('wishlist_id, user_id, role, status, added_at');
+      if (members.error && /added_at/i.test(members.error.message || '')) {
+        members = await client.from('wishlist_members').select('wishlist_id, user_id, role, status');
+      }
       if (members.error && /status/i.test(members.error.message || '')) {
         members = await client.from('wishlist_members').select('wishlist_id, user_id, role');
       }
@@ -618,6 +621,7 @@ function randomAvatar() {
           avatar: avatars.get(row.user_id) || null,
           role: row.role,
           status: row.status || 'accepted',
+          addedAt: row.added_at || '',
         }));
         if (list.created_by && !memberList.some((person) => person.id === list.created_by)) {
           memberList.unshift({
@@ -626,9 +630,18 @@ function randomAvatar() {
             avatar: avatars.get(list.created_by) || null,
             role: 'owner',
             status: 'accepted',
+            addedAt: '',
           });
         }
-        memberList.sort((a, b) => (a.role === 'owner' ? -1 : 0) - (b.role === 'owner' ? -1 : 0) || a.username.localeCompare(b.username, 'de'));
+        memberList.sort((a, b) => {
+          const ownerA = a.role === 'owner' ? 0 : 1;
+          const ownerB = b.role === 'owner' ? 0 : 1;
+          if (ownerA !== ownerB) return ownerA - ownerB;
+          const timeA = Date.parse(a.addedAt || '') || 0;
+          const timeB = Date.parse(b.addedAt || '') || 0;
+          if (timeA && timeB && timeA !== timeB) return timeA - timeB;
+          return 0;
+        });
         return {
           id: list.id,
           title: list.title,
