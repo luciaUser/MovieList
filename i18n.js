@@ -120,6 +120,7 @@
     'Rated together': 'Zusammen geschaut',
     'Rating': 'Rating',
     'Recommendations': 'Empfehlungen',
+    'Couldn\'t load recommendations': 'Empfehlungen konnten nicht geladen werden',
     'Recommendations via TMDB': 'Empfehlungen via TMDB',
     'Recovery email': 'Wiederherstellungs-E-Mail',
     'Release date still open': 'Erscheinungsdatum noch offen',

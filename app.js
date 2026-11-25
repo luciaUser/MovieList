@@ -97,6 +97,14 @@
   let followedCache = null;
   let skipProfileHome = false;
   let panelFilm = null;
+  let pathOn = false;
+  let pathLock = false;
+  let pathEpoch = 0;
+  let pathSeq = 1;
+  let pathState = null;
+  let pathSeen = new Set();
+  let pathObserver = null;
+  const pathPages = new Map();
   let compareId = null;
   let lensId = null;
   let panelList = null;
@@ -1049,7 +1057,7 @@
   }
 
   function networkHalf() {
-    return phoneSheet() && mode === 'network';
+    return phoneSheet() && (mode === 'network' || pathOn);
   }
 
   function sheetOffset() {
@@ -1263,6 +1271,8 @@
   bindPanelDrag();
 
   function clearSelection() {
+    const leavingPath = pathOn;
+    if (leavingPath) closePath();
     editDraft = null;
     closeWishSearch();
     panelFilm = null;
@@ -1273,7 +1283,7 @@
     hidePanel();
     applyNetworkFocus();
     paint();
-    if (mode === 'network' && network) requestAnimationFrame(() => network.resize());
+    if (mode === 'network' && network && !leavingPath) requestAnimationFrame(() => network.resize());
   }
 
   function paint() {
@@ -2115,8 +2125,13 @@
 
   function showRecommendation(row) {
     const film = filmFromRecommendation(row);
+    if (!pathLock) {
+      if (pathOn) pathPick(film);
+      else if (panelFilm) pathEnter(panelFilm, film);
+    }
     panelList = null;
     renderPanel(film, { quiet: true });
+    if (pathOn) pathFitSheet();
     const card = readFilmCard(film.id);
     if (card && card.ready) return;
     const token = (cardTokens.get(film.id) || 0) + 1;
@@ -2135,6 +2150,635 @@
         placeFilmCredits(film);
       })
       .catch(() => {});
+  }
+
+  function closePath() {
+    pathOn = false;
+    pathLock = false;
+    pathEpoch += 1;
+    pathState = null;
+    pathSeen = new Set();
+    if (pathObserver) {
+      pathObserver.disconnect();
+      pathObserver = null;
+    }
+    document.body.classList.remove('is-path');
+    const node = document.getElementById('path-view');
+    if (node) node.remove();
+  }
+
+  function pathFitSheet() {
+    if (!phoneSheet() || !pathOn || panel.hidden) return;
+    panel.classList.add('is-sheet');
+    sheetPlace = 'half';
+    const y = Math.round((panel.offsetHeight || window.innerHeight) * 0.5);
+    panel.style.transition = 'transform 240ms ease-out';
+    panel.style.transform = `translateY(${y}px)`;
+  }
+
+  function pathRow(film) {
+    return {
+      tmdbId: film.tmdbId,
+      type: film.tmdbType === 'tv' ? 'tv' : 'movie',
+      title: film.title,
+      original: film.original || '',
+      year: film.year || '',
+      poster: film.poster || '',
+      vote: film.imdb,
+      genres: film.genres || [],
+      overview: film.overview || '',
+    };
+  }
+
+  function pathChainFilms() {
+    if (!pathState) return [];
+    const films = [pathState.origin];
+    pathState.steps.forEach((step) => {
+      if (step.chosenFilm) films.push(step.chosenFilm);
+    });
+    return films;
+  }
+
+  function pathChainKey(films) {
+    return (films || []).map((film) => (film.tmdbId != null ? String(film.tmdbId) : film.id)).join('.');
+  }
+
+  function pathCloneStep(step) {
+    return {
+      key: step.key,
+      source: { ...step.source },
+      chosenId: step.chosenId || null,
+      chosenFilm: step.chosenFilm ? { ...step.chosenFilm } : null,
+      candidates: step.candidates ? step.candidates.map((row) => ({ ...row })) : null,
+      loading: false,
+      error: false,
+    };
+  }
+
+  function pathSaveCurrent() {
+    if (!pathState) return;
+    const films = pathChainFilms();
+    if (films.length < 2) return;
+    const key = pathChainKey(films);
+    if (pathState.routes.some((route) => route.key === key)) return;
+    pathState.routes.push({
+      key,
+      at: Date.now(),
+      origin: { ...pathState.origin },
+      films: films.map((film) => ({ ...film })),
+      steps: pathState.steps.map(pathCloneStep),
+    });
+    while (pathState.routes.length > 10) pathState.routes.shift();
+  }
+
+  function pathOpenStep(film) {
+    return {
+      key: 's' + (pathSeq += 1),
+      source: { ...film },
+      candidates: null,
+      chosenId: null,
+      chosenFilm: null,
+      loading: true,
+      error: false,
+    };
+  }
+
+  async function pathPull(query, page) {
+    const key = query + '\n' + page;
+    if (pathPages.has(key)) return pathPages.get(key);
+    const cached = cachedRecPage(query, page);
+    if (cached) {
+      pathPages.set(key, cached);
+      return cached;
+    }
+    const url = `/api/recommendations?q=${encodeURIComponent(query)}&page=${page}`;
+    let response = await fetch(url);
+    if (response.status === 429) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      response = await fetch(url);
+    }
+    if (!response.ok) return null;
+    const data = await response.json().catch(() => null);
+    if (!data || !Array.isArray(data.films)) return null;
+    const pack = { films: data.films, more: Boolean(data.more) };
+    pathPages.set(key, pack);
+    return pack;
+  }
+
+  function pathEligible(map, source, allow) {
+    return [...map.values()].filter((row) => {
+      if (!row || !row.tmdbId) return false;
+      if (recSameFilm(row, source)) return false;
+      const id = Number(row.tmdbId);
+      if (allow != null && id === allow) return true;
+      if (recInArchive(row)) return false;
+      if (pathSeen.has(id)) return false;
+      return true;
+    }).sort((a, b) => {
+      const diff = recRank(b) - recRank(a);
+      if (diff) return diff;
+      return (Number(b.vote) || 0) - (Number(a.vote) || 0);
+    });
+  }
+
+  function pathWindow(rows, allow) {
+    if (!rows.length) return [];
+    if (allow == null) return rows.slice(0, 5);
+    const index = rows.findIndex((row) => Number(row.tmdbId) === allow);
+    if (index < 0) return rows.slice(0, 5);
+    if (index < 5) return rows.slice(0, 5);
+    return rows.slice(Math.max(0, index - 4), index + 1);
+  }
+
+  async function pathCollect(source, chosen) {
+    const query = recommendationQuery(source);
+    if (!query) throw new Error('empty');
+    const allow = chosen && chosen.tmdbId != null ? Number(chosen.tmdbId) : null;
+    const map = new Map();
+    let page = 0;
+    let more = true;
+    let guard = 0;
+    let failed = false;
+    while (more && guard < 8) {
+      const ready = pathWindow(pathEligible(map, source, allow), allow);
+      const holds = allow == null || ready.some((row) => Number(row.tmdbId) === allow);
+      if (ready.length >= 5 && holds) break;
+      guard += 1;
+      page += 1;
+      const pack = await pathPull(query, page);
+      if (!pack) {
+        if (page === 1 && !map.size) failed = true;
+        break;
+      }
+      more = Boolean(pack.more);
+      (pack.films || []).forEach((row) => {
+        if (!row || !row.tmdbId || map.has(row.tmdbId)) return;
+        map.set(row.tmdbId, { ...row });
+      });
+    }
+    const rows = pathWindow(pathEligible(map, source, allow), allow);
+    if (allow != null && chosen && !rows.some((row) => Number(row.tmdbId) === allow)) {
+      rows.unshift(pathRow(chosen));
+      rows.splice(5);
+    }
+    if (!rows.length && failed) throw new Error('load');
+    return rows;
+  }
+
+  function pathEnter(origin, chosen) {
+    if (!origin || !chosen) return;
+    pathOn = true;
+    pathEpoch += 1;
+    pathSeen = new Set();
+    if (origin.tmdbId != null) pathSeen.add(Number(origin.tmdbId));
+    pathState = {
+      origin: { ...origin },
+      steps: [],
+      routes: [],
+      queued: null,
+    };
+    document.body.classList.add('is-path');
+    pathState.steps.push({
+      key: 's' + (pathSeq += 1),
+      source: { ...origin },
+      candidates: null,
+      chosenId: chosen.id,
+      chosenFilm: { ...chosen },
+      loading: true,
+      error: false,
+    });
+    pathEnsure();
+    pathSync(false);
+    pathLoadStep(0);
+  }
+
+  function pathPick(film) {
+    if (!pathOn || !pathState || !film) return;
+    const last = pathState.steps[pathState.steps.length - 1];
+    if (!last) return;
+    if (last.loading && last.chosenFilm) {
+      pathState.queued = film;
+      return;
+    }
+    pathChoose(pathState.steps.length - 1, film);
+  }
+
+  function pathChoose(index, film) {
+    if (!pathState || !film) return false;
+    const step = pathState.steps[index];
+    if (!step || step.loading) {
+      if (step) step.pendingFilm = film;
+      return false;
+    }
+    const same = step.chosenId === film.id;
+    if (same && index < pathState.steps.length - 1) return false;
+    if (index < pathState.steps.length - 1) {
+      pathSaveCurrent();
+      step.chosenId = film.id;
+      step.chosenFilm = { ...film };
+      pathState.steps = pathState.steps.slice(0, index + 1);
+      pathState.steps.push(pathOpenStep(film));
+      pathSync(true);
+      pathLoadStep(pathState.steps.length - 1);
+      return true;
+    }
+    if (!step.candidates) step.candidates = [];
+    if (!step.candidates.some((row) => Number(row.tmdbId) === Number(film.tmdbId))) {
+      step.candidates = [pathRow(film), ...step.candidates].slice(0, 5);
+    }
+    step.chosenId = film.id;
+    step.chosenFilm = { ...film };
+    if (film.tmdbId != null) pathSeen.add(Number(film.tmdbId));
+    pathState.steps.push(pathOpenStep(film));
+    pathSync(true);
+    pathLoadStep(pathState.steps.length - 1);
+    return true;
+  }
+
+  async function pathLoadStep(index) {
+    const epoch = pathEpoch;
+    const step = pathState && pathState.steps[index];
+    if (!step) return;
+    step.loading = true;
+    step.error = false;
+    pathPaintStep(step);
+    try {
+      const rows = await pathCollect(step.source, step.chosenFilm);
+      if (epoch !== pathEpoch || !pathState || pathState.steps[index] !== step) return;
+      step.candidates = rows;
+      step.loading = false;
+      rows.forEach((row) => pathSeen.add(Number(row.tmdbId)));
+      if (step.chosenFilm && step.chosenFilm.tmdbId != null) pathSeen.add(Number(step.chosenFilm.tmdbId));
+      pathPaintStep(step);
+      const pending = step.pendingFilm;
+      step.pendingFilm = null;
+      if (pending) {
+        pathChoose(index, pending);
+        return;
+      }
+      if (step.chosenFilm && index === pathState.steps.length - 1) {
+        const queued = pathState.queued;
+        pathState.queued = null;
+        const next = pathOpenStep(step.chosenFilm);
+        if (queued) next.pendingFilm = queued;
+        pathState.steps.push(next);
+        pathSync(true);
+        pathLoadStep(pathState.steps.length - 1);
+        return;
+      }
+      pathRevealLatest();
+    } catch {
+      if (epoch !== pathEpoch || !pathState || !pathState.steps[index]) return;
+      step.loading = false;
+      step.error = true;
+      pathPaintStep(step);
+    }
+  }
+
+  function pathPoster(parent, poster, title, id) {
+    const cover = document.createElement('button');
+    cover.type = 'button';
+    cover.className = 'path-cover';
+    cover.setAttribute('aria-label', title || 'Film');
+    if (poster) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.draggable = false;
+      image.decoding = 'async';
+      image.loading = 'lazy';
+      image.setAttribute('data-src', poster);
+      cover.append(image);
+    } else {
+      cover.classList.add('is-blank');
+      cover.style.setProperty('--blank', `hsl(${posterHue(id || title || 'film')} 25% 14%)`);
+      cover.append(el('span', 'poster-title', title || 'Film'));
+    }
+    parent.append(cover);
+    return cover;
+  }
+
+  function pathEnsure() {
+    if (document.getElementById('path-view')) return;
+    const root = el('div', 'path-view');
+    root.id = 'path-view';
+    const scroller = el('div', 'path-scroll');
+    const row = el('div', 'path-row');
+    const origin = el('div', 'path-origin');
+    const film = pathState.origin;
+    const cover = pathPoster(origin, film.poster, film.title, film.id);
+    cover.classList.add('is-origin');
+    origin.append(el('div', 'path-routes'));
+    row.append(origin);
+    scroller.append(row);
+    root.append(scroller);
+    document.body.append(root);
+    pathObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.querySelectorAll('img[data-src]').forEach((image) => {
+          image.src = image.getAttribute('data-src');
+          image.removeAttribute('data-src');
+        });
+      });
+    }, { root: scroller, rootMargin: '80px' });
+    pathObserver.observe(origin);
+    pathArm(origin);
+    scroller.addEventListener('wheel', (event) => {
+      if (phoneSheet()) return;
+      if (event.target.closest('.path-track')) return;
+      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+      scroller.scrollLeft += event.deltaY;
+      event.preventDefault();
+    }, { passive: false });
+  }
+
+  function pathBindTrack(track) {
+    if (track.dataset.bound === '1') return;
+    track.dataset.bound = '1';
+    let drag = null;
+    let snapTimer = 0;
+    track.addEventListener('pointerdown', (event) => {
+      if (event.button != null && event.button !== 0) return;
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        left: track.scrollLeft,
+        top: track.scrollTop,
+        moved: false,
+      };
+    });
+    track.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 5) return;
+      drag.moved = true;
+      if (phoneSheet()) track.scrollLeft = drag.left - dx;
+      else track.scrollTop = drag.top - dy;
+    });
+    const end = (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const moved = drag.moved;
+      drag = null;
+      if (!moved) return;
+      track.dataset.dragged = '1';
+      pathSnap(track);
+      window.setTimeout(() => { track.dataset.dragged = ''; }, 40);
+    };
+    track.addEventListener('pointerup', end);
+    track.addEventListener('pointercancel', end);
+    track.addEventListener('wheel', () => {
+      window.clearTimeout(snapTimer);
+      snapTimer = window.setTimeout(() => pathSnap(track), 90);
+    }, { passive: true });
+  }
+
+  function pathSnap(track) {
+    const covers = [...track.querySelectorAll('.path-cover')];
+    if (!covers.length) return;
+    const phone = phoneSheet();
+    let best = covers[0];
+    let bestDist = Infinity;
+    covers.forEach((cover) => {
+      const mid = phone
+        ? track.scrollLeft + track.clientWidth / 2
+        : track.scrollTop + track.clientHeight / 2;
+      const at = phone
+        ? cover.offsetLeft + cover.offsetWidth / 2
+        : cover.offsetTop + cover.offsetHeight / 2;
+      const dist = Math.abs(at - mid);
+      if (dist < bestDist) {
+        best = cover;
+        bestDist = dist;
+      }
+    });
+    if (phone) {
+      const left = best.offsetLeft - (track.clientWidth - best.offsetWidth) / 2;
+      track.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
+      return;
+    }
+    const top = best.offsetTop - (track.clientHeight - best.offsetHeight) / 2;
+    track.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  }
+
+  function pathLayout() {
+    const root = document.getElementById('path-view');
+    if (!root || !pathOn) return;
+    const phone = phoneSheet();
+    root.querySelectorAll('.path-track').forEach((track) => {
+      const cover = track.querySelector('.path-cover');
+      if (!cover) return;
+      if (phone) {
+        const space = Math.max(0, (track.clientWidth - cover.offsetWidth) / 2);
+        track.style.paddingLeft = `${space}px`;
+        track.style.paddingRight = `${space}px`;
+        track.style.paddingTop = '';
+        track.style.paddingBottom = '';
+      } else {
+        const space = Math.max(0, (track.clientHeight - cover.offsetHeight) / 2);
+        track.style.paddingTop = `${space}px`;
+        track.style.paddingBottom = `${space}px`;
+        track.style.paddingLeft = '';
+        track.style.paddingRight = '';
+      }
+      const pick = track.querySelector('.path-cover.is-pick') || cover;
+      if (phone) track.scrollLeft = Math.max(0, pick.offsetLeft - (track.clientWidth - pick.offsetWidth) / 2);
+      else track.scrollTop = Math.max(0, pick.offsetTop - (track.clientHeight - pick.offsetHeight) / 2);
+    });
+  }
+
+  function pathRevealLatest() {
+    const scroller = document.querySelector('#path-view .path-scroll');
+    if (!scroller) return;
+    const last = [...scroller.querySelectorAll('.path-step')].filter((node) => !node.classList.contains('is-leaving')).pop();
+    if (!last) return;
+    if (phoneSheet()) {
+      const top = last.offsetTop;
+      const bottom = top + last.offsetHeight;
+      if (top >= scroller.scrollTop - 4 && bottom <= scroller.scrollTop + scroller.clientHeight + 4) return;
+      scroller.scrollTo({ top: Math.max(0, top - 8), behavior: 'smooth' });
+      return;
+    }
+    const right = last.offsetLeft + last.offsetWidth;
+    if (last.offsetLeft >= scroller.scrollLeft && right <= scroller.scrollLeft + scroller.clientWidth) return;
+    scroller.scrollTo({ left: Math.max(0, right - scroller.clientWidth + 16), behavior: 'smooth' });
+  }
+
+  function pathPaintStep(step) {
+    const row = document.querySelector('#path-view .path-row');
+    if (!row || !step) return;
+    let node = row.querySelector(`.path-step[data-key="${step.key}"]`);
+    if (!node) {
+      node = el('div', 'path-step is-entering');
+      node.dataset.key = step.key;
+      node.append(el('span', 'path-link'));
+      const track = el('div', 'path-track');
+      node.append(track);
+      row.append(node);
+      pathBindTrack(track);
+      if (pathObserver) pathObserver.observe(node);
+      window.setTimeout(() => node.classList.remove('is-entering'), 240);
+    }
+    const track = node.querySelector('.path-track');
+    node.classList.toggle('is-set', Boolean(step.chosenId));
+    const ids = (step.candidates || []).map((item) => item.tmdbId).join(',');
+    const mark = step.loading ? 'load' : step.error ? 'error' : ids;
+    if (node.dataset.mark === mark) {
+      track.querySelectorAll('.path-cover').forEach((cover) => {
+        cover.classList.toggle('is-pick', cover.dataset.id === step.chosenId);
+      });
+      return;
+    }
+    node.dataset.mark = mark;
+    track.replaceChildren();
+    if (step.loading) {
+      for (let i = 0; i < 5; i += 1) track.append(el('span', 'path-cover is-wait'));
+      return;
+    }
+    if (step.error || !(step.candidates || []).length) {
+      const retry = el('button', 'path-retry', t('Couldn\'t load recommendations'));
+      retry.type = 'button';
+      retry.addEventListener('click', () => pathLoadStep(pathState.steps.indexOf(step)));
+      track.append(retry);
+      return;
+    }
+    step.candidates.forEach((item) => {
+      const film = filmFromRecommendation(item);
+      const cover = pathPoster(track, item.poster, item.title, film.id);
+      cover.dataset.id = film.id;
+      cover.classList.toggle('is-pick', film.id === step.chosenId);
+      cover.addEventListener('click', () => {
+        if (track.dataset.dragged === '1') return;
+        const index = pathState.steps.indexOf(step);
+        if (index < 0) return;
+        if (!pathChoose(index, film)) return;
+        pathLock = true;
+        showRecommendation(item);
+        pathLock = false;
+      });
+    });
+    pathArm(node);
+    requestAnimationFrame(() => pathLayout());
+  }
+
+  function pathArm(node) {
+    const scroller = document.querySelector('#path-view .path-scroll');
+    if (!node || !scroller) return;
+    const box = node.getBoundingClientRect();
+    const root = scroller.getBoundingClientRect();
+    const visible = box.bottom > root.top - 80 && box.top < root.bottom + 80
+      && box.right > root.left - 80 && box.left < root.right + 80;
+    if (!visible) return;
+    node.querySelectorAll('img[data-src]').forEach((image) => {
+      image.src = image.getAttribute('data-src');
+      image.removeAttribute('data-src');
+    });
+  }
+
+  function pathSync(reveal) {
+    if (!pathState) return;
+    pathEnsure();
+    const row = document.querySelector('#path-view .path-row');
+    const keys = new Set(pathState.steps.map((step) => step.key));
+    row.querySelectorAll('.path-step').forEach((node) => {
+      if (keys.has(node.dataset.key) || node.classList.contains('is-leaving')) return;
+      node.style.left = `${node.offsetLeft}px`;
+      node.style.top = `${node.offsetTop}px`;
+      node.style.width = `${node.offsetWidth}px`;
+      node.style.height = `${node.offsetHeight}px`;
+      node.style.position = 'absolute';
+      node.classList.add('is-leaving');
+      window.setTimeout(() => node.remove(), 220);
+    });
+    pathState.steps.forEach((step) => pathPaintStep(step));
+    pathPaintRoutes();
+    if (reveal) pathRevealLatest();
+    requestAnimationFrame(() => requestAnimationFrame(pathLayout));
+  }
+
+  function pathPaintRoutes() {
+    const host = document.querySelector('#path-view .path-routes');
+    if (!host || !pathState) return;
+    const currentKey = pathChainKey(pathChainFilms());
+    const routes = pathState.routes.filter((route) => route.key !== currentKey);
+    routes.push({
+      key: currentKey,
+      films: pathChainFilms(),
+      steps: pathState.steps.map(pathCloneStep),
+      origin: pathState.origin,
+    });
+    host.replaceChildren();
+    routes.forEach((route) => {
+      if (!route.films || route.films.length < 2) return;
+      const active = route.key === currentKey;
+      const node = el('div', 'path-route');
+      if (active) node.classList.add('is-active');
+      route.films.forEach((film, index) => {
+        const bead = el('span', 'path-bead');
+        if (active && index === route.films.length - 1) bead.classList.add('is-tip');
+        node.append(bead);
+      });
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.className = 'path-x';
+      close.setAttribute('aria-label', 'Remove route');
+      close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+      close.addEventListener('click', (event) => {
+        event.stopPropagation();
+        pathDeleteRoute(route.key);
+      });
+      node.append(close);
+      let hold = 0;
+      let skipClick = false;
+      node.addEventListener('pointerdown', (event) => {
+        if (!phoneSheet() || (event.button != null && event.button !== 0)) return;
+        window.clearTimeout(hold);
+        hold = window.setTimeout(() => {
+          host.querySelectorAll('.path-route.is-armed').forEach((item) => item.classList.remove('is-armed'));
+          if (!node.classList.contains('is-active')) node.classList.add('is-armed');
+          skipClick = true;
+        }, 480);
+      });
+      const dropHold = () => window.clearTimeout(hold);
+      node.addEventListener('pointerup', dropHold);
+      node.addEventListener('pointercancel', dropHold);
+      node.addEventListener('pointermove', dropHold);
+      node.addEventListener('click', (event) => {
+        if (event.target.closest('.path-x')) return;
+        if (skipClick) {
+          skipClick = false;
+          return;
+        }
+        pathRestore(route);
+      });
+      host.append(node);
+    });
+  }
+
+  function pathDeleteRoute(key) {
+    if (!pathState || key === pathChainKey(pathChainFilms())) return;
+    pathState.routes = pathState.routes.filter((route) => route.key !== key);
+    pathPaintRoutes();
+  }
+
+  function pathRestore(route) {
+    if (!pathState || !route || route.key === pathChainKey(pathChainFilms())) return;
+    const saved = pathState.routes.find((item) => item.key === route.key) || route;
+    pathSaveCurrent();
+    pathState.origin = { ...(saved.origin || saved.films[0]) };
+    pathState.steps = (saved.steps || []).map(pathCloneStep);
+    pathState.queued = null;
+    pathSync(true);
+    pathState.steps.forEach((step, index) => {
+      if (!step.candidates) pathLoadStep(index);
+    });
+    const films = saved.films || [];
+    const last = films[films.length - 1];
+    if (!last) return;
+    pathLock = true;
+    showRecommendation(pathRow(last));
+    pathLock = false;
   }
 
   async function archiveRecommendation(row) {
@@ -3803,6 +4447,7 @@
   let profileShape = '';
   window.addEventListener('resize', () => {
     if (mode === 'network' && network) network.resize();
+    if (pathOn) pathLayout();
     const shape = `${window.innerWidth < 1000 ? 'narrow' : 'wide'}:${topCap()}`;
     if (shape === profileShape) return;
     profileShape = shape;
