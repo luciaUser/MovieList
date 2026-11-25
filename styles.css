@@ -595,13 +595,21 @@ header > * { pointer-events: auto; }
 
 .wish-swatch {
   position: relative;
-  width: 8.4px;
+  display: block;
+  width: auto;
   height: 11.9px;
   flex: none;
   padding: 0;
   border: 0;
-  background: #fff;
+  background: transparent;
+  color: #fff;
   overflow: visible;
+}
+
+.wish-swatch svg {
+  display: block;
+  height: 11.9px;
+  width: auto;
 }
 
 .wish-swatch::before {
@@ -3005,7 +3013,101 @@ body.is-wish .poster.is-blank { filter: none; }
 }
 
 .link:hover .link-title,
-.link:focus-visible .link-title { color: #fff; }
+.link:focus-visible .link-title,
+.rec-open:hover .link-title,
+.rec-open:focus-visible .link-title { color: #fff; }
+
+.rec-kicker {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rec-count {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.rec-open {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.rec-add {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.rec-add.is-in { color: rgba(255, 255, 255, 0.82); }
+
+.rec-list > .link:first-child,
+.rec-list > .rec-skel:first-child { border-top: 0; }
+
+.rec-more {
+  margin: 4px 0 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font: inherit;
+  font-size: 13px;
+}
+
+.rec-more:disabled { opacity: 0.45; }
+
+.rec-note {
+  margin: 8px 0 0;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 11px;
+}
+
+.rec-skel {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.rec-skel-poster {
+  flex: none;
+  width: 48px;
+  aspect-ratio: 2 / 3;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rec-skel-copy { flex: 1; min-width: 0; }
+
+.rec-skel-line {
+  display: block;
+  height: 10px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.rec-skel-line + .rec-skel-line {
+  width: 72%;
+  margin-top: 8px;
+}
 
 @media (max-width: 720px) {
   #panel {
@@ -3033,7 +3135,8 @@ body.is-wish .poster.is-blank { filter: none; }
     touch-action: none;
   }
 
-  .link-poster { width: 44px; }
+  .link-poster,
+  .rec-skel-poster { width: 44px; }
 }
 
 #sheet {

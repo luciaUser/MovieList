@@ -1,5 +1,5 @@
 import http from 'node:http';
-import { filmResponse } from './lookup.mjs';
+import { filmResponse, recommendResponse } from './lookup.mjs';
 import recovery from './api/recovery.js';
 import account from './api/account.js';
 import taste from './api/taste.js';
@@ -126,6 +126,10 @@ async function handle(req, res) {
     if (url.pathname === '/api/recovery') return recovery(req, res);
     if (url.pathname === '/api/account') return account(req, res);
     if (url.pathname === '/api/taste') return taste(req, res);
+    if (url.pathname === '/api/recommendations') {
+      const result = await recommendResponse(url.searchParams.get('q') || '', url.searchParams.get('page') || '1');
+      return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);
+    }
     if (url.pathname === '/api/film') {
       const result = await filmResponse(url.searchParams.get('q') || '', {
         list: url.searchParams.get('list') === '1',

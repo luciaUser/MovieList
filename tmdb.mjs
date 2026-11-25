@@ -116,6 +116,113 @@ export async function findByImdb(imdbId) {
   return shape({ ...hit, media_type: movie ? 'movie' : 'tv' }, false);
 }
 
+function goodMovie(item, type) {
+  if (!item || !item.id) return null;
+  const kind = type === 'tv' ? 'tv' : 'movie';
+  if (item.media_type && item.media_type !== kind) return null;
+  const vote = Number(item.vote_average);
+  const votes = Number(item.vote_count);
+  if (!Number.isFinite(vote) || !Number.isFinite(votes) || vote < 7 || votes < 300) return null;
+  const title = kind === 'tv' ? (item.name || item.title || '') : (item.title || item.name || '');
+  if (!title) return null;
+  const date = String(kind === 'tv' ? (item.first_air_date || item.release_date || '') : (item.release_date || '')).slice(0, 10);
+  const original = kind === 'tv' ? (item.original_name || item.original_title || '') : (item.original_title || item.original_name || '');
+  return {
+    tmdbId: item.id,
+    type: kind,
+    title,
+    original: original && original !== title ? original : '',
+    year: date.slice(0, 4),
+    poster: item.poster_path ? `https://image.tmdb.org/t/p/w342${item.poster_path}` : '',
+    vote: Math.round(vote * 10) / 10,
+    votes,
+  };
+}
+
+function resultList(data) {
+  return Array.isArray(data && data.results) ? data.results : [];
+}
+
+function pageContinues(data, page) {
+  return Number(data && data.total_pages) > page;
+}
+
+async function grab(path) {
+  try {
+    return await get(path);
+  } catch {
+    return null;
+  }
+}
+
+export async function recommendBundle(kind, id, page) {
+  const type = kind === 'tv' ? 'tv' : 'movie';
+  const pageNum = Math.min(20, Math.max(1, Number.parseInt(page, 10) || 1));
+  const numericId = Number(id);
+  if (!Number.isFinite(numericId)) {
+    return { page: pageNum, more: false, director: '', films: [] };
+  }
+  const [credits, recs, sims] = await Promise.all([
+    grab(`/${type}/${numericId}/credits?language=en-US`),
+    grab(`/${type}/${numericId}/recommendations?language=de-DE&page=${pageNum}`),
+    grab(`/${type}/${numericId}/similar?language=de-DE&page=${pageNum}`),
+  ]);
+  const crew = credits && Array.isArray(credits.crew) ? credits.crew : [];
+  const director = crew.find((person) => person && person.job === 'Director' && person.id) || null;
+  const cast = (credits && Array.isArray(credits.cast) ? credits.cast : [])
+    .filter((person) => person && person.id && person.name)
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    .slice(0, 5);
+  const discoverPath = type === 'tv' ? '/discover/tv' : '/discover/movie';
+  const jobs = [];
+  if (director) {
+    jobs.push(grab(`${discoverPath}?with_crew=${director.id}&page=${pageNum}&vote_count.gte=300&vote_average.gte=7&sort_by=vote_average.desc&include_adult=false&language=de-DE`).then((data) => ({
+      kind: 'director',
+      data,
+    })));
+  }
+  cast.forEach((person) => {
+    jobs.push(grab(`${discoverPath}?with_cast=${person.id}&page=${pageNum}&vote_count.gte=300&vote_average.gte=7&sort_by=vote_average.desc&include_adult=false&language=de-DE`).then((data) => ({
+      kind: 'cast',
+      name: person.name,
+      data,
+    })));
+  });
+  const discovered = await Promise.all(jobs);
+  const map = new Map();
+  const add = (item, source, extra) => {
+    const row = goodMovie(item, type);
+    if (!row || row.tmdbId === numericId) return;
+    let current = map.get(row.tmdbId);
+    if (!current) {
+      current = {
+        ...row,
+        sources: [],
+        cast: [],
+        sameDirector: false,
+      };
+      map.set(row.tmdbId, current);
+    }
+    if (!current.sources.includes(source)) current.sources.push(source);
+    if (extra && extra.sameDirector) current.sameDirector = true;
+    if (extra && extra.castName && !current.cast.includes(extra.castName)) current.cast.push(extra.castName);
+  };
+  resultList(recs).forEach((item) => add(item, 'recommendations'));
+  resultList(sims).forEach((item) => add(item, 'similar'));
+  discovered.forEach((entry) => {
+    resultList(entry && entry.data).forEach((item) => {
+      if (entry.kind === 'director') add(item, 'director', { sameDirector: true });
+      else add(item, 'cast', { castName: entry.name });
+    });
+  });
+  return {
+    page: pageNum,
+    more: pageContinues(recs, pageNum) || pageContinues(sims, pageNum),
+    director: director && director.name ? director.name : '',
+    films: [...map.values()],
+  };
+}
+
 export async function details(type, id) {
   const kind = type === 'tv' ? 'tv' : 'movie';
   const append = kind === 'tv'

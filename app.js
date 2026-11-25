@@ -1782,6 +1782,381 @@
     }
   }
 
+  let recToken = 0;
+  const REC_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+  function recommendationQuery(film) {
+    const known = overviewQuery(film);
+    if (known) return known;
+    const title = String(film && film.title || '').trim();
+    if (!title) return '';
+    const year = yearOf(film);
+    return year ? `${title} (${year})` : title;
+  }
+
+  function recCacheKey(query) {
+    return `moviebylucia-recs:${query}`;
+  }
+
+  function readRecCache(query) {
+    try {
+      const row = JSON.parse(localStorage.getItem(recCacheKey(query)) || 'null');
+      if (!row || typeof row.at !== 'number' || Date.now() - row.at > REC_WEEK) return null;
+      if (!row.pages || typeof row.pages !== 'object') return null;
+      return row;
+    } catch {
+      return null;
+    }
+  }
+
+  function writeRecCache(query, row) {
+    try {
+      localStorage.setItem(recCacheKey(query), JSON.stringify(row));
+    } catch {
+      /* Speicher voll */
+    }
+  }
+
+  function cachedRecPage(query, page) {
+    const row = readRecCache(query);
+    const hit = row && row.pages && row.pages[String(page)];
+    if (!hit) return null;
+    return {
+      director: row.director || '',
+      films: Array.isArray(hit.films) ? hit.films : [],
+      more: Boolean(hit.more),
+    };
+  }
+
+  async function pullRecPage(query, page) {
+    const hit = cachedRecPage(query, page);
+    if (hit) return hit;
+    const url = `/api/recommendations?q=${encodeURIComponent(query)}&page=${page}`;
+    let response = await fetch(url);
+    if (response.status === 429) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      response = await fetch(url);
+    }
+    if (!response.ok) return null;
+    const data = await response.json().catch(() => null);
+    if (!data || !Array.isArray(data.films)) return null;
+    const pack = readRecCache(query) || { at: Date.now(), director: '', pages: {} };
+    if (data.director) pack.director = data.director;
+    pack.pages[String(page)] = { films: data.films, more: Boolean(data.more) };
+    writeRecCache(query, pack);
+    return {
+      director: pack.director || '',
+      films: data.films,
+      more: Boolean(data.more),
+    };
+  }
+
+  function recSameFilm(row, film) {
+    if (!row || !film) return false;
+    const ident = identityOf(film);
+    if (ident.tmdb && ident.tmdb === Number(row.tmdbId)) return true;
+    const parsed = String(film.id || '').match(/^tmdb[:\-](?:movie|tv)[:\-](\d+)$/i);
+    if (parsed && Number(parsed[1]) === Number(row.tmdbId)) return true;
+    const year = Number(row.year) || null;
+    if (!year || ident.year !== year) return false;
+    const names = [normTitle(row.title), normTitle(row.original)].filter(Boolean);
+    return ident.titles.some((name) => names.includes(name));
+  }
+
+  function myListRecord() {
+    return (wishLists || []).find((list) => String(list.title || '').trim().toLocaleLowerCase('de') === 'mylist') || null;
+  }
+
+  function recOnMyList(row) {
+    const list = myListRecord();
+    if (!list) return false;
+    const kind = row.type === 'tv' ? 'tv' : 'movie';
+    const keys = new Set([
+      `tmdb:${kind}:${row.tmdbId}`,
+      `tmdb-${kind}-${row.tmdbId}`,
+    ]);
+    if ((list.stamps || []).some((stamp) => keys.has(stamp.filmId))) return true;
+    if (wishOpenId !== list.id) return false;
+    const title = normTitle(row.title);
+    const year = String(row.year || '');
+    return (wishItems || []).some((item) => {
+      const film = item && item.film;
+      if (!film) return false;
+      const filmYear = String(film.year || '').slice(0, 4);
+      return normTitle(film.title) === title && (!year || !filmYear || filmYear === year);
+    });
+  }
+
+  function recBlocked(row, film) {
+    if (recSameFilm(row, film)) return true;
+    for (const item of byId.values()) {
+      if (recSameFilm(row, item)) return true;
+    }
+    return recOnMyList(row);
+  }
+
+  function recRank(row) {
+    let score = 0;
+    if (row.sameDirector) score += 10;
+    score += (row.cast ? row.cast.length : 0) * 2;
+    const sources = row.sources || [];
+    if (sources.includes('recommendations') && sources.includes('similar')) score += 1;
+    return score;
+  }
+
+  function recAbsorb(state, row) {
+    if (!row || !row.tmdbId) return;
+    const prev = state.map.get(row.tmdbId);
+    if (!prev) {
+      state.map.set(row.tmdbId, {
+        ...row,
+        sources: (row.sources || []).slice(),
+        cast: (row.cast || []).slice(),
+        sameDirector: Boolean(row.sameDirector),
+      });
+      return;
+    }
+    (row.sources || []).forEach((source) => {
+      if (!prev.sources.includes(source)) prev.sources.push(source);
+    });
+    (row.cast || []).forEach((name) => {
+      if (!prev.cast.includes(name)) prev.cast.push(name);
+    });
+    if (row.sameDirector) prev.sameDirector = true;
+    if (row.poster && !prev.poster) prev.poster = row.poster;
+  }
+
+  function recRanked(state) {
+    return [...state.map.values()].filter((row) => state.added.has(row.tmdbId) || !recBlocked(row, state.film)).sort((a, b) => {
+      const diff = recRank(b) - recRank(a);
+      if (diff) return diff;
+      return (Number(b.vote) || 0) - (Number(a.vote) || 0);
+    });
+  }
+
+  function recLine(row, director) {
+    const mark = `★ ${formatScore(row.vote)}`;
+    const year = row.year ? String(row.year) : '';
+    let lead = 'TMDB-Empfehlung';
+    if (row.sameDirector && director) lead = `Gleicher Regisseur: ${director}`;
+    else if (row.cast && row.cast.length) lead = `Mit ${row.cast.join(', ')}`;
+    return year ? `${lead} · ${year} · ${mark}` : `${lead} · ${mark}`;
+  }
+
+  function recHead(count) {
+    const head = el('div', 'section-head');
+    const row = el('div', 'rec-kicker');
+    row.append(el('h2', 'profile-kicker', 'Empfehlungen'));
+    row.append(el('span', 'rec-count', count > 0 ? String(count) : ''));
+    head.append(row, el('span', 'section-rule'));
+    return head;
+  }
+
+  function recSkeleton() {
+    const row = el('div', 'rec-skel');
+    const copy = el('span', 'rec-skel-copy');
+    copy.append(el('span', 'rec-skel-line'), el('span', 'rec-skel-line'));
+    row.append(el('span', 'rec-skel-poster'), copy);
+    return row;
+  }
+
+  async function openRecommendation(row) {
+    const kind = row.type === 'tv' ? 'tv' : 'movie';
+    const query = `https://www.themoviedb.org/${kind}/${row.tmdbId}`;
+    try {
+      const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.film) return;
+      const film = withCanonicalId(data.film, data.facets || {});
+      if (data.facets) {
+        film.facets = data.facets;
+        if (!globalThis.FILM_FACETS) globalThis.FILM_FACETS = {};
+        if (!globalThis.FILM_FACETS[film.id]) globalThis.FILM_FACETS[film.id] = data.facets;
+      }
+      openFilm(film, false);
+    } catch {
+      /* das Popup bleibt beim aktuellen Film */
+    }
+  }
+
+  async function addRecommendation(row, director) {
+    let list = myListRecord();
+    if (!list && globalThis.Cloud && globalThis.Cloud.wishOverview) {
+      try { await loadWishlists({ quiet: true }); } catch { /* Liste bleibt leer */ }
+      list = myListRecord();
+    }
+    if (!list || list.myStatus === 'invited' || !globalThis.Cloud || !globalThis.Cloud.addWishlistItem) return false;
+    const kind = row.type === 'tv' ? 'tv' : 'movie';
+    const facets = {
+      tmdbId: row.tmdbId,
+      tmdbType: kind,
+      poster: row.poster || null,
+      director: row.sameDirector ? (director || null) : null,
+      tmdbRating: row.vote,
+      tmdbVotes: row.votes,
+    };
+    const film = {
+      id: `tmdb:${kind}:${row.tmdbId}`,
+      tmdbId: row.tmdbId,
+      tmdbType: kind,
+      title: row.title,
+      original: row.original || null,
+      year: row.year || '',
+      poster: row.poster || '',
+      director: row.sameDirector ? (director || '') : '',
+      genres: [],
+      kind: kind === 'tv' ? 'serie' : 'film',
+      imdb: row.vote,
+      imdbLabel: formatScore(row.vote),
+      fromCatalog: false,
+    };
+    const message = await addFilmToList(list.id, film, facets);
+    return !message || message === 'Schon auf der Liste';
+  }
+
+  function recRow(row, state) {
+    const line = el('div', 'link');
+    const open = el('button', 'rec-open');
+    open.type = 'button';
+    const cover = el('span', 'link-poster');
+    if (row.poster) {
+      const image = document.createElement('img');
+      image.alt = '';
+      image.draggable = false;
+      image.decoding = 'async';
+      image.loading = 'lazy';
+      image.src = row.poster;
+      cover.append(image);
+    } else {
+      cover.classList.add('is-blank');
+      cover.style.setProperty('--blank', `hsl(${posterHue(row.tmdbId)} 25% 14%)`);
+      cover.append(el('span', 'poster-title', row.title || 'Film'));
+    }
+    const copy = el('span', 'link-copy');
+    copy.append(
+      el('span', 'link-title', row.title),
+      el('span', 'link-meta', recLine(row, state.director)),
+    );
+    open.append(cover, copy);
+    open.addEventListener('click', () => openRecommendation(row));
+    const plus = el('button', 'rec-add', state.added.has(row.tmdbId) ? '✓' : '+');
+    plus.type = 'button';
+    plus.setAttribute('aria-label', state.added.has(row.tmdbId) ? 'Auf myList' : 'Zu myList');
+    if (state.added.has(row.tmdbId)) {
+      plus.classList.add('is-in');
+      plus.disabled = true;
+    } else {
+      plus.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        if (plus.disabled) return;
+        plus.disabled = true;
+        const ok = await addRecommendation(row, state.director);
+        if (state.token !== recToken) return;
+        if (!ok) {
+          plus.disabled = false;
+          return;
+        }
+        state.added.add(row.tmdbId);
+        plus.classList.add('is-in');
+        plus.textContent = '✓';
+        plus.setAttribute('aria-label', 'Auf myList');
+      });
+    }
+    line.append(open, plus);
+    return line;
+  }
+
+  function paintRec(state, group) {
+    if (state.token !== recToken || !group.isConnected) return;
+    const ranked = recRanked(state);
+    if (!ranked.length && !state.more && !state.loading) {
+      group.hidden = true;
+      group.replaceChildren();
+      return;
+    }
+    group.hidden = false;
+    const shown = ranked.slice(0, state.shown);
+    group.replaceChildren(recHead(ranked.length));
+    const list = el('div', 'rec-list');
+    if (state.loading && !shown.length) {
+      list.append(recSkeleton(), recSkeleton(), recSkeleton());
+    } else {
+      shown.forEach((row) => list.append(recRow(row, state)));
+    }
+    group.append(list);
+    if ((ranked.length > state.shown || state.more) && !(state.loading && !shown.length)) {
+      const more = el('button', 'rec-more', 'Mehr anzeigen');
+      more.type = 'button';
+      if (state.loading) more.disabled = true;
+      more.addEventListener('click', () => {
+        state.shown += 6;
+        growRec(state, group);
+      });
+      group.append(more);
+    }
+    if (shown.length || state.loading) group.append(el('p', 'rec-note', 'Empfehlungen via TMDB'));
+  }
+
+  function takeCachedRec(state) {
+    while (recRanked(state).length < state.shown && state.more) {
+      const hit = cachedRecPage(state.query, state.page + 1);
+      if (!hit) return;
+      state.page += 1;
+      if (hit.director) state.director = hit.director;
+      hit.films.forEach((row) => recAbsorb(state, row));
+      state.more = hit.more;
+    }
+  }
+
+  async function growRec(state, group) {
+    if (state.loading || state.token !== recToken) return;
+    takeCachedRec(state);
+    if (recRanked(state).length >= state.shown || !state.more) {
+      paintRec(state, group);
+      return;
+    }
+    state.loading = true;
+    paintRec(state, group);
+    let guard = 0;
+    while (state.token === recToken && recRanked(state).length < state.shown && state.more && guard < 6) {
+      guard += 1;
+      const data = await pullRecPage(state.query, state.page + 1);
+      if (state.token !== recToken) return;
+      if (!data) {
+        state.more = false;
+        break;
+      }
+      state.page += 1;
+      if (data.director) state.director = data.director;
+      (data.films || []).forEach((row) => recAbsorb(state, row));
+      state.more = Boolean(data.more);
+    }
+    state.loading = false;
+    paintRec(state, group);
+  }
+
+  function mountRecommendations(film) {
+    const query = recommendationQuery(film);
+    if (!query) return;
+    recToken += 1;
+    const state = {
+      token: recToken,
+      film,
+      query,
+      director: '',
+      map: new Map(),
+      page: 0,
+      more: true,
+      shown: 6,
+      added: new Set(),
+      loading: false,
+    };
+    const group = el('section', 'group recs');
+    group.hidden = true;
+    panel.append(group);
+    growRec(state, group);
+  }
+
   function renderPanel(film) {
     closeWishSearch();
     panelFilm = film;
@@ -1885,7 +2260,7 @@
     const score = el('p', 'panel-score');
     const localImdb = (window.FILMS || []).some((row) => row && row.id === film.id);
     score.append(
-      el('span', 'star', '☆'),
+      el('span', 'star', '★'),
       el('span', 'panel-score-value', film.imdbLabel || '–'),
       el('span', 'panel-score-source', localImdb ? 'IMDb' : 'TMDB'),
     );
@@ -1993,6 +2368,7 @@
       });
       panel.append(group);
     });
+    mountRecommendations(film);
     revealPanel();
     if (cast) requestAnimationFrame(() => fitCastNames(cast));
   }
@@ -6315,7 +6691,8 @@
     const swatch = document.createElement(accepted ? 'button' : 'span');
     if (accepted) swatch.type = 'button';
     swatch.className = 'wish-swatch';
-    swatch.style.background = color;
+    swatch.style.color = color;
+    swatch.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     if (accepted) swatch.setAttribute('aria-label', 'Farbe');
     const label = el('span', 'wish-title', list.title || (invited ? 'Liste' : ''));
     label.style.color = color;
@@ -6333,7 +6710,7 @@
     scale.append(bar);
     cell.append(scale);
     const place = (hex) => {
-      swatch.style.background = hex;
+      swatch.style.color = hex;
       label.style.color = hex;
       grip.style.left = `${(wishHue(hex) / 360) * 100}%`;
     };
@@ -7532,8 +7909,8 @@
     const color = list.color || '';
     const swatch = bar.querySelector('.wish-swatch');
     const hueOpen = bar.querySelector('.genre-name.is-hue');
-    if (!hueOpen && swatch && color && swatch.style.background !== color) {
-      swatch.style.background = color;
+    if (!hueOpen && swatch && color && swatch.style.color !== color) {
+      swatch.style.color = color;
       if (title && !renaming) title.style.color = color;
     }
     const names = bar.querySelector('.wish-by-names');

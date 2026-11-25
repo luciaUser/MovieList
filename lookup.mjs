@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { search, searchHits, directorName, findByImdb, details } from './tmdb.mjs';
+import { search, searchHits, directorName, findByImdb, details, recommendBundle } from './tmdb.mjs';
 import { enrichFilm } from './enrich.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -293,6 +293,66 @@ export async function lookupFilms(raw, options) {
     films: films.filter((row) => row.film && row.film.title),
     hasUpcoming,
   };
+}
+
+export async function recommendResponse(raw, page) {
+  try {
+    if (!configured()) {
+      return {
+        status: 503,
+        body: JSON.stringify({ error: 'TMDB ist nicht eingerichtet', films: [], more: false, director: '' }),
+        cache: 'no-store',
+      };
+    }
+    const parsed = parseQuery(raw);
+    if (!parsed) {
+      return {
+        status: 400,
+        body: JSON.stringify({ films: [], more: false, director: '' }),
+        cache: 'no-store',
+      };
+    }
+    let type = 'movie';
+    let id = null;
+    if (parsed.kind === 'tmdb') {
+      type = parsed.type;
+      id = parsed.id;
+    } else if (parsed.kind === 'imdb') {
+      const hit = await findByImdb(parsed.id);
+      if (!hit || !hit.id) {
+        return {
+          status: 200,
+          body: JSON.stringify({ films: [], more: false, director: '' }),
+          cache: 'no-store',
+        };
+      }
+      type = hit.mediaType === 'tv' ? 'tv' : 'movie';
+      id = hit.id;
+    } else {
+      const hit = await search(parsed.text, parsed.year, { prefer: 'movie' });
+      if (!hit || !hit.id) {
+        return {
+          status: 200,
+          body: JSON.stringify({ films: [], more: false, director: '' }),
+          cache: 'no-store',
+        };
+      }
+      type = hit.mediaType === 'tv' ? 'tv' : 'movie';
+      id = hit.id;
+    }
+    const bundle = await recommendBundle(type, id, page);
+    return {
+      status: 200,
+      body: JSON.stringify(bundle),
+      cache: bundle.films.length ? 's-maxage=86400' : 'no-store',
+    };
+  } catch {
+    return {
+      status: 502,
+      body: JSON.stringify({ error: 'Der Abruf ist gerade nicht möglich.', films: [], more: false, director: '' }),
+      cache: 'no-store',
+    };
+  }
 }
 
 export async function filmResponse(raw, options) {

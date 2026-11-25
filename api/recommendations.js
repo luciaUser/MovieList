@@ -1,0 +1,26 @@
+import { recommendResponse } from '../lookup.mjs';
+
+function send(res, status, body, cache) {
+  const headers = {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': cache,
+  };
+  if (res && typeof res.writeHead === 'function') {
+    res.writeHead(status, headers);
+    res.end(body);
+    return undefined;
+  }
+  return new Response(body, { status, headers });
+}
+
+export default async function handler(req, res) {
+  try {
+    const raw = typeof req === 'string' ? req : req?.url || '/';
+    const url = new URL(raw, 'http://127.0.0.1');
+    const result = await recommendResponse(url.searchParams.get('q') || '', url.searchParams.get('page') || '1');
+    return send(res, result.status, result.body, result.cache);
+  } catch {
+    const body = JSON.stringify({ error: 'Der Abruf ist gerade nicht möglich.', films: [], more: false, director: '' });
+    return send(res, 502, body, 'no-store');
+  }
+}
