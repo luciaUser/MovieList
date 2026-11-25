@@ -1457,7 +1457,7 @@
     document.querySelectorAll('#panel .member-rate').forEach((row) => {
       const mine = row.querySelector('.rate') || (account.id && row.dataset.user === account.id);
       if (!mine) return;
-      const svg = row.querySelector(':scope > .avatar');
+      const svg = row.querySelector('.avatar');
       if (svg) svg.replaceWith(avatarNode(avatar, 28));
       const bar = row.querySelector('.score-bar');
       if (!bar) return;
@@ -1546,25 +1546,40 @@
     }
   }
 
+  function memberRateLine(film, options) {
+    const opts = options || {};
+    const rateRow = el('div', 'member-rate');
+    if (opts.userId) rateRow.dataset.user = opts.userId;
+    const head = el('div', 'member-head');
+    head.append(avatarNode(opts.avatar, 28), el('span', 'member-name', opts.name || ''));
+    if (opts.mine) head.append(profileColorSwitch());
+    const bar = scoreBar(opts.avatar, opts.value, Boolean(opts.mine));
+    const value = el('output', 'rate-value', formatScore(opts.value));
+    if (opts.mine && bar._range) {
+      value.htmlFor = 'own-rate';
+      bar._range.addEventListener('input', () => {
+        const next = Math.round(Number(bar._range.value) * 10) / 10;
+        const rating = next > 0 ? next : null;
+        const previous = entry(film.id).rating;
+        value.textContent = formatScore(rating);
+        bar.style.setProperty('--p', `${next * 10}%`);
+        commitRating(film, rating, previous);
+        if (opts.onRate) opts.onRate(rating);
+      });
+    }
+    rateRow.append(head, bar, value);
+    return rateRow;
+  }
+
   function ownRateBlock(film, row) {
     const block = document.createDocumentFragment();
-    const rateRow = el('div', 'member-rate');
-    rateRow.append(avatarNode(account && account.avatar, 28));
-    rateRow.append(el('span', 'member-name', (account && (account.display_name || account.username)) || 'Ich'));
-    rateRow.append(profileColorSwitch());
-    const bar = scoreBar(account && account.avatar, row.rating, true);
-    const value = el('output', 'rate-value', formatScore(row.rating));
-    value.htmlFor = 'own-rate';
-    bar._range.addEventListener('input', () => {
-      const next = Math.round(Number(bar._range.value) * 10) / 10;
-      const rating = next > 0 ? next : null;
-      const previous = entry(film.id).rating;
-      value.textContent = formatScore(rating);
-      bar.style.setProperty('--p', `${next * 10}%`);
-      commitRating(film, rating, previous);
-    });
-    rateRow.append(bar, value);
-    block.append(rateRow);
+    block.append(memberRateLine(film, {
+      avatar: account && account.avatar,
+      name: (account && (account.display_name || account.username)) || 'Ich',
+      userId: account && account.id,
+      value: row.rating,
+      mine: true,
+    }));
     return block;
   }
 
@@ -1587,54 +1602,49 @@
       paintWear(poster, avg);
       if (score) score.textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
     };
-    list.members.forEach((person) => {
-      const mine = account && person.id === account.id;
-      const rateRow = el('div', 'member-rate');
-      const avatar = mine ? (account.avatar || person.avatar) : person.avatar;
-      const name = mine
-        ? ((account && (account.display_name || account.username)) || person.username)
-        : (person.username || 'Profil');
-      rateRow.append(avatarNode(avatar, 28), el('span', 'member-name', name));
-      if (mine) rateRow.append(profileColorSwitch());
-      const known = mine ? row.rating : null;
-      const bar = scoreBar(avatar, known, mine);
-      const value = el('output', 'rate-value', formatScore(known));
-      if (mine) {
-        value.htmlFor = 'own-rate';
-        bar._range.addEventListener('input', () => {
-          const next = Math.round(Number(bar._range.value) * 10) / 10;
-          const rating = next > 0 ? next : null;
-          const previous = entry(film.id).rating;
-          value.textContent = formatScore(rating);
-          bar.style.setProperty('--p', `${next * 10}%`);
-          commitRating(film, rating, previous);
-          paintAverage(rating);
-        });
-      }
-      rateRow.append(bar, value);
-      rateRow.dataset.user = person.id;
-      block.append(rateRow);
-    });
+    const minePerson = (list.members || []).find((person) => account && person.id === account.id);
+    block.append(memberRateLine(film, {
+      avatar: (account && account.avatar) || (minePerson && minePerson.avatar),
+      name: (account && (account.display_name || account.username)) || (minePerson && minePerson.username) || 'Ich',
+      userId: (account && account.id) || (minePerson && minePerson.id),
+      value: row.rating,
+      mine: true,
+      onRate: paintAverage,
+    }));
     paintAverage(row.rating);
     const cloud = globalThis.Cloud;
-    if (cloud && cloud.memberRatings) {
-      cloud.memberRatings(list.members.map((person) => person.id), [film.id]).then((rows) => {
+    const memberIds = (list.members || []).map((person) => person.id).filter((id) => !account || id !== account.id);
+    if (cloud && cloud.memberRatings && memberIds.length) {
+      cloud.memberRatings(memberIds, [film.id]).then((rows) => {
         if (!block.isConnected) return;
-        rows.forEach((item) => {
+        const byUser = new Map();
+        (rows || []).forEach((item) => {
           const rating = Number(item.rating);
-          if (!(rating > 0)) return;
-          if (account && item.user_id === account.id) return;
-          others.set(item.user_id, rating);
-          const rateRow = block.querySelector(`[data-user="${item.user_id}"]`);
-          if (!rateRow) return;
-          const output = rateRow.querySelector('.rate-value');
-          const host = rateRow.querySelector('.score-bar');
-          if (output) output.textContent = formatScore(rating);
-          if (host) {
-            const person = list.members.find((member) => member.id === item.user_id);
-            const next = scoreBar(person && person.avatar, rating, false);
-            host.replaceWith(next);
+          if (rating > 0 && item.user_id) byUser.set(item.user_id, rating);
+        });
+        (list.members || []).forEach((person) => {
+          if (!person || (account && person.id === account.id)) return;
+          const rating = byUser.get(person.id);
+          const existing = block.querySelector(`[data-user="${CSS.escape(person.id)}"]`);
+          if (!(rating > 0)) {
+            if (existing) existing.remove();
+            others.delete(person.id);
+            return;
           }
+          others.set(person.id, rating);
+          if (existing) {
+            const output = existing.querySelector('.rate-value');
+            const host = existing.querySelector('.score-bar');
+            if (output) output.textContent = formatScore(rating);
+            if (host) host.replaceWith(scoreBar(person.avatar, rating, false));
+            return;
+          }
+          block.append(memberRateLine(film, {
+            avatar: person.avatar,
+            name: person.username || 'Profil',
+            userId: person.id,
+            value: rating,
+          }));
         });
         paintAverage(entry(film.id).rating);
       }).catch(() => {});
@@ -2153,6 +2163,49 @@
     return !message || message === 'Schon auf der Liste';
   }
 
+  async function removeRecommendation(row) {
+    const cloud = globalThis.Cloud;
+    if (!cloud || !cloud.removeWishlistItem) return false;
+    const kind = row.type === 'tv' ? 'tv' : 'movie';
+    const filmId = `tmdb:${kind}:${row.tmdbId}`;
+    let list = myListRecord();
+    let stamp = list && (list.stamps || []).find((item) => item.filmId === filmId);
+    if (!stamp && cloud.wishOverview) {
+      try { await loadWishlists({ quiet: true }); } catch { return false; }
+      list = myListRecord();
+      stamp = list && (list.stamps || []).find((item) => item.filmId === filmId);
+    }
+    if (!stamp) return false;
+    try {
+      await cloud.removeWishlistItem(stamp.id);
+    } catch {
+      return false;
+    }
+    const current = myListRecord();
+    if (current && current.stamps) {
+      current.stamps = current.stamps.filter((item) => item.id !== stamp.id);
+      current.filmCount = Math.max(0, (Number(current.filmCount) || 1) - 1);
+    }
+    if (current && wishOpenId === current.id) {
+      wishItems = (wishItems || []).filter((item) => item.id !== stamp.id && item.filmId !== filmId);
+    }
+    loadWishlists({ quiet: true });
+    return true;
+  }
+
+  function recGlyph(kind) {
+    if (kind === 'check') {
+      return '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 12.5 10 16.5 18.5 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="miter"></polyline></svg>';
+    }
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
+  }
+
+  function paintRecMark(button, on) {
+    button.innerHTML = recGlyph(on ? 'check' : 'plus');
+    button.setAttribute('aria-label', on ? 'Auf myList' : 'Zu myList');
+    button.classList.toggle('is-in', on);
+  }
+
   function recRow(row, state) {
     const line = el('div', 'link');
     const open = el('button', 'rec-open');
@@ -2178,29 +2231,24 @@
     );
     open.append(cover, copy);
     open.addEventListener('click', () => showRecommendation(row));
-    const plus = el('button', 'rec-add', state.added.has(row.tmdbId) ? '✓' : '+');
+    const plus = el('button', 'rec-add');
     plus.type = 'button';
-    plus.setAttribute('aria-label', state.added.has(row.tmdbId) ? 'Auf myList' : 'Zu myList');
-    if (state.added.has(row.tmdbId)) {
-      plus.classList.add('is-in');
+    paintRecMark(plus, state.added.has(row.tmdbId));
+    plus.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      if (plus.disabled) return;
       plus.disabled = true;
-    } else {
-      plus.addEventListener('click', async (event) => {
-        event.stopPropagation();
-        if (plus.disabled) return;
-        plus.disabled = true;
-        const ok = await addRecommendation(row, state.director);
-        if (state.token !== recToken) return;
-        if (!ok) {
-          plus.disabled = false;
-          return;
-        }
-        state.added.add(row.tmdbId);
-        plus.classList.add('is-in');
-        plus.textContent = '✓';
-        plus.setAttribute('aria-label', 'Auf myList');
-      });
-    }
+      const present = state.added.has(row.tmdbId);
+      const ok = present
+        ? await removeRecommendation(row)
+        : await addRecommendation(row, state.director);
+      if (state.token !== recToken || !plus.isConnected) return;
+      plus.disabled = false;
+      if (!ok) return;
+      if (present) state.added.delete(row.tmdbId);
+      else state.added.add(row.tmdbId);
+      paintRecMark(plus, !present);
+    });
     line.append(open, plus);
     return line;
   }

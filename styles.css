@@ -2702,21 +2702,34 @@ body.is-wish .poster.is-blank { filter: none; }
 
 .member-rate {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 2.8em;
   grid-template-rows: auto 16px;
   column-gap: 10px;
   row-gap: 16px;
   align-items: center;
 }
 
-.member-rate .avatar { grid-row: 1; grid-column: 1; width: 28px; height: 28px; }
+.member-rate .member-head {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
 
-.member-rate .member-name { grid-row: 1; grid-column: 2; color: #fff; }
+.member-rate .avatar { width: 28px; height: 28px; flex: none; }
+
+.member-rate .member-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+}
 
 .member-rate .profile-color {
-  grid-row: 1;
-  grid-column: 3;
-  justify-self: end;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: var(--icon-text-gap);
@@ -2736,9 +2749,15 @@ body.is-wish .poster.is-blank { filter: none; }
   flex: none;
 }
 
-.member-rate .score-bar { grid-row: 2; grid-column: 1 / 3; }
+.member-rate .score-bar { grid-row: 2; grid-column: 1; width: 100%; min-width: 0; }
 
-.member-rate .rate-value { grid-row: 2; grid-column: 3; }
+.member-rate .rate-value {
+  grid-row: 2;
+  grid-column: 2;
+  width: 2.8em;
+  min-width: 2.8em;
+  max-width: 2.8em;
+}
 
 .score-bar {
   position: relative;
@@ -3052,6 +3071,9 @@ body.is-wish .poster.is-blank { filter: none; }
 }
 
 .rec-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: none;
   width: 32px;
   height: 32px;
@@ -3060,11 +3082,10 @@ body.is-wish .poster.is-blank { filter: none; }
   background: transparent;
   color: rgba(255, 255, 255, 0.42);
   font: inherit;
-  font-size: 18px;
   line-height: 1;
 }
 
-.rec-add.is-in { color: rgba(255, 255, 255, 0.82); }
+.rec-add svg { display: block; width: 18px; height: 18px; }
 
 .rec-list > .link:first-child,
 .rec-list > .rec-skel:first-child { border-top: 0; }
