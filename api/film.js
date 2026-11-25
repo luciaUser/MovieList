@@ -20,6 +20,7 @@ export default async function handler(req, res) {
     const result = await filmResponse(url.searchParams.get('q') || '', {
       list: url.searchParams.get('list') === '1',
       upcoming: url.searchParams.get('upcoming') === '1',
+      overview: url.searchParams.get('overview') === '1',
     });
     return send(res, result.status, result.body, result.cache);
   } catch {

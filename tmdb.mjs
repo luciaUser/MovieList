@@ -121,5 +121,12 @@ export async function details(type, id) {
   const append = kind === 'tv'
     ? 'keywords,credits,content_ratings,external_ids'
     : 'keywords,credits,release_dates,external_ids';
-  return get(`/${kind}/${id}?language=en-US&append_to_response=${append}`);
+  const payload = await get(`/${kind}/${id}?language=en-US&append_to_response=${append}`);
+  if (!payload) return null;
+  if (!String(payload.overview || '').trim()) {
+    const german = await get(`/${kind}/${id}?language=de-DE`);
+    const text = german && String(german.overview || '').trim();
+    if (text) payload.overview = text;
+  }
+  return payload;
 }

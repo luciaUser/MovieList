@@ -105,6 +105,7 @@ function filmRecord(hit, facets, extra) {
     poster: facets.poster || (hit.posterPath ? `https://image.tmdb.org/t/p/w500${hit.posterPath}` : null),
     release_date: extra && extra.release_date ? extra.release_date : null,
     status: extra && extra.status ? extra.status : null,
+    overview: extra && extra.overview ? String(extra.overview).trim() : '',
   };
 }
 
@@ -147,10 +148,38 @@ export async function lookupFilm(raw) {
   if (!facets.tmdbId) throw fail(404, 'Dazu finde ich keinen Film.');
   const releaseDate = dateOnly(detailPayload?.release_date || detailPayload?.first_air_date || hit.releaseDate);
   const status = detailPayload && detailPayload.status ? String(detailPayload.status) : '';
+  const overview = String(detailPayload && detailPayload.overview || '').trim();
   return {
-    film: filmRecord(hit, facets, { release_date: releaseDate || null, status: status || null }),
+    film: filmRecord(hit, facets, {
+      release_date: releaseDate || null,
+      status: status || null,
+      overview: overview || null,
+    }),
     facets,
   };
+}
+
+async function filmOverview(raw) {
+  if (!configured()) return '';
+  const parsed = parseQuery(raw);
+  if (!parsed || parsed.kind === 'text') return '';
+  try {
+    let type = 'movie';
+    let id = null;
+    if (parsed.kind === 'tmdb') {
+      type = parsed.type;
+      id = parsed.id;
+    } else {
+      const hit = await findByImdb(parsed.id);
+      if (!hit || !hit.id) return '';
+      type = hit.mediaType === 'tv' ? 'tv' : 'movie';
+      id = hit.id;
+    }
+    const payload = await details(type, id);
+    return String(payload && payload.overview || '').trim();
+  } catch {
+    return '';
+  }
 }
 
 function lightFilm(hit, director, fact) {
@@ -268,6 +297,14 @@ export async function lookupFilms(raw, options) {
 
 export async function filmResponse(raw, options) {
   try {
+    if (options && options.overview) {
+      const overview = await filmOverview(raw);
+      return {
+        status: 200,
+        body: JSON.stringify({ overview }),
+        cache: overview ? 's-maxage=86400' : 'no-store',
+      };
+    }
     if (options && options.list) {
       const found = await lookupFilms(raw, { upcoming: Boolean(options && options.upcoming) });
       const body = options && options.upcoming

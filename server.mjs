@@ -130,6 +130,7 @@ async function handle(req, res) {
       const result = await filmResponse(url.searchParams.get('q') || '', {
         list: url.searchParams.get('list') === '1',
         upcoming: url.searchParams.get('upcoming') === '1',
+        overview: url.searchParams.get('overview') === '1',
       });
       return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);
     }

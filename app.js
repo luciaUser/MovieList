@@ -1551,6 +1551,89 @@
     return block;
   }
 
+  let overviewToken = 0;
+
+  function storedOverview(id) {
+    try {
+      return localStorage.getItem(`moviebylucia-overview:${id}`) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function storeOverview(id, text) {
+    const value = String(text || '').trim();
+    if (!id || !value) return;
+    try {
+      localStorage.setItem(`moviebylucia-overview:${id}`, value);
+    } catch {
+      /* voller Speicher */
+    }
+  }
+
+  function overviewQuery(film) {
+    if (!film) return '';
+    const id = String(film.id || '');
+    const direct = id.match(/^tmdb:(movie|tv):(\d+)$/) || id.match(/^tmdb-(movie|tv)-(\d+)$/);
+    if (direct) return `https://www.themoviedb.org/${direct[1]}/${direct[2]}`;
+    const stored = globalThis.FILM_FACETS || {};
+    const facets = film.facets || stored[film.id] || stored[originalIdOf(film.id)] || {};
+    if (facets.tmdbId) {
+      const type = facets.tmdbType === 'tv' || film.kind === 'serie' ? 'tv' : 'movie';
+      return `https://www.themoviedb.org/${type}/${facets.tmdbId}`;
+    }
+    const imdb = String(facets.imdbId || '').toLowerCase();
+    if (/^tt\d+$/.test(imdb)) return imdb;
+    return '';
+  }
+
+  function overviewNode(text) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'panel-overview';
+    button.textContent = text;
+    button.addEventListener('click', () => button.classList.toggle('is-open'));
+    return button;
+  }
+
+  function paintOverview(film, slot) {
+    const known = String((film && film.overview) || storedOverview(film.id) || '').trim();
+    if (known) {
+      film.overview = known;
+      storeOverview(film.id, known);
+      slot.replaceChildren(overviewNode(known));
+      return;
+    }
+    const query = overviewQuery(film);
+    if (!query) return;
+    const token = overviewToken;
+    const id = film.id;
+    fetch(`/api/film?q=${encodeURIComponent(query)}&overview=1`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const text = String(data && data.overview || '').trim();
+        if (!text || token !== overviewToken || !slot.isConnected) return;
+        film.overview = text;
+        storeOverview(id, text);
+        slot.replaceChildren(overviewNode(text));
+      })
+      .catch(() => {});
+  }
+
+  function fitCastNames(node) {
+    if (!node || !node.isConnected) return;
+    const line = parseFloat(getComputedStyle(node).lineHeight);
+    if (!Number.isFinite(line) || line <= 0) return;
+    const limit = line * 2 + 1;
+    const people = [...node.querySelectorAll('.cast-link')];
+    while (people.length && node.scrollHeight > limit) {
+      const last = people.pop();
+      const prev = last.previousSibling;
+      if (prev && prev.nodeType === Node.TEXT_NODE && /^,\s*$/.test(prev.textContent || '')) prev.remove();
+      last.remove();
+    }
+  }
+
   function renderPanel(film) {
     closeWishSearch();
     panelFilm = film;
@@ -1610,8 +1693,10 @@
       poster.append(el('span', 'poster-title', film.title || 'Film'));
     }
     const copy = el('div', 'panel-copy');
-    if (film.year) copy.append(el('p', 'panel-year', String(film.year)));
-    copy.append(el('h1', null, film.title));
+    const copyTop = el('div', 'panel-copy-top');
+    if (film.year) copyTop.append(el('p', 'panel-year', String(film.year)));
+    copyTop.append(el('h1', null, film.title));
+    const copyFoot = el('div', 'panel-copy-foot');
     if (full.director) {
       const director = el('p', 'panel-credit');
       director.append(el('span', 'panel-kicker', 'Director'));
@@ -1623,11 +1708,12 @@
         ids: filmsWith('director', full.director),
       }));
       director.append(name);
-      copy.append(director);
+      copyFoot.append(director);
     }
-    const names = (full.cast || []).slice(0, 3);
+    const names = (full.cast || []).filter(Boolean);
+    let cast = null;
     if (names.length) {
-      const cast = el('p', 'panel-credit');
+      cast = el('p', 'panel-credit panel-cast');
       cast.append(el('span', 'panel-kicker', 'Cast'));
       names.forEach((name, index) => {
         if (index) cast.append(document.createTextNode(', '));
@@ -1640,8 +1726,13 @@
         }));
         cast.append(person);
       });
-      copy.append(cast);
+      copyFoot.append(cast);
     }
+    copy.append(copyTop);
+    if (copyFoot.childNodes.length) copy.append(copyFoot);
+    hero.append(poster, copy);
+    head.append(hero);
+    const meta = el('div', 'panel-meta');
     const score = el('p', 'panel-score');
     const localImdb = (window.FILMS || []).some((row) => row && row.id === film.id);
     score.append(
@@ -1649,22 +1740,25 @@
       el('span', 'panel-score-value', film.imdbLabel || '–'),
       el('span', 'panel-score-source', localImdb ? 'IMDb' : 'TMDB'),
     );
-    copy.append(score);
-    hero.append(poster, copy);
-    head.append(hero);
-    if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
-      head.append(el('p', 'unsynced', 'nicht synchronisiert'));
-    }
+    meta.append(score);
     if ((film.genres || []).length) {
       const pills = el('ul', 'pills');
       film.genres.forEach((genre) => pills.append(el('li', null, genre)));
-      head.append(pills);
+      meta.append(pills);
+    }
+    head.append(meta);
+    const blurb = el('div', 'panel-overview-slot');
+    head.append(blurb);
+    overviewToken += 1;
+    paintOverview(film, blurb);
+    if (needsProfile() && globalThis.Store && globalThis.Store.syncable && !globalThis.Store.syncable(film.id)) {
+      head.append(el('p', 'unsynced', 'nicht synchronisiert'));
     }
     const actions = el('div', 'panel-actions');
     const wishWrap = el('div', 'panel-wish-wrap');
     wishWrap.append(wish, pick);
     actions.append(wishWrap);
-    if (mine) actions.append(remove);
+    if (mine && !isUpcomingFilm(film)) actions.append(remove);
     head.append(actions);
     panel.append(head);
     const followed = el('div', 'followed-row');
@@ -1727,6 +1821,7 @@
       panel.append(group);
     });
     revealPanel();
+    if (cast) requestAnimationFrame(() => fitCastNames(cast));
   }
 
   const TRAIT_FIELDS = [
