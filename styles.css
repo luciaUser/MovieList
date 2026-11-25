@@ -2484,6 +2484,25 @@ body.is-network {
 
 .panel-actions .panel-remove { color: #e23d3d; }
 
+.panel-remove-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.panel-actions .panel-remove.is-list {
+  gap: 0;
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.panel-actions .panel-remove.is-sure .wish-sure {
+  max-width: 72px;
+  padding: 0 8px 0 0;
+  opacity: 1;
+}
+
 .wish-pick {
   position: fixed;
   z-index: 30;

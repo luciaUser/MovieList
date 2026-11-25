@@ -2115,6 +2115,7 @@
 
   function showRecommendation(row) {
     const film = filmFromRecommendation(row);
+    panelList = null;
     renderPanel(film, { quiet: true });
     const card = readFilmCard(film.id);
     if (card && card.ready) return;
@@ -2334,6 +2335,78 @@
     });
   }
 
+  function listedWishItem(list, film) {
+    if (!list || !film) return null;
+    const keys = new Set();
+    if (film.id) keys.add(film.id);
+    const keyOf = globalThis.Store && globalThis.Store.filmKey;
+    if (keyOf) {
+      const canon = keyOf(film);
+      if (canon) keys.add(canon);
+    }
+    const openItem = wishOpenId === list.id
+      ? (wishItems || []).find((item) => item && keys.has(item.filmId))
+      : null;
+    if (openItem) {
+      if (!openItem._posterFilm) openItem._posterFilm = film;
+      return openItem;
+    }
+    const stamp = (list.stamps || []).find((item) => item && keys.has(item.filmId));
+    if (!stamp) return null;
+    return {
+      id: stamp.id,
+      filmId: stamp.filmId,
+      createdAt: stamp.createdAt,
+      addedBy: stamp.addedBy,
+      _posterFilm: film,
+    };
+  }
+
+  function listRemoveButton(film, list) {
+    const button = el('button', 'panel-remove is-list');
+    button.type = 'button';
+    const name = (list && list.title) || t('List');
+    const label = t('Remove from {name}', { name });
+    button.title = label;
+    button.setAttribute('aria-label', label);
+    const sure = el('span', 'wish-sure', 'sure?');
+    const main = el('span', 'panel-remove-main');
+    main.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg><span>Remove</span>';
+    button.append(sure, main);
+    let timer = 0;
+    const calm = () => {
+      window.clearTimeout(timer);
+      button.classList.remove('is-sure');
+    };
+    button.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      if (!button.classList.contains('is-sure')) {
+        button.classList.add('is-sure');
+        window.clearTimeout(timer);
+        timer = window.setTimeout(() => {
+          endTransient(button);
+          calm();
+        }, 4000);
+        openTransient(button, calm);
+        return;
+      }
+      endTransient(button);
+      window.clearTimeout(timer);
+      button.disabled = true;
+      const item = listedWishItem(list, film);
+      const ok = item ? await removeWishItem(item, list, { holdBoard: true }) : false;
+      if (!button.isConnected) return;
+      if (!ok) {
+        button.disabled = false;
+        calm();
+        if (!item) setWishStatus('Das hat nicht geklappt.');
+        return;
+      }
+      clearSelection();
+    });
+    return button;
+  }
+
   function renderPanel(film, options) {
     const quiet = Boolean(options && options.quiet);
     const stay = Boolean(options && options.stay) && !panel.hidden;
@@ -2475,7 +2548,8 @@
     const wishWrap = el('div', 'panel-wish-wrap');
     wishWrap.append(wish, addedNote);
     actions.append(wishWrap);
-    if (mine && !isUpcomingFilm(film)) actions.append(remove);
+    if (panelList) actions.append(listRemoveButton(film, panelList));
+    else if (mine && !isUpcomingFilm(film)) actions.append(remove);
     else if (!mine && !isUnreleased(film)) actions.append(archiveAddButton(film, remove));
     head.append(actions);
     panel.append(head);
@@ -6305,7 +6379,7 @@
 
   function paintLanguage() {
     const row = el('div', 'lang-row');
-    row.append(el('span', 'lang-label', t('Language')));
+    row.append(el('span', 'lang-label', t('Language:')));
     const choices = [['en', 'English'], ['de', 'Deutsch']];
     choices.forEach(([code, label]) => {
       const button = el('button', 'lang-choice', label);
@@ -6370,9 +6444,11 @@
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
-    svg.innerHTML = kind === 'out'
-      ? '<path d="M8 6.2H5.8v11.6H8M8 6.2h3.2M8 17.8h3.2M11.2 12H19M15.4 8.4 19 12l-3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>'
-      : '<path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
+    const mark = {
+      out: '<path d="M8 6.2H5.8v11.6H8M8 6.2h3.2M8 17.8h3.2M11.2 12H19M15.4 8.4 19 12l-3.6 3.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>',
+      reset: '<path d="M4 12a8 8 0 1 0 2.3-5.6M4 4.8V9h4.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>',
+    };
+    svg.innerHTML = mark[kind] || '<path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>';
     return svg;
   }
 
@@ -6474,7 +6550,7 @@
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'account-row is-danger';
-    reset.append(accountIcon('x'), el('span', null, 'Reset archive'));
+    reset.append(accountIcon('reset'), el('span', null, 'Reset archive'));
     reset.addEventListener('click', () => show('reset'));
     const wipe = document.createElement('button');
     wipe.type = 'button';
@@ -6955,7 +7031,7 @@
       bindWishRealtime();
       const wishTyping = document.activeElement && document.activeElement.closest && document.activeElement.closest('#wish-board');
       const hueOpen = document.querySelector('.genre-name.is-hue');
-      if (mode === 'wish' && !wishTyping && !hueOpen) paintWishBoard();
+      if (mode === 'wish' && !wishTyping && !hueOpen && !(options && options.holdBoard)) paintWishBoard();
       if (options && options.quiet) return;
       const typing = document.activeElement && document.activeElement.getAttribute('aria-label') === 'Profile suchen';
       const inviting = document.querySelector('.friend-invite.is-open, .friend-invite.is-ok');
@@ -7523,7 +7599,7 @@
   }
 
   function openListedFilm(film, list) {
-    panelList = list && list.members && list.members.length > 1 ? list : null;
+    panelList = list || null;
     panelListHold = true;
     openFilm(film);
   }
@@ -8619,11 +8695,11 @@
     image.alt = '';
     image.src = posterSrc(film);
     poster.append(image);
-    poster.addEventListener('click', () => openFilm(wishFilmObject(article._wishItem)));
+    poster.addEventListener('click', () => openListedFilm(wishFilmObject(article._wishItem), list));
     const body = el('div', 'wish-copy');
     const title = el('button', 'wish-title', film.title || 'Film');
     title.type = 'button';
-    title.addEventListener('click', () => openFilm(wishFilmObject(article._wishItem)));
+    title.addEventListener('click', () => openListedFilm(wishFilmObject(article._wishItem), list));
     const year = film.year ? `${film.year} · ` : '';
     body.append(title, el('p', 'wish-meta', `${year}hinzugefügt von ${item.addedName}`));
     const vote = el('button', 'wish-vote', `Will ich · ${item.votes.length}`);
@@ -9007,8 +9083,9 @@
     }
   }
 
-  async function removeWishItem(item, list) {
-    if (!item || !globalThis.Cloud || !globalThis.Cloud.removeWishlistItem) return;
+  async function removeWishItem(item, list, options) {
+    if (!item || !globalThis.Cloud || !globalThis.Cloud.removeWishlistItem) return false;
+    const holdBoard = Boolean(options && options.holdBoard);
     const listId = (list && list.id) || wishOpenId;
     noteOwnWish(listId);
     const film = item._posterFilm || wishFilmObject(item);
@@ -9041,7 +9118,7 @@
       entry.filmCount = Math.max(0, (Number(entry.filmCount) || 1) - 1);
     });
     const openList = wishLists.find((entry) => entry.id === wishOpenId);
-    if (openList && document.getElementById('wish-items')) fillWishItems(openList);
+    if (!holdBoard && openList && document.getElementById('wish-items')) fillWishItems(openList);
     try {
       await globalThis.Cloud.removeWishlistItem(item.id);
       if (listId) {
@@ -9051,7 +9128,8 @@
           facets: film.facets || facetsOf(film),
         });
       }
-      await loadWishlists({ quiet: true });
+      await loadWishlists(holdBoard ? { quiet: true, holdBoard: true } : { quiet: true });
+      return true;
     } catch (error) {
       wishItems = previousItems;
       previousLists.forEach((saved) => {
@@ -9067,6 +9145,7 @@
         else spot.parent.append(spot.node);
       });
       setWishStatus(wishFail(error));
+      return false;
     }
   }
 
