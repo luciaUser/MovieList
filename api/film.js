@@ -22,6 +22,7 @@ export default async function handler(req, res) {
       upcoming: url.searchParams.get('upcoming') === '1',
       overview: url.searchParams.get('overview') === '1',
       card: url.searchParams.get('card') === '1',
+      lang: url.searchParams.get('lang') === 'de' ? 'de' : 'en',
     });
     return send(res, result.status, result.body, result.cache);
   } catch {

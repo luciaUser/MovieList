@@ -116,7 +116,37 @@ export async function findByImdb(imdbId) {
   return shape({ ...hit, media_type: movie ? 'movie' : 'tv' }, false);
 }
 
-const GENRE_NAMES = {
+const GENRE_EN = {
+  28: 'Action',
+  12: 'Adventure',
+  16: 'Animation',
+  35: 'Comedy',
+  80: 'Crime',
+  99: 'Documentary',
+  18: 'Drama',
+  10751: 'Family',
+  14: 'Fantasy',
+  36: 'History',
+  27: 'Horror',
+  10402: 'Music',
+  9648: 'Mystery',
+  10749: 'Romance',
+  878: 'Science Fiction',
+  10770: 'TV Movie',
+  53: 'Thriller',
+  10752: 'War',
+  37: 'Western',
+  10759: 'Action & Adventure',
+  10762: 'Kids',
+  10763: 'News',
+  10764: 'Reality',
+  10765: 'Sci-Fi & Fantasy',
+  10766: 'Soap',
+  10767: 'Talk',
+  10768: 'War & Politics',
+};
+
+const GENRE_DE = {
   28: 'Action',
   12: 'Abenteuer',
   16: 'Animation',
@@ -146,13 +176,14 @@ const GENRE_NAMES = {
   10768: 'War & Politics',
 };
 
-function genreNames(item) {
+function genreNames(item, language) {
   const named = Array.isArray(item && item.genres)
     ? item.genres.map((genre) => (genre && genre.name) || '').filter(Boolean)
     : [];
   if (named.length) return named.slice(0, 3);
+  const table = language === 'de' ? GENRE_DE : GENRE_EN;
   const ids = Array.isArray(item && item.genre_ids) ? item.genre_ids : [];
-  return ids.map((id) => GENRE_NAMES[id]).filter(Boolean).slice(0, 3);
+  return ids.map((id) => table[id]).filter(Boolean).slice(0, 3);
 }
 
 function goodMovie(item, type) {
@@ -176,7 +207,7 @@ function goodMovie(item, type) {
     vote: Math.round(vote * 10) / 10,
     votes,
     overview: String(item.overview || '').trim(),
-    genres: genreNames(item),
+    genres: genreNames(item, 'en'),
   };
 }
 
@@ -205,8 +236,8 @@ export async function recommendBundle(kind, id, page) {
   }
   const [credits, recs, sims] = await Promise.all([
     grab(`/${type}/${numericId}/credits?language=en-US`),
-    grab(`/${type}/${numericId}/recommendations?language=de-DE&page=${pageNum}`),
-    grab(`/${type}/${numericId}/similar?language=de-DE&page=${pageNum}`),
+    grab(`/${type}/${numericId}/recommendations?language=en-US&page=${pageNum}`),
+    grab(`/${type}/${numericId}/similar?language=en-US&page=${pageNum}`),
   ]);
   const crew = credits && Array.isArray(credits.crew) ? credits.crew : [];
   const director = crew.find((person) => person && person.job === 'Director' && person.id) || null;
@@ -217,13 +248,13 @@ export async function recommendBundle(kind, id, page) {
   const discoverPath = type === 'tv' ? '/discover/tv' : '/discover/movie';
   const jobs = [];
   if (director) {
-    jobs.push(grab(`${discoverPath}?with_crew=${director.id}&page=${pageNum}&vote_count.gte=300&vote_average.gte=7&sort_by=vote_average.desc&include_adult=false&language=de-DE`).then((data) => ({
+    jobs.push(grab(`${discoverPath}?with_crew=${director.id}&page=${pageNum}&vote_count.gte=300&vote_average.gte=7&sort_by=vote_average.desc&include_adult=false&language=en-US`).then((data) => ({
       kind: 'director',
       data,
     })));
   }
   cast.forEach((person) => {
-    jobs.push(grab(`${discoverPath}?with_cast=${person.id}&page=${pageNum}&vote_count.gte=300&vote_average.gte=7&sort_by=vote_average.desc&include_adult=false&language=de-DE`).then((data) => ({
+    jobs.push(grab(`${discoverPath}?with_cast=${person.id}&page=${pageNum}&vote_count.gte=300&vote_average.gte=7&sort_by=vote_average.desc&include_adult=false&language=en-US`).then((data) => ({
       kind: 'cast',
       name: person.name,
       data,
@@ -266,11 +297,15 @@ export async function recommendBundle(kind, id, page) {
   };
 }
 
-export async function filmCard(type, id) {
+export async function filmCard(type, id, language) {
   const kind = type === 'tv' ? 'tv' : 'movie';
   const numericId = Number(id);
   if (!Number.isFinite(numericId)) return null;
-  const payload = await grab(`/${kind}/${numericId}?language=de-DE&append_to_response=credits`);
+  const locale = language === 'de' ? 'de-DE' : 'en-US';
+  let payload = await grab(`/${kind}/${numericId}?language=${locale}&append_to_response=credits`);
+  if (!payload && locale !== 'en-US') {
+    payload = await grab(`/${kind}/${numericId}?language=en-US&append_to_response=credits`);
+  }
   if (!payload) return null;
   const credits = payload.credits || {};
   const crew = Array.isArray(credits.crew) ? credits.crew : [];
@@ -280,11 +315,18 @@ export async function filmCard(type, id) {
     .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
     .slice(0, 8)
     .map((person) => person.name);
+  let overview = String(payload.overview || '').trim();
+  let genres = genreNames(payload, language === 'de' ? 'de' : 'en');
+  if (locale !== 'en-US' && (!overview || !genres.length)) {
+    const english = await grab(`/${kind}/${numericId}?language=en-US`);
+    if (!overview) overview = String(english && english.overview || '').trim();
+    if (!genres.length) genres = genreNames(english, 'en');
+  }
   return {
     director: director && director.name ? director.name : '',
     cast,
-    overview: String(payload.overview || '').trim(),
-    genres: genreNames(payload),
+    overview,
+    genres,
   };
 }
 

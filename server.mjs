@@ -136,6 +136,7 @@ async function handle(req, res) {
         upcoming: url.searchParams.get('upcoming') === '1',
         overview: url.searchParams.get('overview') === '1',
         card: url.searchParams.get('card') === '1',
+        lang: url.searchParams.get('lang') === 'de' ? 'de' : 'en',
       });
       return reply(res, result.status, result.body, 'application/json; charset=utf-8', result.cache);
     }

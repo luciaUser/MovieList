@@ -13,6 +13,23 @@
     year: 'Gleiche Welt',
   };
 
+  const GROUP_TEXT = {
+    'Gleiche Handschrift': 'Same handwriting',
+    'Ähnliche Geschichte': 'Similar stories',
+    'Ähnliche Stimmung': 'Similar mood',
+    'Gleiche Welt': 'Same world',
+  };
+
+  function t(key, vars) {
+    const api = globalThis.I18n;
+    return api ? api.t(key, vars) : key;
+  }
+
+  function uiLang() {
+    const value = globalThis.I18n && globalThis.I18n.lang ? globalThis.I18n.lang() : 'en';
+    return value === 'de' ? 'de' : 'en';
+  }
+
   const wall = document.getElementById('wall');
   const panel = document.getElementById('panel');
   const search = document.getElementById('search');
@@ -2418,18 +2435,13 @@
     wishWrap.append(wish, pick);
     actions.append(wishWrap);
     if (mine && !isUpcomingFilm(film)) actions.append(remove);
+    else if (!mine && !isUnreleased(film)) actions.append(archiveAddButton(film, remove));
     head.append(actions);
     panel.append(head);
     const followed = el('div', 'followed-row');
     followed.hidden = true;
     panel.append(followed);
     if (!(quiet && !mine)) fillFollowed(film.id, followed);
-    if (!mine && !isUnreleased(film)) {
-      const addMine = el('button', 'text-line', 'Zu meinem Archiv hinzufügen');
-      addMine.type = 'button';
-      addMine.addEventListener('click', () => addForeignFilm(film));
-      panel.append(addMine);
-    }
 
     const shared = panelList && panelList.members && panelList.members.length > 1 ? panelList : null;
     const rateSection = el('section', 'group');
@@ -2463,7 +2475,7 @@
       const items = shownLinks.filter((link) => link.group === name).slice(0, 6);
       if (!items.length) return;
       const group = el('section', 'group');
-      group.append(sectionHead(name));
+      group.append(sectionHead(t(GROUP_TEXT[name] || name)));
       items.forEach((link) => {
         const other = byId.get(link.id);
         const button = document.createElement('button');
@@ -5332,6 +5344,46 @@
     return box;
   }
 
+  function archiveAddButton(film, remove) {
+    const button = el('button', 'panel-add');
+    button.type = 'button';
+    button.setAttribute('aria-label', 'Add');
+    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg><span>Add</span>';
+    button.addEventListener('click', () => {
+      if (!addFilmQuiet(film)) return;
+      button.replaceWith(remove);
+    });
+    return button;
+  }
+
+  function addFilmQuiet(film) {
+    if (!globalThis.Store || !film || isUnreleased(film)) return false;
+    if (!archive) {
+      archive = globalThis.Store.create('leer');
+      removed = new Set();
+      facetOverrides = archive.facetOverrides || {};
+      state = archive.entries || {};
+      added = [];
+      FILMS = [];
+      byId.clear();
+      started = true;
+    }
+    const facets = film.facets || (globalThis.FILM_FACETS || {})[film.id] || {};
+    if (byId.get(film.id) || findExisting(film, facets)) return true;
+    const next = { ...film, genres: film.genres || [], cast: film.cast || [] };
+    if (next.poster) posters.set(next.id, next.poster);
+    added.push(next);
+    FILMS.push(next);
+    byId.set(next.id, next);
+    if (facets && Object.keys(facets).length) {
+      facetOverrides[next.id] = facets;
+      if (!globalThis.FILM_FACETS) globalThis.FILM_FACETS = {};
+      globalThis.FILM_FACETS[next.id] = facets;
+    }
+    persist();
+    return true;
+  }
+
   function addForeignFilm(film) {
     if (!globalThis.Store || !film || isUnreleased(film)) return;
     if (!archive) {
@@ -6825,7 +6877,7 @@
     if (accepted) swatch.type = 'button';
     swatch.className = 'wish-swatch';
     swatch.style.color = color;
-    swatch.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+    swatch.innerHTML = '<svg viewBox="0 0 33 31" fill="none" aria-hidden="true"><path d="M26.6986 13.7058V22.0678H5.24023V13.7058" stroke="currentColor"></path><path d="M5.14551 14.0937L9.76053 6.1003" stroke="currentColor"></path><path d="M26.7983 14.0937L22.1833 6.1003" stroke="currentColor"></path><path d="M5.26074 14.0974H22.1887M26.7985 14.0974H21.4141" stroke="currentColor"></path><path d="M9.32764 6.18579H22.6211" stroke="currentColor"></path><path d="M9.76074 11.5291H22.022" stroke="currentColor"></path><path d="M11.0137 9.0127H20.9253" stroke="currentColor"></path></svg>';
     if (accepted) swatch.setAttribute('aria-label', 'Farbe');
     const label = el('span', 'wish-title', list.title || (invited ? 'Liste' : ''));
     label.style.color = color;

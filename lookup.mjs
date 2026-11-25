@@ -355,7 +355,7 @@ export async function recommendResponse(raw, page) {
   }
 }
 
-export async function cardResponse(raw) {
+export async function cardResponse(raw, language) {
   const empty = { director: '', cast: [], overview: '', genres: [] };
   try {
     if (!configured()) {
@@ -365,7 +365,7 @@ export async function cardResponse(raw) {
     if (!parsed || parsed.kind !== 'tmdb') {
       return { status: 200, body: JSON.stringify(empty), cache: 'no-store' };
     }
-    const card = await filmCard(parsed.type, parsed.id);
+    const card = await filmCard(parsed.type, parsed.id, language);
     return {
       status: 200,
       body: JSON.stringify(card || empty),
@@ -378,7 +378,7 @@ export async function cardResponse(raw) {
 
 export async function filmResponse(raw, options) {
   try {
-    if (options && options.card) return cardResponse(raw);
+    if (options && options.card) return cardResponse(raw, options.lang === 'de' ? 'de' : 'en');
     if (options && options.overview) {
       const overview = await filmOverview(raw);
       return {

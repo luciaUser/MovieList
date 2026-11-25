@@ -2127,6 +2127,7 @@ body.is-network {
 
 .panel-close svg,
 .panel-wish svg,
+.panel-add svg,
 .panel-remove svg,
 .remove-film svg { display: block; width: 22px; height: 22px; flex: none; }
 
@@ -2367,6 +2368,7 @@ body.is-network {
 .panel-actions .panel-wish-wrap { margin-left: 0; }
 
 .panel-actions .panel-wish,
+.panel-actions .panel-add,
 .panel-actions .panel-remove {
   display: inline-flex;
   align-items: center;
@@ -2389,6 +2391,9 @@ body.is-network {
 .panel-actions .panel-wish:hover,
 .panel-actions .panel-wish:focus,
 .panel-actions .panel-wish:active,
+.panel-actions .panel-add:hover,
+.panel-actions .panel-add:focus,
+.panel-actions .panel-add:active,
 .panel-actions .panel-remove:hover,
 .panel-actions .panel-remove:focus,
 .panel-actions .panel-remove:active {
@@ -2398,11 +2403,13 @@ body.is-network {
 }
 
 .panel-actions .panel-wish:focus-visible,
+.panel-actions .panel-add:focus-visible,
 .panel-actions .panel-remove:focus-visible {
   outline: none;
 }
 
 .panel-actions .panel-wish:focus-visible span,
+.panel-actions .panel-add:focus-visible span,
 .panel-actions .panel-remove:focus-visible span {
   text-decoration: underline;
   text-underline-offset: 3px;
