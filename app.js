@@ -1056,6 +1056,14 @@
     return window.matchMedia('(max-width: 720px)').matches;
   }
 
+  function panelScroller() {
+    if (phoneSheet()) {
+      const node = panel.querySelector('.panel-scroll');
+      if (node) return node;
+    }
+    return panel;
+  }
+
   function networkHalf() {
     return phoneSheet() && (mode === 'network' || pathOn);
   }
@@ -1220,7 +1228,7 @@
       if (event.button != null && event.button !== 0) return;
       if (event.target.closest('button, a, input, textarea, select')) return;
       const onGrab = Boolean(event.target.closest('.panel-bar'));
-      if (!onGrab && panel.scrollTop > 0) return;
+      if (!onGrab && panelScroller().scrollTop > 0) return;
       const peek = networkHalf();
       drag = {
         id: event.pointerId,
@@ -1241,7 +1249,7 @@
         if (drag.peek && drag.onGrab) {
           if (Math.abs(delta) < 4) return;
         } else if (delta <= 0) return;
-        else if (!drag.onGrab && (delta < 8 || panel.scrollTop > 0)) return;
+        else if (!drag.onGrab && (delta < 8 || panelScroller().scrollTop > 0)) return;
         drag.active = true;
         try { panel.setPointerCapture(event.pointerId); } catch { /* kein Capture */ }
       }
@@ -2966,7 +2974,7 @@
       loading: false,
     };
     const group = el('section', 'group recs');
-    panel.append(group);
+    panelScroller().append(group);
     group.replaceChildren(recHead(0));
     const pending = el('div', 'rec-list');
     pending.append(recSkeleton(), recSkeleton(), recSkeleton());
@@ -3054,7 +3062,7 @@
   function renderPanel(film, options) {
     const quiet = Boolean(options && options.quiet);
     const stay = Boolean(options && options.stay) && !panel.hidden;
-    const keptScroll = stay ? panel.scrollTop : 0;
+    const keptScroll = stay ? panelScroller().scrollTop : 0;
     const shownLinks = quiet ? [] : links;
     closeWishSearch();
     document.querySelectorAll('body > .wish-pick').forEach((node) => node.remove());
@@ -3096,9 +3104,9 @@
       placeWishPick(pick, wish);
       wish.setAttribute('aria-expanded', 'true');
       const onScroll = () => closeTransient();
-      panel.addEventListener('scroll', onScroll, { passive: true });
+      panelScroller().addEventListener('scroll', onScroll, { passive: true });
       openTransient(pick, () => {
-        panel.removeEventListener('scroll', onScroll);
+        panelScroller().removeEventListener('scroll', onScroll);
         pick.hidden = true;
         wish.setAttribute('aria-expanded', 'false');
       }, (target) => wish.contains(target));
@@ -3107,7 +3115,8 @@
     const head = el('div', 'panel-head');
     const bar = el('div', 'panel-bar');
     bar.append(el('span', 'panel-grab'), closeIcon);
-    head.append(bar);
+    const sheet = el('div', 'panel-scroll');
+    panel.append(bar, sheet);
     const hero = el('div', 'panel-hero');
     const poster = el('div', 'panel-poster');
     const known = knownPoster(film);
@@ -3196,10 +3205,10 @@
     else if (mine && !isUpcomingFilm(film)) actions.append(remove);
     else if (!mine && !isUnreleased(film)) actions.append(archiveAddButton(film, remove));
     head.append(actions);
-    panel.append(head);
+    sheet.append(head);
     const followed = el('div', 'followed-row');
     followed.hidden = true;
-    panel.append(followed);
+    sheet.append(followed);
     if (!(quiet && !mine)) fillFollowed(film.id, followed);
 
     const shared = panelList && panelList.members && panelList.members.length > 1 ? panelList : null;
@@ -3220,7 +3229,7 @@
     memo.value = row.memo;
     memo.addEventListener('input', () => writeEntry(film.id, { memo: memo.value }));
     noteSection.append(memo);
-    panel.append(rateSection, noteSection);
+    sheet.append(rateSection, noteSection);
     if (isCustomFilm(film)) suggestCustomLink(film);
     appendTraits(film, full);
     mountRecommendations(film);
@@ -3270,10 +3279,10 @@
         button.addEventListener('click', () => openFilm(other, true));
         group.append(button);
       });
-      panel.append(group);
+      sheet.append(group);
     });
-    if (stay) panel.scrollTop = keptScroll;
-    else if (quiet && !panel.hidden) panel.scrollTop = 0;
+    if (stay) panelScroller().scrollTop = keptScroll;
+    else if (quiet && !panel.hidden) panelScroller().scrollTop = 0;
     else revealPanel();
     if (cast) requestAnimationFrame(() => fitCastNames(cast));
   }
@@ -3542,7 +3551,7 @@
     const section = el('section', 'group');
     section.append(sectionHead(t('Traits')));
     section.append(editing ? traitEditor(film) : traitView(full));
-    panel.append(section);
+    panelScroller().append(section);
   }
 
   function savedMode() {
@@ -7783,6 +7792,64 @@
     }));
   }
 
+  function watchWishTitle(label) {
+    const paint = () => {
+      if (!label.isConnected) return;
+      const extra = label.scrollWidth - label.clientWidth > 2;
+      const left = label.scrollLeft > 2;
+      const right = extra && label.scrollLeft + label.clientWidth < label.scrollWidth - 2;
+      label.classList.toggle('is-more', right);
+      label.classList.toggle('is-back', left);
+    };
+    label.addEventListener('scroll', paint, { passive: true });
+    if (typeof ResizeObserver === 'function') {
+      const watch = new ResizeObserver(paint);
+      watch.observe(label);
+    } else requestAnimationFrame(paint);
+    let start = 0;
+    let moved = false;
+    label.addEventListener('pointerdown', (event) => {
+      start = event.clientX;
+      moved = false;
+    });
+    label.addEventListener('pointermove', (event) => {
+      if (Math.abs(event.clientX - start) > 6) moved = true;
+    });
+    label.addEventListener('pointerup', paint);
+    label.addEventListener('click', (event) => {
+      if (label.querySelector('input') || !moved) return;
+      moved = false;
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+  }
+
+  function closeWishRoster() {
+    const roster = document.querySelector('.wish-roster');
+    if (!roster) return;
+    if (transient && transient.element === roster) closeTransient();
+    else roster.remove();
+  }
+
+  function openWishRoster(cell, list) {
+    if (cell.querySelector('.wish-roster')) {
+      closeWishRoster();
+      return;
+    }
+    closeWishRoster();
+    const people = (list.members || []).slice().sort((a, b) => (a.role === 'owner' ? 0 : 1) - (b.role === 'owner' ? 0 : 1));
+    if (!people.length) return;
+    const roster = el('div', 'wish-roster');
+    people.forEach((person) => roster.append(wishPersonNode(person)));
+    cell.append(roster);
+    const onScroll = () => closeWishRoster();
+    document.addEventListener('scroll', onScroll, true);
+    openTransient(roster, () => {
+      document.removeEventListener('scroll', onScroll, true);
+      if (roster.isConnected) roster.remove();
+    }, (target) => cell.contains(target));
+  }
+
   function wishNameCell(list) {
     const accepted = list.myStatus === 'accepted';
     const invited = list.myStatus === 'invited';
@@ -7798,6 +7865,7 @@
     const label = el('span', 'wish-title', list.title || (invited ? 'Liste' : ''));
     label.style.color = color;
     cell.append(swatch, label);
+    if (phoneSheet()) watchWishTitle(label);
     if (!accepted) return cell;
     label.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -8182,7 +8250,7 @@
         line.append(button);
         const note = panel.querySelector('.release-note');
         if (note) note.before(line);
-        else panel.append(line);
+        else panelScroller().append(line);
       })
       .catch(() => {});
   }
@@ -8507,6 +8575,11 @@
     };
     button.addEventListener('click', async (event) => {
       event.stopPropagation();
+      if (event.target.closest('.wish-sure')) {
+        endTransient(button);
+        calmSure();
+        return;
+      }
       if (!bar.classList.contains('is-sure')) {
         bar.classList.add('is-sure');
         window.clearTimeout(timer);
@@ -9167,6 +9240,14 @@
     const names = el('span', 'wish-by-names');
     fillWishNames(names, list);
     by.append(names);
+    by.addEventListener('click', (event) => {
+      if (!phoneSheet()) return;
+      if (event.target.closest('button, input, .wish-member-hits')) {
+        if (by.querySelector('.wish-roster')) closeWishRoster();
+        return;
+      }
+      openWishRoster(by, list);
+    });
     const side = el('span', 'genre-score');
     const sideText = el('span', 'genre-score-text', wishCountLabel(list.filmCount || 0));
     side.append(sideText);
