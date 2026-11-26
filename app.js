@@ -130,6 +130,7 @@
   let wishViewToken = 0;
   let wishReloadTimer = 0;
   let wishSearchList = null;
+  let upcomingFeedPool = null;
   let wishMarkedId = null;
   let wishFocusId = null;
   let wishUndoTimer = 0;
@@ -1305,6 +1306,9 @@
   function paint() {
     document.body.classList.toggle('has-selection', Boolean(selectedId));
     document.body.classList.toggle('is-rating', ratingView);
+    document.querySelectorAll('.wish-coming-cover').forEach((button) => {
+      button.classList.toggle('is-selected', Boolean(selectedId) && button.dataset.id === selectedId);
+    });
     wall.querySelectorAll('.poster').forEach((button) => {
       const row = viewEntry(button.dataset.id);
       const selected = button.dataset.id === selectedId;
@@ -2148,25 +2152,9 @@
     panelList = null;
     renderPanel(film, { quiet: true });
     if (pathOn) document.body.classList.add('is-path-panel');
-    const card = readFilmCard(film.id);
-    if (card && card.ready) return;
-    const token = (cardTokens.get(film.id) || 0) + 1;
-    cardTokens.set(film.id, token);
-    const kind = film.tmdbType === 'tv' ? 'tv' : 'movie';
-    const query = `https://www.themoviedb.org/${kind}/${film.tmdbId}`;
-    fetch(`/api/film?q=${encodeURIComponent(query)}&card=1`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!data || cardTokens.get(film.id) !== token) return;
-        if (data.director) film.director = data.director;
-        if (Array.isArray(data.cast) && data.cast.length) film.cast = data.cast.filter(Boolean);
-        if (data.overview && !film.overview) film.overview = data.overview;
-        if ((!film.genres || !film.genres.length) && Array.isArray(data.genres)) film.genres = data.genres.slice(0, 3);
-        writeFilmCard(film.id, film);
-        placeFilmCredits(film);
-      })
-      .catch(() => {});
+    loadFilmCard(film);
   }
+
 
   function closePath() {
     pathOn = false;
@@ -8978,8 +8966,6 @@
     }
   }
 
-  let upcomingFeedPool = null;
-
   function loadUpcomingFeed() {
     if (upcomingFeedPool) return upcomingFeedPool;
     upcomingFeedPool = fetch('/api/film?upcoming=1&feed=1')
@@ -9051,7 +9037,7 @@
     clearGenreFit();
     panel.replaceChildren();
     const box = el('div', 'wish-find');
-    const bar = el('div', 'wish-add-bar');
+    const bar = el('div', 'wish-add-bar panel-bar');
     const closeIcon = el('button', 'panel-close');
     closeIcon.type = 'button';
     closeIcon.setAttribute('aria-label', 'Close');
@@ -9650,6 +9636,104 @@
     return items;
   }
 
+  function loadFilmCard(film) {
+    const card = readFilmCard(film.id);
+    if (card && card.ready) return;
+    const token = (cardTokens.get(film.id) || 0) + 1;
+    cardTokens.set(film.id, token);
+    const kind = film.tmdbType === 'tv' ? 'tv' : 'movie';
+    const query = `https://www.themoviedb.org/${kind}/${film.tmdbId}`;
+    fetch(`/api/film?q=${encodeURIComponent(query)}&card=1`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data || cardTokens.get(film.id) !== token) return;
+        if (data.director) film.director = data.director;
+        if (Array.isArray(data.cast) && data.cast.length) film.cast = data.cast.filter(Boolean);
+        if (data.overview && !film.overview) film.overview = data.overview;
+        if ((!film.genres || !film.genres.length) && Array.isArray(data.genres)) film.genres = data.genres.slice(0, 3);
+        writeFilmCard(film.id, film);
+        placeFilmCredits(film);
+      })
+      .catch(() => {});
+  }
+
+  function comingFilm(row) {
+    const source = row.film;
+    const facets = row.facets || {};
+    const tmdbId = source.tmdbId != null ? source.tmdbId : facets.tmdbId;
+    const kind = (source.tmdbType || facets.tmdbType) === 'tv' ? 'tv' : 'movie';
+    const id = `tmdb:${kind}:${tmdbId}`;
+    const card = readFilmCard(id);
+    return {
+      id,
+      tmdbId,
+      tmdbType: kind,
+      title: source.title,
+      original: source.original || null,
+      year: source.year || '',
+      poster: source.poster || '',
+      release_date: source.release_date || null,
+      status: source.status || null,
+      genres: (card && card.genres) || [],
+      overview: (card && card.overview) || '',
+      director: (card && card.director) || source.director || '',
+      cast: (card && card.cast) || [],
+      imdb: null,
+      imdbLabel: '–',
+      kind: kind === 'tv' ? 'serie' : 'film',
+      fromCatalog: false,
+    };
+  }
+
+  function wishComingStrip() {
+    const wrap = el('section', 'wish-coming-wrap');
+    wrap.hidden = true;
+    const bar = el('div', 'genre-bar wish-coming-bar');
+    const name = el('div', 'genre-name wish-coming-name');
+    const flame = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.4 3c.6 3.1-1.6 4.8-3.1 6.8C8.1 11.4 7.4 13 7.4 14.8a4.8 4.8 0 0 0 9.6 0c0-2.5-1.2-4.4-2.5-5.9-.3 1.4-1 2.4-2 2.9.5-3.1 0-6.3-.1-8.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+    name.innerHTML = flame;
+    name.append(el('span', null, 'Upcoming:'));
+    bar.append(name);
+    const strip = el('div', 'wish-coming');
+    strip.setAttribute('aria-label', 'Upcoming in cinemas');
+    wrap.append(bar, strip);
+    loadUpcomingFeed().then((rows) => {
+      const sorted = rows.slice().sort((a, b) => {
+        const left = String(a.film.release_date || '9999');
+        const right = String(b.film.release_date || '9999');
+        return left.localeCompare(right);
+      });
+      if (!sorted.length) return;
+      strip.replaceChildren(...sorted.map((row) => {
+        const film = comingFilm(row);
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'wish-coming-cover';
+        button.dataset.id = film.id;
+        const stamp = releaseStamp(film);
+        const label = `${film.title || 'Film'}${stamp ? ` · ${stamp}` : ''}`;
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        const image = document.createElement('img');
+        image.alt = '';
+        image.loading = 'lazy';
+        image.decoding = 'async';
+        image.draggable = false;
+        image.src = film.poster;
+        button.append(image);
+        if (stamp) button.append(el('span', 'wish-when', stamp));
+        button.addEventListener('click', () => {
+          panelFilm = null;
+          openFilm(film);
+          loadFilmCard(film);
+        });
+        return button;
+      }));
+      wrap.hidden = false;
+    });
+    return wrap;
+  }
+
   async function paintWishBoard(options) {
     const board = document.getElementById('wish-board');
     if (!board) return;
@@ -9660,6 +9744,7 @@
     const ready = board.querySelector('.wish-grid[data-list="draft"]');
     if (!ready) {
       board.replaceChildren();
+      board.append(wishComingStrip());
       paintWishInvites(board);
       paintWishDraft(board);
     } else {
