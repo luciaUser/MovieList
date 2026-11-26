@@ -2548,64 +2548,33 @@
     return Math.max(0, cover.offsetTop - (track.clientHeight - cover.offsetHeight) / 2);
   }
 
-  function pathAnimateScroll(track, axis, target, done) {
-    const start = axis === 'left' ? track.scrollLeft : track.scrollTop;
-    const change = target - start;
-    if (Math.abs(change) < 1) {
-      if (axis === 'left') track.scrollLeft = target;
-      else track.scrollTop = target;
-      if (done) done();
-      return;
-    }
-    const began = performance.now();
+  function pathCoast(track, velocity, axis) {
+    let speed = velocity;
+    if (Math.abs(speed) < 0.04) return;
+    let last = performance.now();
     const frame = (now) => {
-      const progress = Math.min(1, (now - began) / 180);
-      const eased = 1 - (1 - progress) * (1 - progress) * (1 - progress);
-      const value = start + change * eased;
-      if (axis === 'left') track.scrollLeft = value;
-      else track.scrollTop = value;
-      if (progress < 1) {
-        track._pathFrame = requestAnimationFrame(frame);
+      const dt = Math.min(34, now - last);
+      last = now;
+      speed *= Math.exp(-dt / 260);
+      if (Math.abs(speed) < 0.02) {
+        track._pathFrame = 0;
         return;
       }
-      track._pathFrame = 0;
-      if (done) done();
+      const max = axis === 'left'
+        ? track.scrollWidth - track.clientWidth
+        : track.scrollHeight - track.clientHeight;
+      const next = (axis === 'left' ? track.scrollLeft : track.scrollTop) + speed * dt;
+      if (next <= 0 || next >= max - 0.5) {
+        if (axis === 'left') track.scrollLeft = Math.max(0, Math.min(max, next));
+        else track.scrollTop = Math.max(0, Math.min(max, next));
+        track._pathFrame = 0;
+        return;
+      }
+      if (axis === 'left') track.scrollLeft = next;
+      else track.scrollTop = next;
+      track._pathFrame = requestAnimationFrame(frame);
     };
     track._pathFrame = requestAnimationFrame(frame);
-  }
-
-  function pathQueueStep(track, dir) {
-    const covers = pathCovers(track);
-    if (covers.length < 2 || !dir) return;
-    const at = track._pathAt || 0;
-    const pending = track._pathPending || 0;
-    const dest = at + pending + dir;
-    if (dest < 0 || dest > covers.length - 1) return;
-    track._pathPending = pending + dir;
-    pathDrain(track);
-  }
-
-  function pathDrain(track) {
-    if (track._pathBusy) return;
-    const pending = track._pathPending || 0;
-    if (!pending) return;
-    const dir = pending > 0 ? 1 : -1;
-    track._pathPending = pending - dir;
-    const covers = pathCovers(track);
-    const next = Math.max(0, Math.min(covers.length - 1, (track._pathAt || 0) + dir));
-    if (!covers.length || next === (track._pathAt || 0)) {
-      track._pathPending = 0;
-      return;
-    }
-    track._pathAt = next;
-    track._pathBusy = true;
-    const phone = phoneSheet();
-    const target = pathCenter(track, covers[next], phone);
-    pathAnimateScroll(track, phone ? 'left' : 'top', target, () => {
-      track._pathBusy = false;
-      pathPlaceLinks();
-      pathDrain(track);
-    });
   }
 
   function pathBindTrack(track) {
@@ -2614,38 +2583,75 @@
     let drag = null;
     track.addEventListener('pointerdown', (event) => {
       if (event.button != null && event.button !== 0) return;
+      if (track._pathFrame) {
+        cancelAnimationFrame(track._pathFrame);
+        track._pathFrame = 0;
+      }
       track.dataset.dragged = '';
+      const scroller = track.closest('.path-scroll');
       drag = {
         id: event.pointerId,
+        type: event.pointerType,
         x: event.clientX,
         y: event.clientY,
+        left: track.scrollLeft,
+        top: track.scrollTop,
+        scrollTop: scroller ? scroller.scrollTop : 0,
         moved: false,
+        along: false,
+        last: event.pointerType === 'touch' ? 0 : (phoneSheet() ? event.clientX : event.clientY),
+        lastT: performance.now(),
+        velocity: 0,
       };
+      if (event.pointerType !== 'touch') {
+        try { track.setPointerCapture(event.pointerId); } catch { /* already released */ }
+      }
     });
     track.addEventListener('pointermove', (event) => {
-      if (!drag || event.pointerId !== drag.id) return;
+      if (!drag || event.pointerId !== drag.id || drag.type === 'touch') return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) < 8) return;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
       drag.moved = true;
       const phone = phoneSheet();
-      const along = phone ? Math.abs(dx) : Math.abs(dy);
-      const across = phone ? Math.abs(dy) : Math.abs(dx);
-      if (along > across) event.preventDefault();
+      const now = performance.now();
+      const dt = Math.max(8, now - drag.lastT);
+      if (phone) {
+        if (!drag.axis) drag.axis = Math.abs(dy) > Math.abs(dx) ? 'y' : 'x';
+        if (drag.axis === 'y') {
+          const scroller = track.closest('.path-scroll');
+          if (scroller) scroller.scrollTop = drag.scrollTop - dy;
+          return;
+        }
+        const next = drag.left - dx;
+        drag.velocity = (drag.last - event.clientX) / dt;
+        drag.last = event.clientX;
+        drag.along = true;
+        track.scrollLeft = next;
+      } else {
+        const next = drag.top - dy;
+        drag.velocity = (drag.last - event.clientY) / dt;
+        drag.last = event.clientY;
+        drag.along = true;
+        track.scrollTop = next;
+      }
+      drag.lastT = now;
+      event.preventDefault();
     }, { passive: false });
     const end = (event) => {
       if (!drag || event.pointerId !== drag.id) return;
-      const dx = event.clientX - drag.x;
-      const dy = event.clientY - drag.y;
-      const moved = drag.moved;
+      const phone = phoneSheet();
+      const moved = drag.moved
+        || Math.abs(track.scrollLeft - drag.left) > 3
+        || Math.abs(track.scrollTop - drag.top) > 3;
+      const velocity = drag.velocity;
+      const along = drag.along;
+      const type = drag.type;
       drag = null;
       if (!moved) return;
       track.dataset.dragged = '1';
-      const phone = phoneSheet();
-      const delta = phone ? dx : dy;
-      const across = phone ? dy : dx;
-      if (Math.abs(delta) < 24 || Math.abs(delta) < Math.abs(across)) return;
-      pathQueueStep(track, delta < 0 ? 1 : -1);
+      if (type === 'touch' || !along) return;
+      pathCoast(track, velocity, phone ? 'left' : 'top');
     };
     track.addEventListener('click', (event) => {
       if (track.dataset.dragged !== '1') return;
@@ -2655,27 +2661,6 @@
     }, true);
     track.addEventListener('pointerup', end);
     track.addEventListener('pointercancel', end);
-    track.addEventListener('wheel', (event) => {
-      if (phoneSheet()) return;
-      const horizontal = Math.abs(event.deltaX) > Math.abs(event.deltaY);
-      if (horizontal) {
-        const scroller = track.closest('.path-scroll');
-        if (scroller) scroller.scrollLeft += event.deltaX;
-        event.preventDefault();
-        return;
-      }
-      event.preventDefault();
-      if (event.deltaMode !== 0) {
-        pathQueueStep(track, event.deltaY > 0 ? 1 : event.deltaY < 0 ? -1 : 0);
-        return;
-      }
-      track._pathWheel = (track._pathWheel || 0) + event.deltaY;
-      while (Math.abs(track._pathWheel) >= 60) {
-        const dir = track._pathWheel > 0 ? 1 : -1;
-        track._pathWheel -= dir * 60;
-        pathQueueStep(track, dir);
-      }
-    }, { passive: false });
   }
 
   function pathLayout() {
@@ -2691,29 +2676,39 @@
         cancelAnimationFrame(track._pathFrame);
         track._pathFrame = 0;
       }
-      track._pathBusy = false;
-      track._pathPending = 0;
+      if (phone ? track.clientWidth < 2 : track.clientHeight < 2) return;
       if (phone) {
+        const prev = parseFloat(track.style.paddingLeft) || 0;
         const space = Math.max(0, (track.clientWidth - cover.offsetWidth) / 2);
         track.style.paddingLeft = `${space}px`;
         track.style.paddingRight = `${space}px`;
         track.style.paddingTop = '';
         track.style.paddingBottom = '';
-      } else {
-        const space = Math.max(0, (track.clientHeight - cover.offsetHeight) / 2);
-        track.style.paddingTop = `${space}px`;
-        track.style.paddingBottom = `${space}px`;
-        track.style.paddingLeft = '';
-        track.style.paddingRight = '';
+        if (track.dataset.placed === '1') {
+          track.scrollLeft += space - prev;
+          return;
+        }
+        const pick = track.querySelector('.path-cover.is-pick');
+        const index = pick ? covers.indexOf(pick) : Math.floor((covers.length - 1) / 2);
+        track.scrollLeft = pathCenter(track, covers[index] || cover, true);
+        track.dataset.placed = '1';
+        return;
+      }
+      const prev = parseFloat(track.style.paddingTop) || 0;
+      const space = Math.max(0, (track.clientHeight - cover.offsetHeight) / 2);
+      track.style.paddingTop = `${space}px`;
+      track.style.paddingBottom = `${space}px`;
+      track.style.paddingLeft = '';
+      track.style.paddingRight = '';
+      if (track.dataset.placed === '1') {
+        track.scrollTop += space - prev;
+        return;
       }
       const pick = track.querySelector('.path-cover.is-pick');
       const index = pick ? covers.indexOf(pick) : Math.floor((covers.length - 1) / 2);
-      const target = covers[index] || cover;
-      track._pathAt = Math.max(0, index);
-      if (phone) track.scrollLeft = pathCenter(track, target, true);
-      else track.scrollTop = pathCenter(track, target, false);
+      track.scrollTop = pathCenter(track, covers[index] || cover, false);
+      track.dataset.placed = '1';
     });
-    pathPlaceLinks();
   }
 
   function pathMarkLatest() {
@@ -2723,78 +2718,23 @@
     steps.forEach((node, index) => node.classList.toggle('is-latest', index === steps.length - 1));
   }
 
-  function pathAnchor(node) {
-    if (!node) return null;
-    const pick = node.querySelector('.path-cover.is-pick');
-    if (pick) return pick;
-    const covers = [...node.querySelectorAll('.path-cover')];
-    if (!covers.length) return null;
-    return covers[Math.floor((covers.length - 1) / 2)];
-  }
-
-  function pathPlaceLinks() {
-    const row = document.querySelector('#path-view .path-row');
-    if (!row) return;
-    const phone = phoneSheet();
-    const steps = [...row.querySelectorAll('.path-step')].filter((node) => !node.classList.contains('is-leaving'));
-    const origin = row.querySelector('.path-origin');
-    steps.forEach((step, index) => {
-      const link = step.querySelector('.path-link');
-      if (!link) return;
-      const current = pathAnchor(step);
-      const prev = pathAnchor(index === 0 ? origin : steps[index - 1]);
-      link.classList.toggle('is-dash', index === steps.length - 1);
-      link.classList.toggle('is-upright', phone);
-      if (!current || !prev) {
-        link.classList.remove('is-on');
-        return;
-      }
-      const stepBox = step.getBoundingClientRect();
-      const here = current.getBoundingClientRect();
-      const there = prev.getBoundingClientRect();
-      const gap = 6;
-      if (phone) {
-        const upper = here.bottom <= there.top ? here : there;
-        const lower = upper === here ? there : here;
-        const top = upper.bottom - stepBox.top + gap;
-        const height = lower.top - upper.bottom - gap * 2;
-        const left = here.left + here.width / 2 - stepBox.left;
-        if (height < 1) {
-          link.classList.remove('is-on');
-          return;
-        }
-        link.style.top = `${top}px`;
-        link.style.left = `${left}px`;
-        link.style.width = '1px';
-        link.style.height = `${height}px`;
-        link.classList.add('is-on');
-        return;
-      }
-      const y = here.top + here.height / 2 - stepBox.top;
-      const left = there.right - stepBox.left + gap;
-      const width = here.left - there.right - gap * 2;
-      if (width < 1) {
-        link.classList.remove('is-on');
-        return;
-      }
-      link.style.top = `${y}px`;
-      link.style.left = `${left}px`;
-      link.style.width = `${width}px`;
-      link.style.height = '1px';
-      link.classList.add('is-on');
-    });
-  }
-
   function pathRevealLatest() {
     const scroller = document.querySelector('#path-view .path-scroll');
     if (!scroller) return;
     const last = [...scroller.querySelectorAll('.path-step')].filter((node) => !node.classList.contains('is-leaving')).pop();
     if (!last) return;
     if (phoneSheet()) {
+      const below = last.previousElementSibling;
       const top = last.offsetTop;
-      const bottom = top + last.offsetHeight;
-      if (top >= scroller.scrollTop - 4 && bottom <= scroller.scrollTop + scroller.clientHeight + 4) return;
-      scroller.scrollTo({ top: Math.max(0, top - 8), behavior: 'smooth' });
+      const bottom = below ? below.offsetTop + below.offsetHeight : top + last.offsetHeight;
+      const viewTop = scroller.scrollTop;
+      const viewBottom = viewTop + scroller.clientHeight;
+      if (top >= viewTop - 4 && bottom <= viewBottom + 4) return;
+      const span = bottom - top;
+      const target = span > scroller.clientHeight || top < viewTop
+        ? Math.max(0, top - 8)
+        : Math.max(0, bottom - scroller.clientHeight + 8);
+      scroller.scrollTo({ top: target, behavior: 'smooth' });
       return;
     }
     const right = last.offsetLeft + last.offsetWidth;
@@ -2868,6 +2808,7 @@
       });
     });
     pathArm(node);
+    track.dataset.placed = '';
     requestAnimationFrame(() => pathLayout());
   }
 
@@ -3175,7 +3116,7 @@
       loading: false,
     };
     const group = el('section', 'group recs');
-    panelScroller().append(group);
+    (panel.querySelector('.panel-scroll') || panel).append(group);
     group.replaceChildren(recHead(0));
     const pending = el('div', 'rec-list');
     pending.append(recSkeleton(), recSkeleton(), recSkeleton());
@@ -3752,7 +3693,7 @@
     const section = el('section', 'group');
     section.append(sectionHead(t('Traits')));
     section.append(editing ? traitEditor(film) : traitView(full));
-    panelScroller().append(section);
+    (panel.querySelector('.panel-scroll') || panel).append(section);
   }
 
   function savedMode() {
@@ -4592,6 +4533,15 @@
     else openSearch();
   });
 
+  const searchX = document.getElementById('search-x');
+  if (searchX) {
+    searchX.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSearch();
+    });
+  }
+
   document.addEventListener('pointerdown', (event) => {
     if (transient && !transientHolds(event.target)) closeTransient();
   }, true);
@@ -4791,7 +4741,7 @@
     wallSort = savedWallSort();
     paintSortMenu();
     paintAvatarTab();
-    const ready = setMode(savedMode());
+    const ready = setMode('rating');
     loadPosters();
     loadStoredFacets();
     ensureVocab().catch(() => {
