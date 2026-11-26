@@ -104,6 +104,8 @@
   let pathState = null;
   let pathSeen = new Set();
   let pathObserver = null;
+  let pathHeld = false;
+  let pathScrollY = 0;
   const pathPages = new Map();
   let compareId = null;
   let lensId = null;
@@ -2177,6 +2179,11 @@
     document.body.classList.remove('is-path', 'is-path-panel');
     const node = document.getElementById('path-view');
     if (node) node.remove();
+    if (pathHeld) {
+      const y = pathScrollY;
+      pathHeld = false;
+      requestAnimationFrame(() => window.scrollTo(0, y));
+    }
   }
 
   function exitPath() {
@@ -2373,6 +2380,10 @@
       queued: null,
     };
     document.body.classList.add('is-path');
+    if (phoneSheet() && !pathHeld) {
+      pathHeld = true;
+      pathScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+    }
     pathState.steps.push({
       key: 's' + (pathSeq += 1),
       source: { ...origin },
@@ -2558,6 +2569,7 @@
       speed *= Math.exp(-dt / 260);
       if (Math.abs(speed) < 0.02) {
         track._pathFrame = 0;
+        pathSettle(track);
         return;
       }
       const max = axis === 'left'
@@ -2568,6 +2580,7 @@
         if (axis === 'left') track.scrollLeft = Math.max(0, Math.min(max, next));
         else track.scrollTop = Math.max(0, Math.min(max, next));
         track._pathFrame = 0;
+        pathSettle(track);
         return;
       }
       if (axis === 'left') track.scrollLeft = next;
@@ -2575,6 +2588,19 @@
       track._pathFrame = requestAnimationFrame(frame);
     };
     track._pathFrame = requestAnimationFrame(frame);
+  }
+
+  function pathSettle(track) {
+    if (!track) return;
+    const phone = phoneSheet();
+    const prop = phone ? 'scrollLeft' : 'scrollTop';
+    const value = track[prop];
+    track.style.scrollSnapType = 'none';
+    track[prop] = value;
+    requestAnimationFrame(() => {
+      track.style.scrollSnapType = '';
+      track[prop] = value;
+    });
   }
 
   function pathBindTrack(track) {
@@ -2588,7 +2614,6 @@
         track._pathFrame = 0;
       }
       track.dataset.dragged = '';
-      const scroller = track.closest('.path-scroll');
       drag = {
         id: event.pointerId,
         type: event.pointerType,
@@ -2596,52 +2621,36 @@
         y: event.clientY,
         left: track.scrollLeft,
         top: track.scrollTop,
-        scrollTop: scroller ? scroller.scrollTop : 0,
         moved: false,
         along: false,
-        last: event.pointerType === 'touch' ? 0 : (phoneSheet() ? event.clientX : event.clientY),
+        last: event.clientY,
         lastT: performance.now(),
         velocity: 0,
       };
-      if (event.pointerType !== 'touch') {
-        try { track.setPointerCapture(event.pointerId); } catch { /* already released */ }
-      }
     });
     track.addEventListener('pointermove', (event) => {
-      if (!drag || event.pointerId !== drag.id || drag.type === 'touch') return;
+      if (!drag || event.pointerId !== drag.id || drag.type === 'touch' || phoneSheet()) return;
       const dx = event.clientX - drag.x;
       const dy = event.clientY - drag.y;
-      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
-      drag.moved = true;
-      const phone = phoneSheet();
+      if (!drag.moved && Math.hypot(dx, dy) <= 6) return;
+      if (!drag.moved) {
+        drag.moved = true;
+        try { track.setPointerCapture(event.pointerId); } catch { /* already gone */ }
+      }
       const now = performance.now();
       const dt = Math.max(8, now - drag.lastT);
-      if (phone) {
-        if (!drag.axis) drag.axis = Math.abs(dy) > Math.abs(dx) ? 'y' : 'x';
-        if (drag.axis === 'y') {
-          const scroller = track.closest('.path-scroll');
-          if (scroller) scroller.scrollTop = drag.scrollTop - dy;
-          return;
-        }
-        const next = drag.left - dx;
-        drag.velocity = (drag.last - event.clientX) / dt;
-        drag.last = event.clientX;
-        drag.along = true;
-        track.scrollLeft = next;
-      } else {
-        const next = drag.top - dy;
-        drag.velocity = (drag.last - event.clientY) / dt;
-        drag.last = event.clientY;
-        drag.along = true;
-        track.scrollTop = next;
-      }
+      drag.velocity = (drag.last - event.clientY) / dt;
+      drag.last = event.clientY;
       drag.lastT = now;
+      drag.along = true;
+      track.scrollTop = drag.top - dy;
       event.preventDefault();
     }, { passive: false });
     const end = (event) => {
       if (!drag || event.pointerId !== drag.id) return;
-      const phone = phoneSheet();
-      const moved = drag.moved
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      const moved = drag.moved || Math.hypot(dx, dy) > 6
         || Math.abs(track.scrollLeft - drag.left) > 3
         || Math.abs(track.scrollTop - drag.top) > 3;
       const velocity = drag.velocity;
@@ -2650,8 +2659,9 @@
       drag = null;
       if (!moved) return;
       track.dataset.dragged = '1';
-      if (type === 'touch' || !along) return;
-      pathCoast(track, velocity, phone ? 'left' : 'top');
+      if (type === 'touch' || phoneSheet() || !along) return;
+      if (Math.abs(velocity) >= 0.04) pathCoast(track, velocity, 'top');
+      else pathSettle(track);
     };
     track.addEventListener('click', (event) => {
       if (track.dataset.dragged !== '1') return;
@@ -2789,19 +2799,10 @@
         if (track.dataset.dragged === '1') return;
         const index = pathState.steps.indexOf(step);
         if (index < 0) return;
-        const picked = step.chosenId === film.id;
-        if (phoneSheet()) {
-          if (!picked) {
-            pathChoose(index, film);
-            return;
-          }
-          pathLock = true;
-          showRecommendation(item);
-          pathLock = false;
+        if (step.chosenId !== film.id) {
+          pathChoose(index, film);
           return;
         }
-        const changed = pathChoose(index, film);
-        if (!changed && !picked) return;
         pathLock = true;
         showRecommendation(item);
         pathLock = false;
@@ -4532,15 +4533,6 @@
     if (searchForm.classList.contains('is-open')) closeSearch();
     else openSearch();
   });
-
-  const searchX = document.getElementById('search-x');
-  if (searchX) {
-    searchX.addEventListener('click', (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      closeSearch();
-    });
-  }
 
   document.addEventListener('pointerdown', (event) => {
     if (transient && !transientHolds(event.target)) closeTransient();
