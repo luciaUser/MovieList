@@ -5377,19 +5377,22 @@
     return sky;
   }
 
+  // Kugel oben, Formular direkt darunter (nicht mehr am unteren Rand)
   function skyHome() {
     const W = window.innerWidth;
     const H = window.innerHeight;
     const card = document.getElementById('gate-card');
     const filled = card && card.childElementCount > 0;
-    const formTop = !skySplash && filled ? card.getBoundingClientRect().top : H;
     if (skySplash || !filled) {
       const r = Math.min(110, Math.max(60, Math.min(W, H) * 0.26));
       return { x: W / 2, y: H * 0.42, r };
     }
-    const room = Math.max(140, formTop);
-    const r = Math.min(110, Math.max(44, Math.min(room * 0.3, W * 0.26)));
-    return { x: W / 2, y: Math.max(r + 40, room * 0.5), r };
+    const phone = W <= 720;
+    const r = phone ? Math.min(80, Math.max(48, W * 0.2)) : Math.min(100, Math.max(56, H * 0.11));
+    const y = r + (phone ? 70 : Math.max(70, H * 0.08));
+    const gate = gateNode();
+    if (gate) gate.style.setProperty('--gate-top', `${Math.round(y + r + (phone ? 48 : 56))}px`);
+    return { x: W / 2, y, r };
   }
 
   function placeSky() {

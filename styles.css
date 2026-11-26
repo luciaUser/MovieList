@@ -5658,8 +5658,8 @@ body.has-selection .wish-coming-cover.is-selected img { opacity: 1; }
 
 /* Login-Animation: Raum mit Kugel hinter dem Formular, Formular unten (Layout der Website) */
 #gate {
-  align-items: flex-end;
-  padding: 24px 24px calc(28px + env(safe-area-inset-bottom));
+  align-items: flex-start;
+  padding: var(--gate-top, 40vh) 24px calc(28px + env(safe-area-inset-bottom));
   overflow: hidden;
 }
 
@@ -5676,7 +5676,7 @@ body.has-selection .wish-coming-cover.is-selected img { opacity: 1; }
 #gate .gate-card {
   position: relative;
   z-index: 1;
-  max-height: calc(100% - 24px);
+  max-height: 100%;
   overflow-y: auto;
   transition: opacity 0.45s ease;
 }
