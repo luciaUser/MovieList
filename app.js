@@ -6295,22 +6295,38 @@
       suggest.hidden = false;
       if (!person) {
         box._suggest = null;
-        suggest.append(el('p', 'friend-suggest-empty', 'niemand gefunden'));
+        suggest.append(el('p', 'friend-suggest-empty', 'No one found'));
         return;
       }
       const state = suggestState(person);
       const button = document.createElement('button');
       button.type = 'button';
-      button.append(avatarNode(person.avatar, 28), el('span', null, person.display_name || person.username || 'Profil'));
+      const name = el('span', 'friend-suggest-name', person.display_name || person.username || 'Profil');
+      button.append(avatarNode(person.avatar, 28), name);
       if (state === 'friend' || state === 'asked') {
         box._suggest = null;
         button.disabled = true;
-        button.append(el('span', 'friend-suggest-note', state === 'friend' ? 'schon befreundet' : 'angefragt'));
+        button.setAttribute('aria-label', state === 'friend' ? 'Already friends' : 'Request sent');
+        const mark = el('span', state === 'asked' ? 'friend-suggest-mark is-dim' : 'friend-suggest-mark');
+        mark.innerHTML = friendCheck;
+        button.append(mark);
       } else {
         box._suggest = person;
         button.addEventListener('click', () => { submit(); });
       }
       suggest.append(button);
+      requestAnimationFrame(() => fitSuggestName(name));
+    };
+    const fitSuggestName = (name) => {
+      if (!name) return;
+      let size = 16;
+      name.style.fontSize = '16px';
+      name.style.textOverflow = 'clip';
+      while (size > 11 && name.scrollWidth > name.clientWidth) {
+        size -= 1;
+        name.style.fontSize = `${size}px`;
+      }
+      if (name.scrollWidth > name.clientWidth) name.style.textOverflow = 'ellipsis';
     };
     const lookUp = () => {
       window.clearTimeout(box._suggestTimer);
