@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { search, searchHits, directorName, findByImdb, details, recommendBundle, filmCard } from './tmdb.mjs';
+import { search, searchHits, upcomingFeedHits, directorName, findByImdb, details, recommendBundle, filmCard } from './tmdb.mjs';
 import { enrichFilm } from './enrich.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -376,8 +376,37 @@ export async function cardResponse(raw, language) {
   }
 }
 
+let feedCache = null;
+
+export async function upcomingFeed() {
+  if (!configured()) return [];
+  const now = Date.now();
+  if (feedCache && now - feedCache.at < 6 * 60 * 60 * 1000 && feedCache.films.length) return feedCache.films;
+  let hits = [];
+  try {
+    hits = await upcomingFeedHits(30);
+  } catch {
+    hits = [];
+  }
+  const today = todayIso();
+  const films = hits
+    .filter((hit) => hit && dateOnly(hit.releaseDate) > today)
+    .map((hit) => lightFilm(hit, '', { release_date: dateOnly(hit.releaseDate), status: null }))
+    .filter((row) => row.film && row.film.title);
+  if (films.length) feedCache = { at: now, films };
+  return films;
+}
+
 export async function filmResponse(raw, options) {
   try {
+    if (options && options.feed) {
+      const films = await upcomingFeed();
+      return {
+        status: 200,
+        body: JSON.stringify({ films }),
+        cache: films.length ? 's-maxage=21600, stale-while-revalidate=3600' : 'no-store',
+      };
+    }
     if (options && options.card) return cardResponse(raw, options.lang === 'de' ? 'de' : 'en');
     if (options && options.overview) {
       const overview = await filmOverview(raw);

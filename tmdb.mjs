@@ -91,6 +91,24 @@ export async function searchHits(query, year, limit = 8) {
   return ranked.slice(0, limit).map((item) => shape(item, Boolean(yearText) && yearOf(item) === yearText));
 }
 
+export async function upcomingFeedHits(limit = 30) {
+  const today = new Date();
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString().slice(0, 10);
+  const until = new Date(today.getFullYear() + 2, today.getMonth(), today.getDate()).toISOString().slice(0, 10);
+  const base = `/discover/movie?language=de-DE&include_adult=false&sort_by=popularity.desc&primary_release_date.gte=${from}&primary_release_date.lte=${until}`;
+  const pages = await Promise.all([1, 2].map((page) => get(`${base}&page=${page}`).catch(() => null)));
+  const seen = new Set();
+  const hits = [];
+  pages.forEach((data) => {
+    (Array.isArray(data?.results) ? data.results : []).forEach((item) => {
+      if (!item || !item.id || seen.has(item.id) || !item.poster_path || !(item.title || item.name)) return;
+      seen.add(item.id);
+      hits.push(shape({ ...item, media_type: 'movie' }, false));
+    });
+  });
+  return hits.slice(0, limit);
+}
+
 export async function directorName(type, id) {
   const kind = type === 'tv' ? 'tv' : 'movie';
   if (!id) return '';

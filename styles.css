@@ -5247,3 +5247,213 @@ body.is-path #profile { visibility: hidden; }
     to { opacity: 1; transform: none; }
   }
 }
+
+/* Wunschliste: Hinzufügen-Fenster (Upcoming / Released titles mit 3 Covern) */
+.wish-add-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 28px;
+  margin: 0 0 18px;
+}
+
+.wish-add {
+  display: grid;
+  grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.wish-add + .wish-add { margin-top: 48px; }
+
+.wish-add-left { min-width: 0; }
+
+.wish-add-title {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.wish-add-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  transition: border-color 0.15s ease;
+}
+
+.wish-add-line:hover { border-bottom-color: rgba(255, 255, 255, 0.6); }
+
+.wish-add-line:focus-within { border-bottom-color: #fff; }
+
+.wish-add-line input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 6px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+}
+
+.wish-add-go {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  flex: none;
+  cursor: pointer;
+}
+
+.wish-add-go:disabled { opacity: 0.35; cursor: default; }
+
+.wish-add-go svg { width: 22px; height: 22px; display: block; }
+
+.wish-add-note {
+  margin: 8px 0 0;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.3;
+  min-height: 1.3em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wish-add-extra:empty { display: none; }
+
+.wish-add-extra { margin-top: 10px; }
+
+.wish-add-covers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+.wish-add-cover {
+  position: relative;
+  display: block;
+  aspect-ratio: 2 / 3;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #111;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.18s ease;
+}
+
+.wish-add-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wish-add-blank {
+  position: absolute;
+  inset: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.wish-add-cover .wish-when {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 2;
+  padding: 1px 3px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.wish-add-plus {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.wish-add-plus svg { width: 22px; height: 22px; }
+
+@media (hover: hover) {
+  .wish-add-cover:hover .wish-add-plus,
+  .wish-add-cover:focus-visible .wish-add-plus { opacity: 1; }
+}
+
+@media (hover: none) {
+  .wish-add-plus { opacity: 0.7; background: rgba(0, 0, 0, 0.25); }
+}
+
+.wish-add-cover.is-current::after {
+  content: '';
+  position: absolute;
+  left: 25%;
+  right: 25%;
+  bottom: -6px;
+  height: 1px;
+  background: #fff;
+}
+
+.wish-add-cover.is-leaving { opacity: 0; pointer-events: none; }
+
+.wish-add-cover.is-entering { animation: wish-add-in 0.22s ease; }
+
+@keyframes wish-add-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 720px) {
+  #panel:has(> .wish-find) {
+    top: auto;
+    height: 58dvh;
+    max-height: calc(100dvh - 96px);
+    padding: 0 20px calc(24px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+
+  #panel:has(> .wish-find) .wish-add-bar {
+    justify-content: center;
+    min-height: 26px;
+    margin: 0 0 14px;
+  }
+
+  #panel:has(> .wish-find) .wish-add-bar .panel-close { display: none; }
+
+  body.is-wish-search #wish-board { padding-bottom: calc(58dvh + 24px); }
+}

@@ -1083,7 +1083,7 @@
   }
 
   function lockPanelScroll() {
-    if (!phoneSheet() || panelScrollLock) return;
+    if (!phoneSheet() || panelScrollLock || document.body.classList.contains('is-wish-search')) return;
     panelScrollLock = { top: window.scrollY, left: window.scrollX };
     document.documentElement.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
@@ -1115,6 +1115,8 @@
     panel.classList.remove('is-sheet');
     panel.style.transition = '';
     panel.style.transform = '';
+    panel.style.bottom = '';
+    panel.style.maxHeight = '';
     panelDragging = false;
     panelClosing = false;
     sheetPlace = 'half';
@@ -8976,79 +8978,216 @@
     }
   }
 
+  let upcomingFeedPool = null;
+
+  function loadUpcomingFeed() {
+    if (upcomingFeedPool) return upcomingFeedPool;
+    upcomingFeedPool = fetch('/api/film?upcoming=1&feed=1')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        const films = data && Array.isArray(data.films) ? data.films : [];
+        const rows = films.filter((item) => item && item.film && item.film.title).map((item) => ({
+          film: { ...item.film, fromCatalog: false },
+          facets: item.facets || null,
+          source: 'tmdb',
+          fromUpcoming: true,
+        }));
+        if (!rows.length) upcomingFeedPool = null;
+        return rows;
+      })
+      .catch(() => {
+        upcomingFeedPool = null;
+        return [];
+      });
+    return upcomingFeedPool;
+  }
+
+  function keepWishPlusVisible() {
+    if (!phoneSheet()) return;
+    const live = currentWishSearchList();
+    if (!live) return;
+    const plus = document.querySelector(`#wish-board .wish-grid[data-list="${CSS.escape(live.id)}"] .wish-plus`);
+    if (!plus) return;
+    const rect = plus.getBoundingClientRect();
+    const top = 96;
+    const bottom = window.innerHeight - (panel.offsetHeight || window.innerHeight * 0.58) - 12;
+    let delta = 0;
+    if (rect.bottom > bottom) delta = rect.bottom - bottom;
+    else if (rect.top < top) delta = rect.top - top;
+    if (Math.abs(delta) > 1) window.scrollBy({ top: delta, behavior: 'smooth' });
+  }
+
+  function fitWishSheet() {
+    const active = phoneSheet() && document.body.classList.contains('is-wish-search') && !panel.hidden;
+    const view = window.visualViewport;
+    if (!active || !view) {
+      panel.style.bottom = '';
+      panel.style.maxHeight = '';
+      return;
+    }
+    const keyboard = Math.max(0, Math.round(window.innerHeight - view.height - view.offsetTop));
+    panel.style.bottom = keyboard > 40 ? `${keyboard}px` : '';
+    panel.style.maxHeight = keyboard > 40 ? `${Math.max(180, Math.round(view.height - 72))}px` : '';
+  }
+
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', fitWishSheet);
+    window.visualViewport.addEventListener('scroll', fitWishSheet);
+  }
+
+  document.addEventListener('click', (event) => {
+    if (!phoneSheet() || panel.hidden || !document.body.classList.contains('is-wish-search')) return;
+    const target = event.target;
+    if (!(target instanceof Element) || panel.contains(target)) return;
+    if (target.closest('header, .wish-plus')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    clearSelection();
+  }, true);
+
   function renderWishSearch() {
     const list = currentWishSearchList();
     if (!list) return;
     clearGenreFit();
     panel.replaceChildren();
     const box = el('div', 'wish-find');
-    const head = el('div', 'wish-find-head');
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.setAttribute('aria-label', 'Film suchen');
-    input.autocomplete = 'off';
-    input.spellcheck = false;
+    const bar = el('div', 'wish-add-bar');
     const closeIcon = el('button', 'panel-close');
     closeIcon.type = 'button';
-    closeIcon.setAttribute('aria-label', 'Schließen');
-    closeIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+    closeIcon.setAttribute('aria-label', 'Close');
+    closeIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
     closeIcon.addEventListener('click', clearSelection);
-    head.append(input, closeIcon);
-    const note = el('p', 'wish-find-note', 'Titel eingeben');
-    const hits = el('div', 'wish-hits');
-    box.append(head, note, hits);
-    const upcomingTitle = el('h2', 'wish-kicker', 'Upcoming');
-    const upcomingInput = document.createElement('input');
-    upcomingInput.className = 'wish-upcoming';
-    upcomingInput.type = 'text';
-    upcomingInput.setAttribute('aria-label', 'Upcoming');
-    upcomingInput.autocomplete = 'off';
-    upcomingInput.spellcheck = false;
-    const upcomingHits = el('div', 'wish-hits');
-    box.append(upcomingInput, upcomingTitle, upcomingHits);
+    bar.append(el('span', 'panel-grab'), closeIcon);
+    box.append(bar);
+
+    const plusMark = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>';
+    const taken = new Set();
+
+    const makeSection = (label) => {
+      const section = el('section', 'wish-add');
+      const left = el('div', 'wish-add-left');
+      const line = el('div', 'wish-add-line');
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.setAttribute('aria-label', label);
+      input.autocomplete = 'off';
+      input.spellcheck = false;
+      input.enterKeyHint = 'done';
+      const go = document.createElement('button');
+      go.type = 'button';
+      go.className = 'wish-add-go';
+      go.setAttribute('aria-label', 'Add');
+      go.innerHTML = plusMark;
+      line.append(input, go);
+      const note = el('p', 'wish-add-note');
+      const extra = el('div', 'wish-add-extra');
+      left.append(el('h2', 'wish-add-title', label), line, note, extra);
+      const covers = el('div', 'wish-add-covers');
+      section.append(left, covers);
+      box.append(section);
+      return {
+        input, go, note, extra, covers,
+        pool: [], cursor: 0, query: '', token: 0, message: '', nodes: new Map(),
+      };
+    };
+
+    const upcoming = makeSection('Upcoming');
+    const released = makeSection('Released titles');
     panel.append(box);
+    unlockPanelScroll();
     revealPanel();
-    let token = 0;
-    let cursor = 0;
-    let rows = [];
-    const paintHits = () => {
-      hits.replaceChildren();
-      rows.forEach((row, index) => {
-        const film = row.film;
-        const have = wishOnList(currentWishSearchList(), film.id);
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'wish-hit';
-        if (index === cursor) button.classList.add('is-current');
-        if (have) button.classList.add('is-have');
-        button.disabled = have;
+    window.requestAnimationFrame(() => {
+      fitWishSheet();
+      keepWishPlusVisible();
+      window.setTimeout(keepWishPlusVisible, 280);
+    });
+
+    const keyOf = (row) => {
+      if (!row._key) {
+        const canonical = withCanonicalId({ ...row.film }, row.facets || {});
+        row._key = (canonical && canonical.id) || row.film.id;
+      }
+      return row._key;
+    };
+
+    const visible = (state) => {
+      const live = currentWishSearchList();
+      return state.pool.filter((row) => {
+        if (!row || !row.film) return false;
+        const key = keyOf(row);
+        return !taken.has(row.film.id) && !taken.has(key)
+          && !wishOnList(live, row.film.id) && !wishOnList(live, key);
+      }).slice(0, 3);
+    };
+
+    const coverLabel = (row) => {
+      const film = row.film;
+      const when = row.fromUpcoming ? releaseStamp(film) : '';
+      const year = film.year ? ` (${film.year})` : '';
+      return `${film.title || 'Film'}${when ? ` · ${when}` : year}`;
+    };
+
+    const coverNode = (state, row) => {
+      const known = state.nodes.get(row.film.id);
+      if (known) return known;
+      const film = row.film;
+      const node = document.createElement('button');
+      node.type = 'button';
+      node.className = 'wish-add-cover is-entering';
+      const stamp = row.fromUpcoming ? releaseStamp(film) : '';
+      const label = coverLabel(row);
+      node.title = label;
+      node.setAttribute('aria-label', `Add ${label}`);
+      const src = knownPoster(film);
+      if (src) {
         const image = document.createElement('img');
         image.alt = '';
-        image.src = posterSrc(film);
-        const copy = el('span', 'wish-hit-copy');
-        copy.append(el('span', 'wish-hit-title', film.title || 'Film'));
-        const meta = [film.year, film.director].filter(Boolean).join(' · ');
-        if (meta) copy.append(el('span', 'wish-hit-meta', meta));
-        button.append(image, copy);
-        if (have) button.append(el('span', 'wish-hit-check', '✓'));
-        button.addEventListener('click', () => chooseHit(row));
-        hits.append(button);
-      });
-      if (rows.hasUpcoming) {
-        hits.append(el('p', 'wish-upcoming-hint', 'Noch nicht erschienen? Unter UPCOMING hinzufügen.'));
+        image.loading = 'lazy';
+        image.src = src;
+        node.append(image);
+      } else {
+        node.classList.add('is-blank');
+        node.append(el('span', 'wish-add-blank', film.title || 'Film'));
       }
-      const current = hits.querySelector('.wish-hit.is-current');
-      if (current) current.scrollIntoView({ block: 'nearest' });
+      if (stamp) node.append(el('span', 'wish-when', stamp));
+      const plus = el('span', 'wish-add-plus');
+      plus.innerHTML = plusMark;
+      node.append(plus);
+      node.addEventListener('animationend', () => node.classList.remove('is-entering'));
+      node.addEventListener('click', () => take(state, row));
+      state.nodes.set(film.id, node);
+      return node;
     };
-    const chooseHit = async (row) => {
+
+    const paintCovers = (state) => {
+      const shown = visible(state);
+      if (state.cursor >= shown.length) state.cursor = Math.max(0, shown.length - 1);
+      const nodes = shown.map((row, index) => {
+        const node = coverNode(state, row);
+        node.classList.toggle('is-current', index === state.cursor);
+        node.classList.remove('is-leaving');
+        return node;
+      });
+      state.covers.replaceChildren(...nodes);
+      const current = shown[state.cursor];
+      if (current) state.note.textContent = coverLabel(current);
+      else state.note.textContent = state.message || '';
+      state.go.disabled = !current && !(state === upcoming && state.query.length >= 2 && state.message);
+      return shown;
+    };
+
+    const setPool = (state, rows, message) => {
+      state.pool = rows || [];
+      state.cursor = 0;
+      state.message = message || '';
+      state.nodes = new Map();
+      paintCovers(state);
+    };
+
+    const addRow = async (row) => {
       const live = currentWishSearchList();
-      if (!live || !row || wishOnList(live, row.film.id)) return;
+      if (!live || !row || wishOnList(live, row.film.id) || wishOnList(live, keyOf(row))) return '';
       const shown = withCanonicalId({ ...row.film }, row.facets || {});
-      input.value = '';
-      rows = [];
-      cursor = 0;
-      hits.replaceChildren();
-      note.textContent = 'Titel eingeben';
       markWishFilm(shown.id);
       const placed = showWishPosterNow(live, shown);
       const resolved = await completeWishHit({ ...row, film: shown });
@@ -9056,97 +9195,104 @@
       if (row.fromUpcoming) rememberWishDate(film);
       const message = await addFilmToList(live.id, film, resolved.facets);
       if (message) {
-        note.textContent = message;
         if (placed) {
           const stray = document.querySelector(`#wish-board .wish-grid[data-list="${CSS.escape(live.id)}"] [data-id="${CSS.escape(film.id)}"]`);
           if (stray) stray.remove();
         }
-        return;
+        return message;
       }
+      taken.add(film.id);
       markWishFilm(film.id);
+      return '';
     };
-    input.addEventListener('input', () => {
-      const query = input.value.trim();
-      window.clearTimeout(input._timer);
-      rows = [];
-      cursor = 0;
-      if (query.length < 2) {
-        hits.replaceChildren();
-        note.textContent = 'Titel eingeben';
+
+    const take = async (state, row) => {
+      if (!row || taken.has(row.film.id)) return;
+      taken.add(row.film.id);
+      const node = state.nodes.get(row.film.id);
+      if (node) node.classList.add('is-leaving');
+      window.setTimeout(() => paintCovers(state), 180);
+      const message = await addRow(row);
+      if (message) {
+        taken.delete(row.film.id);
+        state.message = message;
+        paintCovers(state);
+        state.note.textContent = message;
+      }
+    };
+
+    const takeCurrent = (state) => {
+      const shown = visible(state);
+      const row = shown[state.cursor] || shown[0];
+      if (row) {
+        take(state, row);
         return;
       }
-      note.textContent = '';
-      input._timer = window.setTimeout(async () => {
-        const mine = ++token;
-        const found = await wishSearch(query).catch(() => []);
-        if (mine !== token || !wishSearchList) return;
-        rows = found;
-        cursor = 0;
-        if (!rows.length) {
-          hits.replaceChildren();
-          if (found.hasUpcoming) {
-            hits.append(el('p', 'wish-upcoming-hint', 'Noch nicht erschienen? Unter UPCOMING hinzufügen.'));
-            note.textContent = '';
-          } else note.textContent = 'Nichts gefunden – mit Jahr versuchen, z. B. The Invisible Man (2020)';
+      if (state === upcoming && state.query.length >= 2 && !state.busy) openCustomYear();
+    };
+
+    const bindKeys = (state) => {
+      state.input.addEventListener('keydown', (event) => {
+        const shown = visible(state);
+        const atEnd = state.input.selectionStart === state.input.value.length
+          && state.input.selectionEnd === state.input.value.length;
+        let step = 0;
+        if (event.key === 'ArrowDown') step = 1;
+        else if (event.key === 'ArrowUp') step = -1;
+        else if (event.key === 'ArrowRight' && atEnd && shown.length > 1) step = 1;
+        else if (event.key === 'ArrowLeft' && atEnd && state.cursor > 0) step = -1;
+        if (step) {
+          if (!shown.length) return;
+          event.preventDefault();
+          state.cursor = Math.max(0, Math.min(shown.length - 1, state.cursor + step));
+          paintCovers(state);
           return;
         }
-        note.textContent = '';
-        paintHits();
-      }, 250);
-    });
-    let upcomingToken = 0;
-    let upcomingCursor = 0;
-    let upcomingRows = [];
-    let upcomingQuery = '';
-    const paintUpcoming = () => {
-      upcomingHits.replaceChildren();
-      upcomingRows.forEach((row, index) => {
-        const film = row.film;
-        const have = wishOnList(currentWishSearchList(), film.id);
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'wish-hit wish-hit-plain';
-        if (index === upcomingCursor) button.classList.add('is-current');
-        if (have) button.classList.add('is-have');
-        button.disabled = have;
-        button.append(el('span', 'wish-hit-title', film.title || 'Film'));
-        button.append(el('span', 'wish-when', releaseStamp(film) || 'UPCOMING'));
-        button.addEventListener('click', () => takeUpcoming(row));
-        upcomingHits.append(button);
+        if (event.key === 'Escape') {
+          if (!state.input.value) return;
+          event.preventDefault();
+          event.stopPropagation();
+          state.input.value = '';
+          state.input.dispatchEvent(new Event('input'));
+          return;
+        }
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        takeCurrent(state);
       });
-      if (upcomingQuery.length < 2) return;
-      const custom = document.createElement('button');
-      custom.type = 'button';
-      custom.className = 'wish-hit wish-custom-hit';
-      if (upcomingCursor === upcomingRows.length) custom.classList.add('is-current');
-      custom.textContent = `„${upcomingQuery}“ als eigenen Eintrag`;
-      custom.addEventListener('click', () => openCustomYear());
-      upcomingHits.append(custom);
+      state.go.addEventListener('click', () => takeCurrent(state));
     };
-    const takeUpcoming = (row) => {
-      row.fromUpcoming = true;
-      upcomingInput.value = '';
-      upcomingQuery = '';
-      upcomingRows = [];
-      upcomingCursor = 0;
-      upcomingHits.replaceChildren();
-      chooseHit(row);
+
+    const showFeed = () => {
+      const mine = ++upcoming.token;
+      loadUpcomingFeed().then((rows) => {
+        if (mine !== upcoming.token || !wishSearchList || upcoming.query.length >= 2) return;
+        setPool(upcoming, rows, '');
+      });
     };
+
     const openCustomYear = () => {
-      const title = upcomingQuery;
+      const title = upcoming.query;
       if (title.length < 2) return;
-      upcomingHits.replaceChildren();
+      upcoming.extra.replaceChildren();
       const year = document.createElement('input');
       year.type = 'text';
       year.className = 'wish-year';
       year.inputMode = 'numeric';
       year.maxLength = 4;
-      year.placeholder = 'Jahr';
-      year.setAttribute('aria-label', 'Jahr');
+      year.placeholder = 'Year';
+      year.setAttribute('aria-label', 'Year');
       year.autocomplete = 'off';
-      upcomingHits.append(year);
+      upcoming.extra.append(year);
       year.focus();
       year.addEventListener('keydown', async (event) => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          upcoming.extra.replaceChildren();
+          upcoming.input.focus();
+          return;
+        }
         if (event.key !== 'Enter') return;
         event.preventDefault();
         const digits = year.value.replace(/\D/g, '');
@@ -9166,84 +9312,78 @@
           imdbLabel: '',
           fromCatalog: false,
         };
-        upcomingInput.value = '';
-        upcomingQuery = '';
-        upcomingRows = [];
-        upcomingHits.replaceChildren();
+        upcoming.extra.replaceChildren();
+        upcoming.input.value = '';
+        upcoming.query = '';
         const message = await addFilmToList(live.id, film, null);
         if (message) {
-          note.textContent = message;
+          upcoming.message = message;
+          upcoming.note.textContent = message;
           return;
         }
         markWishFilm(film.id);
         showWishPosterNow(live, film);
+        showFeed();
       });
     };
-    upcomingInput.addEventListener('input', () => {
-      upcomingQuery = upcomingInput.value.trim();
-      window.clearTimeout(upcomingInput._timer);
-      upcomingRows = [];
-      upcomingCursor = 0;
-      if (upcomingQuery.length < 2) {
-        upcomingHits.replaceChildren();
+
+    upcoming.input.addEventListener('input', () => {
+      upcoming.query = upcoming.input.value.trim();
+      upcoming.extra.replaceChildren();
+      window.clearTimeout(upcoming.timer);
+      if (upcoming.query.length < 2) {
+        upcoming.busy = false;
+        showFeed();
         return;
       }
-      upcomingInput._timer = window.setTimeout(async () => {
-        const mine = upcomingToken + 1;
-        upcomingToken = mine;
+      upcoming.busy = true;
+      upcoming.timer = window.setTimeout(async () => {
+        const mine = ++upcoming.token;
+        const query = upcoming.query;
         let found = [];
         try {
-          const response = await fetch(`/api/film?q=${encodeURIComponent(upcomingQuery)}&list=1&upcoming=1`);
+          const response = await fetch(`/api/film?q=${encodeURIComponent(query)}&list=1&upcoming=1`);
           const data = await response.json().catch(() => null);
           const films = response.ok && data && Array.isArray(data.films) ? data.films : [];
           found = films.filter((item) => item && item.film && item.film.title).map((item) => ({
             film: { ...item.film, fromCatalog: false },
             facets: item.facets || null,
             source: 'tmdb',
+            fromUpcoming: true,
           }));
         } catch {
           found = [];
         }
-        if (mine !== upcomingToken || !wishSearchList) return;
-        upcomingRows = found;
-        upcomingCursor = 0;
-        paintUpcoming();
+        if (mine !== upcoming.token || !wishSearchList) return;
+        upcoming.busy = false;
+        setPool(upcoming, found, `Add “${query}” as custom entry`);
       }, 250);
     });
-    upcomingInput.addEventListener('keydown', (event) => {
-      const total = upcomingRows.length + (upcomingQuery.length >= 2 ? 1 : 0);
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        if (!total) return;
-        event.preventDefault();
-        const step = event.key === 'ArrowDown' ? 1 : -1;
-        upcomingCursor = Math.max(0, Math.min(total - 1, upcomingCursor + step));
-        paintUpcoming();
+
+    released.input.addEventListener('input', () => {
+      released.query = released.input.value.trim();
+      window.clearTimeout(released.timer);
+      if (released.query.length < 2) {
+        released.token += 1;
+        setPool(released, [], '');
         return;
       }
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      if (!upcomingRows.length || upcomingCursor >= upcomingRows.length) {
-        if (upcomingQuery.length >= 2) openCustomYear();
-        return;
-      }
-      const row = upcomingRows[upcomingCursor];
-      if (row) takeUpcoming(row);
+      released.timer = window.setTimeout(async () => {
+        const mine = ++released.token;
+        const found = await wishSearch(released.query).catch(() => []);
+        if (mine !== released.token || !wishSearchList) return;
+        let message = '';
+        if (found.hasUpcoming) message = 'Not out yet? Add it under UPCOMING';
+        else if (!found.length) message = 'Nothing found – try with a year, e.g. The Invisible Man (2020)';
+        setPool(released, found, message);
+      }, 250);
     });
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        if (!rows.length) return;
-        event.preventDefault();
-        const step = event.key === 'ArrowDown' ? 1 : -1;
-        cursor = Math.max(0, Math.min(rows.length - 1, cursor + step));
-        paintHits();
-        return;
-      }
-      if (event.key !== 'Enter') return;
-      event.preventDefault();
-      const row = rows[cursor];
-      if (row) chooseHit(row);
-    });
-    input.focus();
+
+    bindKeys(upcoming);
+    bindKeys(released);
+    setPool(released, [], '');
+    showFeed();
+    if (!phoneSheet()) upcoming.input.focus();
   }
 
   function wishMemberSign(list) {

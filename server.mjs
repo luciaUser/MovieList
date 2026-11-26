@@ -134,6 +134,7 @@ async function handle(req, res) {
       const result = await filmResponse(url.searchParams.get('q') || '', {
         list: url.searchParams.get('list') === '1',
         upcoming: url.searchParams.get('upcoming') === '1',
+        feed: url.searchParams.get('feed') === '1',
         overview: url.searchParams.get('overview') === '1',
         card: url.searchParams.get('card') === '1',
         lang: url.searchParams.get('lang') === 'de' ? 'de' : 'en',
