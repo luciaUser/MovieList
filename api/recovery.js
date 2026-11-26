@@ -171,7 +171,7 @@ async function verify(req, res) {
   const link = `${originOf(req)}/api/recovery?action=confirm&token=${token}`;
   await sendMail(
     target,
-    'E-Mail für MovieByLucia bestätigen',
+    'E-Mail für MoviePlot bestätigen',
     `Bestätige diese Adresse für das Zurücksetzen deines Passworts:\n\n${link}\n\nDer Link gilt 24 Stunden.`,
   );
   return json(res, 200, { ok: true });
@@ -222,7 +222,7 @@ async function reset(req, res) {
     if (!action) return json(res, 200, same);
     await sendMail(
       mail.email,
-      'Passwort für MovieByLucia zurücksetzen',
+      'Passwort für MoviePlot zurücksetzen',
       `Setze dein Passwort über diesen Link zurück:\n\n${action}\n`,
     );
   } catch {
