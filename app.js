@@ -2542,11 +2542,36 @@
     pathArm(origin);
     scroller.addEventListener('wheel', (event) => {
       if (phoneSheet()) return;
-      if (event.target.closest('.path-track')) return;
-      if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
-      scroller.scrollLeft += event.deltaY;
+      const horizontal = event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (!horizontal && event.target.closest('.path-track')) return;
+      scroller.scrollLeft += horizontal ? (event.deltaX || event.deltaY) : event.deltaY;
       event.preventDefault();
     }, { passive: false });
+    scroller.addEventListener('pointerdown', (event) => {
+      if (phoneSheet() || (event.button != null && event.button !== 0)) return;
+      if (event.target.closest('.path-track, .path-cover, button')) return;
+      const drag = { id: event.pointerId, x: event.clientX, left: scroller.scrollLeft };
+      const move = (ev) => {
+        if (ev.pointerId !== drag.id) return;
+        const dx = ev.clientX - drag.x;
+        if (Math.abs(dx) <= 6) return;
+        if (!drag.held) {
+          drag.held = true;
+          try { scroller.setPointerCapture(ev.pointerId); } catch { /* already gone */ }
+        }
+        scroller.scrollLeft = drag.left - dx;
+        ev.preventDefault();
+      };
+      const end = (ev) => {
+        if (ev.pointerId !== drag.id) return;
+        scroller.removeEventListener('pointermove', move);
+        scroller.removeEventListener('pointerup', end);
+        scroller.removeEventListener('pointercancel', end);
+      };
+      scroller.addEventListener('pointermove', move);
+      scroller.addEventListener('pointerup', end);
+      scroller.addEventListener('pointercancel', end);
+    });
   }
 
   function pathCovers(track) {
@@ -3372,9 +3397,10 @@
     memo.value = row.memo;
     memo.addEventListener('input', () => writeEntry(film.id, { memo: memo.value }));
     noteSection.append(memo);
-    sheet.append(rateSection, noteSection);
+    sheet.append(rateSection);
     if (isCustomFilm(film)) suggestCustomLink(film);
     appendTraits(film, full);
+    sheet.append(noteSection);
     mountRecommendations(film);
 
     [
@@ -6821,7 +6847,7 @@
         ids: filmsWith(kind === 'directors' ? 'director' : 'cast', person.name),
       }));
       const meta = person.count
-        ? `Ø ${scoreText(person.avg)} · ${person.count === 1 ? '1 film' : `${person.count} films`}`
+        ? `★ ${scoreText(person.avg)} · ${person.count === 1 ? '1 film' : `${person.count} films`}`
         : (readOnly ? '' : '0 films');
       line.append(rank, name);
       if (meta) line.append(el('small', null, meta));
@@ -8185,9 +8211,7 @@
   }
 
   function wishCountLabel(count) {
-    const n = Number(count) || 0;
-    if (window.matchMedia('(max-width: 720px)').matches) return String(n);
-    return n === 1 ? '1 Movie' : `${n} Movies`;
+    return String(Number(count) || 0);
   }
 
   function canDropWishFilm(list, item) {
@@ -9213,11 +9237,9 @@
     )).join('|');
   }
 
-  function paintWishCount(sideText, count, average) {
+  function paintWishCount(sideText, count) {
     if (!sideText) return;
-    const label = wishCountLabel(count);
-    const extra = average != null ? `  ★ ${average.toFixed(1).replace('.', ',')}` : '';
-    const next = `${label}${extra}`;
+    const next = wishCountLabel(count);
     if (sideText.textContent !== next) sideText.textContent = next;
   }
 

@@ -864,21 +864,15 @@
         const from = displayWorld(edge.source);
         const to = displayWorld(edge.target);
         if (!from || !to) return;
-        const hot = focus.hot === edge.target || focus.hot === edge.source;
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', from.x.toFixed(1));
         line.setAttribute('y1', from.y.toFixed(1));
         line.setAttribute('x2', to.x.toFixed(1));
         line.setAttribute('y2', to.y.toFixed(1));
-        line.setAttribute('stroke', hot ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.7)');
+        line.setAttribute('stroke', 'rgba(255,255,255,0.7)');
         line.setAttribute('stroke-width', '1');
         line.setAttribute('vector-effect', 'non-scaling-stroke');
         line.setAttribute('stroke-linecap', 'round');
-        if (edge.style === 'director') {
-          line.setAttribute('stroke-dasharray', `${(7 / scale).toFixed(2)} ${(6 / scale).toFixed(2)}`);
-        } else if (edge.style === 'cast') {
-          line.setAttribute('stroke-dasharray', `${(1.4 / scale).toFixed(2)} ${(6 / scale).toFixed(2)}`);
-        }
         lines.append(line);
       });
     }
