@@ -7195,7 +7195,6 @@
       hint.append(align);
       stack.append(hint);
     }
-    stack.append(el('p', 'account-caption', 'Display name · visible to friends'));
     stack.append(paintLanguage());
     if (recoveryOn) stack.append(paintRecovery());
     stack.append(paintSignOut(), paintDanger());
