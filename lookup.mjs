@@ -384,7 +384,7 @@ export async function upcomingFeed() {
   if (feedCache && now - feedCache.at < 6 * 60 * 60 * 1000 && feedCache.films.length) return feedCache.films;
   let hits = [];
   try {
-    hits = await upcomingFeedHits(40);
+    hits = await upcomingFeedHits(60);
   } catch {
     hits = [];
   }

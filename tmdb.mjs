@@ -91,13 +91,13 @@ export async function searchHits(query, year, limit = 8) {
   return ranked.slice(0, limit).map((item) => shape(item, Boolean(yearText) && yearOf(item) === yearText));
 }
 
-export async function upcomingFeedHits(limit = 40) {
+export async function upcomingFeedHits(limit = 60) {
   const today = new Date();
   const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString().slice(0, 10);
   const until = new Date(today.getFullYear() + 3, today.getMonth(), today.getDate()).toISOString().slice(0, 10);
-  // Nur Kinostarts (Typ 2 = limitiert, 3 = Kino), nach Beliebtheit, damit relevante Filme oben sind.
-  const base = `/discover/movie?language=de-DE&include_adult=false&include_video=false&sort_by=popularity.desc&with_release_type=2|3&release_date.gte=${from}&release_date.lte=${until}`;
-  const pages = await Promise.all([1, 2, 3].map((page) => get(`${base}&page=${page}`).catch(() => null)));
+  // Nur Filme, die noch nirgends erschienen sind (primary_release_date) und einen Kinostart haben (Typ 2/3), nach Beliebtheit.
+  const base = `/discover/movie?language=de-DE&include_adult=false&include_video=false&sort_by=popularity.desc&with_release_type=2|3&release_date.gte=${from}&release_date.lte=${until}&primary_release_date.gte=${from}&primary_release_date.lte=${until}`;
+  const pages = await Promise.all([1, 2, 3, 4, 5].map((page) => get(`${base}&page=${page}`).catch(() => null)));
   const seen = new Set();
   const items = [];
   pages.forEach((data) => {

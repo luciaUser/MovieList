@@ -1482,8 +1482,10 @@ body.is-wish .poster.is-low:not(.is-selected) > img {
 body.is-rating .poster.is-rated .poster-score,
 body.is-wish .poster.is-rated .poster-score { display: block; }
 
-body.is-rating .poster:not(.is-rated),
-body.is-wish .poster:not(.is-rated):not(.wish-plus) { filter: grayscale(1); }
+body.is-rating .poster:not(.is-rated) { filter: grayscale(1); }
+
+/* Listen-Ansicht: alle Cover farbig mit 60 % Deckkraft, ausgewähltes 100 %, Rest grau */
+body.is-wish .poster:not(.wish-plus) { filter: none; opacity: 0.6; }
 
 body.has-selection .poster {
   filter: grayscale(1);
@@ -1499,10 +1501,14 @@ body.has-selection .poster.is-selected {
   box-shadow: 0 0 18px 8px rgba(0, 0, 0, 0.45), 16px 26px 36px rgba(0, 0, 0, 0.82);
 }
 
-body.is-rating.has-selection .poster:not(.is-selected),
-body.is-wish.has-selection .poster:not(.is-selected):not(.wish-plus) {
+body.is-rating.has-selection .poster:not(.is-selected) {
   filter: grayscale(1);
   opacity: 0.7;
+}
+
+body.is-wish.has-selection .poster:not(.is-selected):not(.wish-plus) {
+  filter: grayscale(1);
+  opacity: 0.6;
 }
 
 body.is-rating.has-selection .poster.is-selected,
@@ -5550,9 +5556,11 @@ body.is-path #profile { visibility: hidden; }
   text-transform: uppercase;
 }
 
-body.has-selection .wish-coming-cover:not(.is-selected) { opacity: 0.45; }
-
-@media (hover: hover) {
-  .wish-coming-cover img { transition: opacity 0.15s ease; }
-  .wish-coming-cover:hover img { opacity: 0.85; }
+.wish-coming-cover img {
+  opacity: 0.6;
+  transition: opacity 0.2s ease, filter 0.2s ease;
 }
+
+body.has-selection .wish-coming-cover:not(.is-selected) img { filter: grayscale(1); }
+
+body.has-selection .wish-coming-cover.is-selected img { opacity: 1; }
