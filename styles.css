@@ -2124,6 +2124,8 @@ body.is-network {
 
   #search-form .line-slot { --line: calc(100vw - 236px); }
 
+  .head-tools { gap: 18px; }
+
   #wall,
   #wish-board,
   .their-wall {

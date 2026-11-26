@@ -4392,9 +4392,33 @@
     }
   }
 
+  function fitHeadLine(owner) {
+    if (!owner) return;
+    const slot = owner.querySelector('.line-slot');
+    if (!slot) return;
+    const icon = owner.getBoundingClientRect();
+    const mid = icon.top + icon.height / 2;
+    let edge = 0;
+    document.querySelectorAll('header .brand, header .modes').forEach((node) => {
+      const box = node.getBoundingClientRect();
+      if (!box.width || box.top > mid || box.bottom < mid) return;
+      edge = Math.max(edge, box.right);
+    });
+    // Linie endet mit Abstand vor «YOUR PLOT» (bzw. den Ansichts-Icons am Desktop).
+    const room = Math.floor(icon.left - 10 - edge - 22);
+    const cap = owner === searchForm ? 300 : 260;
+    slot.style.setProperty('--line', `${Math.max(60, Math.min(cap, room))}px`);
+  }
+
+  window.addEventListener('resize', () => {
+    if (addFilm.classList.contains('is-open')) fitHeadLine(addFilm);
+    if (searchForm.classList.contains('is-open')) fitHeadLine(searchForm);
+  });
+
   function openAdd() {
     closeSearch();
     addQuery.disabled = false;
+    fitHeadLine(addFilm);
     addFilm.classList.add('is-open');
     addButton.setAttribute('aria-expanded', 'true');
     addQuery.focus();
@@ -4419,6 +4443,7 @@
   function openSearch() {
     closeAdd();
     search.disabled = false;
+    fitHeadLine(searchForm);
     searchForm.classList.add('is-open');
     searchOpen.setAttribute('aria-expanded', 'true');
     search.focus();
