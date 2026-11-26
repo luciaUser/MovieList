@@ -5491,9 +5491,16 @@
     return 'Keine Verbindung.';
   }
 
-  function authField(label, type, name, autocomplete) {
+  // eigener Begriff + klein und gedimmt der übliche Begriff daneben (z. B. «Plot twist  password»)
+  function authLabel(node, main, plain) {
+    node.replaceChildren(document.createTextNode(main));
+    if (plain) node.append(el('span', 'auth-plain', plain));
+    return node;
+  }
+
+  function authField(label, type, name, autocomplete, plain) {
     const wrap = document.createElement('label');
-    wrap.append(document.createTextNode(label));
+    authLabel(wrap, label, plain);
     const input = document.createElement('input');
     input.type = type;
     input.name = name;
@@ -11506,12 +11513,12 @@
     error.setAttribute('role', 'status');
 
     if (view === 'password') {
-      card.append(el('h1', null, 'Neues Passwort setzen'));
-      const first = authField('Neues Passwort', 'password', 'password', 'new-password');
-      const second = authField('Passwort wiederholen', 'password', 'repeat', 'new-password');
+      card.append(authLabel(document.createElement('h1'), 'New plot twist', 'new password'));
+      const first = authField('New plot twist', 'password', 'password', 'new-password', 'new password');
+      const second = authField('Repeat plot twist', 'password', 'repeat', 'new-password', 'repeat password');
       const save = document.createElement('button');
       save.type = 'submit';
-      save.textContent = 'Passwort setzen';
+      authLabel(save, 'Save plot twist', 'set password');
       const form = document.createElement('form');
       form.append(first.wrap, second.wrap, error, save);
       form.addEventListener('submit', async (event) => {
@@ -11541,20 +11548,20 @@
     }
 
     if (view === 'forgot') {
-      card.append(el('h1', null, 'Passwort vergessen?'));
+      card.append(authLabel(document.createElement('h1'), 'Forgot your spoiler?', 'reset password'));
       const back = document.createElement('button');
       back.type = 'button';
-      back.textContent = 'Zurück zur Anmeldung';
+      authLabel(back, 'Get into your plot', 'back to sign in');
       back.addEventListener('click', () => renderAuth('in'));
       recoveryEnabled().then((enabled) => {
         if (!enabled) {
           card.insertBefore(el('p', 'auth-note', 'Melde dich bei Luciano.'), back);
           return;
         }
-        const name = authField('Benutzername', 'text', 'username', 'username');
+        const name = authField('Screen name', 'text', 'username', 'username', 'username');
         const send = document.createElement('button');
         send.type = 'submit';
-        send.textContent = 'Link schicken';
+        authLabel(send, 'Send link', 'reset email');
         const form = document.createElement('form');
         form.append(name.wrap, error, send);
         form.addEventListener('submit', async (event) => {
@@ -11590,16 +11597,16 @@
     }
 
     const signingIn = view !== 'up';
-    card.append(el('h1', null, signingIn ? 'Anmelden' : 'Registrieren'));
-    const name = authField('Benutzername', 'text', 'username', 'username');
-    const password = authField('Passwort', 'password', 'password', signingIn ? 'current-password' : 'new-password');
+    card.append(authLabel(document.createElement('h1'), signingIn ? 'Get into your plot' : 'Create your plot', signingIn ? 'sign in' : 'register'));
+    const name = authField('Screen name', 'text', 'username', 'username', 'username');
+    const password = authField('Plot twist', 'password', 'password', signingIn ? 'current-password' : 'new-password', 'password');
     const form = document.createElement('form');
     form.append(name.wrap, password.wrap);
     let repeat = null;
     let mail = null;
     let nameHint = null;
     if (!signingIn) {
-      repeat = authField('Passwort wiederholen', 'password', 'repeat', 'new-password');
+      repeat = authField('Repeat plot twist', 'password', 'repeat', 'new-password', 'repeat password');
       form.append(repeat.wrap);
       nameHint = el('p', 'auth-hint', '');
       form.append(nameHint);
@@ -11631,22 +11638,22 @@
       });
       recoveryEnabled().then((enabled) => {
         if (!enabled || !form.isConnected) return;
-        mail = authField('E-Mail (freiwillig, nur zum Zurücksetzen)', 'email', 'email', 'email');
+        mail = authField('Backup email', 'email', 'email', 'email', 'optional, only for resets');
         form.insertBefore(mail.wrap, error);
       });
     }
     const submit = document.createElement('button');
     submit.type = 'submit';
-    submit.textContent = signingIn ? 'Anmelden' : 'Registrieren';
+    authLabel(submit, signingIn ? 'Roll in' : 'Create your plot', signingIn ? 'sign in' : 'register');
     const swap = document.createElement('button');
     swap.type = 'button';
-    swap.textContent = signingIn ? 'Registrieren' : 'Anmelden';
+    authLabel(swap, signingIn ? 'Create your plot' : 'Get into your plot', signingIn ? 'register' : 'sign in');
     swap.addEventListener('click', () => renderAuth(signingIn ? 'up' : 'in'));
     form.append(error, submit, swap);
     if (signingIn) {
       const forgot = document.createElement('button');
       forgot.type = 'button';
-      forgot.textContent = 'Passwort vergessen?';
+      authLabel(forgot, 'Forgot your spoiler?', 'reset password');
       forgot.addEventListener('click', () => renderAuth('forgot'));
       form.append(forgot);
     }
@@ -11726,7 +11733,7 @@
         setGateBusy(false);
       }
     });
-    form.append(el('p', 'auth-note', 'Notizen bleiben privat.'));
+    form.append(el('p', 'auth-note', 'Your notes stay behind the scenes.'));
     card.append(form);
     name.input.focus();
   }

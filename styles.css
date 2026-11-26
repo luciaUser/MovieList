@@ -5702,3 +5702,14 @@ html.brand-arrive .brand-name { animation: brand-arrive 0.7s cubic-bezier(0.2, 0
   from { opacity: 0; transform: translateX(-10px); }
   to { opacity: 1; transform: none; }
 }
+
+/* Login: eigener Begriff, daneben klein und gedimmt der übliche */
+.gate-card .auth-plain {
+  margin-left: 8px;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+
+.gate-card h1 .auth-plain { font-size: 13px; letter-spacing: 0.02em; }
