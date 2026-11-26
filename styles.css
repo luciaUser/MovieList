@@ -2081,12 +2081,33 @@ body.is-network {
 
   header {
     gap: 16px;
-    padding: 14px 16px 32px;
+    padding: 24px 16px 32px;
   }
+
+  #mode-profile,
+  #mode-profile .avatar,
+  #mode-profile .avatar-slot {
+    width: 30px;
+    height: 30px;
+  }
+
+  .add-film,
+  #add-film,
+  #search-open,
+  #search-form,
+  #add-film svg,
+  #search-open svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  #add-film svg path,
+  #search-open svg circle,
+  #search-open svg path { vector-effect: non-scaling-stroke; }
 
   #wall,
   #wish-board {
-    padding-top: 96px;
+    padding-top: 106px;
     padding-bottom: calc(112px + env(safe-area-inset-bottom));
   }
 
@@ -4578,7 +4599,7 @@ span.person-rank { cursor: default; }
 @media (max-width: 720px) {
   #profile {
     max-width: none;
-    padding: 88px 20px calc(96px + env(safe-area-inset-bottom));
+    padding: 98px 20px calc(96px + env(safe-area-inset-bottom));
     overflow-x: clip;
   }
 

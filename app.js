@@ -8995,7 +8995,7 @@
     const plus = document.querySelector(`#wish-board .wish-grid[data-list="${CSS.escape(live.id)}"] .wish-plus`);
     if (!plus) return;
     const rect = plus.getBoundingClientRect();
-    const top = 96;
+    const top = 106;
     const bottom = window.innerHeight - (panel.offsetHeight || window.innerHeight * 0.58) - 12;
     let delta = 0;
     if (rect.bottom > bottom) delta = rect.bottom - bottom;
@@ -9428,6 +9428,10 @@
     if (poster.dataset.bound === '1') return;
     poster.dataset.bound = '1';
     poster.addEventListener('click', () => {
+      if (poster._wishFilm && selectedId === poster._wishFilm.id) {
+        clearSelection();
+        return;
+      }
       const current = wishLists.find((entry) => entry.id === list.id) || list;
       if (poster._wishFilm) openListedFilm(poster._wishFilm, current);
     });
@@ -9723,6 +9727,10 @@
         button.append(image);
         if (stamp) button.append(el('span', 'wish-when', stamp));
         button.addEventListener('click', () => {
+          if (selectedId === film.id) {
+            clearSelection();
+            return;
+          }
           panelFilm = null;
           openFilm(film);
           loadFilmCard(film);
