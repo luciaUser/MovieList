@@ -7326,93 +7326,81 @@
 
   function paintDanger() {
     const wrap = el('div', 'danger');
-    let open = '';
-    const confirm = el('div', 'danger-confirm');
-    confirm.hidden = true;
-    const hint = el('p', 'profile-note', '');
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.autocomplete = 'off';
-    const go = document.createElement('button');
-    go.type = 'button';
-    go.disabled = true;
     const status = el('p', 'profile-status', '');
     status.setAttribute('role', 'status');
-    confirm.append(hint, input, go, status);
-    const close = () => {
-      open = '';
-      confirm.hidden = true;
-      input.value = '';
-      go.disabled = true;
-      status.textContent = '';
+    const runReset = async () => {
+      const next = await globalThis.Store.reset();
+      if (!next) return false;
+      adoptArchive(next);
+      if (network) {
+        network.setFilms(FILMS);
+        if (networkReady) network.reflow();
+      }
+      renderProfile();
+      return true;
     };
-    const show = (kind) => {
-      if (open === kind) {
-        close();
-        return;
-      }
-      open = kind;
-      const word = kind === 'reset' ? 'zurücksetzen' : 'löschen';
-      hint.textContent = kind === 'reset'
-        ? 'Zum Bestätigen zurücksetzen eintippen'
-        : 'Zum Bestätigen löschen eintippen';
-      input.placeholder = word;
-      input.setAttribute('aria-label', `${word} eingeben`);
-      go.textContent = kind === 'reset' ? 'Archiv zurücksetzen' : 'Konto löschen';
-      input.value = '';
-      go.disabled = true;
-      status.textContent = '';
-      confirm.hidden = false;
-      input.focus();
-      openTransient(wrap, close);
-    };
-    input.addEventListener('input', () => {
-      const word = open === 'reset' ? 'zurücksetzen' : 'löschen';
-      go.disabled = input.value.trim().toLocaleLowerCase('de') !== word;
-    });
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        closeTransient();
-      }
-    });
-    go.addEventListener('click', async () => {
-      if (open === 'reset') {
-        go.disabled = true;
-        const next = await globalThis.Store.reset();
-        if (!next) {
-          go.disabled = false;
-          return;
-        }
-        adoptArchive(next);
-        if (network) {
-          network.setFilms(FILMS);
-          if (networkReady) network.reflow();
-        }
-        renderProfile();
-        return;
-      }
-      go.disabled = true;
+    const runDelete = async () => {
       try {
         await globalThis.Cloud.deleteAccount();
         await leave();
+        return true;
       } catch (error) {
         status.textContent = profileFail(error);
-        go.disabled = false;
+        return false;
       }
-    });
-    const reset = document.createElement('button');
-    reset.type = 'button';
-    reset.className = 'account-row is-danger';
-    reset.append(accountIcon('reset'), el('span', null, 'Reset archive'));
-    reset.addEventListener('click', () => show('reset'));
-    const wipe = document.createElement('button');
-    wipe.type = 'button';
-    wipe.className = 'account-row is-danger';
-    wipe.append(accountIcon('x'), el('span', null, 'Delete account'));
-    wipe.addEventListener('click', () => show('delete'));
-    wrap.append(reset, wipe, confirm);
+    };
+    const sureRow = (kind, label, action) => {
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'account-row is-danger';
+      row.setAttribute('aria-label', label);
+      const icon = el('span', 'account-icon');
+      icon.append(accountIcon(kind === 'reset' ? 'reset' : 'x'));
+      const sure = el('span', 'account-sure', 'sure?');
+      row.append(icon, el('span', null, label), sure);
+      let timer = 0;
+      const calm = () => {
+        window.clearTimeout(timer);
+        row.classList.remove('is-sure');
+        row.setAttribute('aria-label', label);
+      };
+      row.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        if (row.disabled) return;
+        if (!row.classList.contains('is-sure')) {
+          status.textContent = '';
+          row.classList.add('is-sure');
+          row.setAttribute('aria-label', `${label}: tap the icon again to confirm`);
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => {
+            endTransient(row);
+            calm();
+          }, 4000);
+          openTransient(row, calm);
+          return;
+        }
+        // In «sure?»: Tippen auf «sure?» bricht ab, Tippen auf das Icon bestätigt.
+        if (!event.target.closest('.account-icon')) {
+          endTransient(row);
+          calm();
+          return;
+        }
+        endTransient(row);
+        window.clearTimeout(timer);
+        row.disabled = true;
+        const ok = await action();
+        if (!ok && row.isConnected) {
+          row.disabled = false;
+          calm();
+        }
+      });
+      return row;
+    };
+    wrap.append(
+      sureRow('reset', 'Reset archive', runReset),
+      sureRow('delete', 'Delete account', runDelete),
+      status,
+    );
     return wrap;
   }
 

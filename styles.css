@@ -5587,3 +5587,71 @@ body.is-path #profile { visibility: hidden; }
 body.has-selection .wish-coming-cover:not(.is-selected) img { filter: grayscale(1); }
 
 body.has-selection .wish-coming-cover.is-selected img { opacity: 1; }
+
+/* Konto: Archiv zurücksetzen / Konto löschen mit «sure?» aus dem Icon */
+#profile .account-row.is-danger { position: relative; }
+
+#profile .account-row .account-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+#profile .account-row .account-sure {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 30px;
+  right: 0;
+  display: flex;
+  align-items: center;
+  background: #000;
+  color: #fff;
+  font-size: 16px;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.22s ease;
+  pointer-events: none;
+}
+
+#profile .account-row.is-sure .account-sure {
+  clip-path: inset(0 0 0 0);
+  pointer-events: auto;
+}
+
+#profile .account-row.is-danger::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: #e23d3d;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.3s ease;
+}
+
+#profile .account-row.is-sure::after { transform: scaleX(1); }
+
+#profile .account-row:disabled { opacity: 0.5; cursor: default; }
+
+/* Handy: kleinere Tipp-Zonen der unteren Icon-Leiste (Icons bleiben an derselben Stelle) */
+@media (max-width: 720px) {
+  .modes { pointer-events: none; }
+
+  .modes.is-sort-open { pointer-events: auto; }
+
+  .modes .icon-tab,
+  .modes .sort-wrap {
+    justify-self: center;
+    align-self: end;
+    width: 72px;
+    min-width: 0;
+    height: 64px;
+    min-height: 64px;
+  }
+
+  .modes .sort-wrap .icon-tab { width: 100%; }
+}
