@@ -2028,7 +2028,7 @@ body.is-network {
 
   .modes .icon-tab::after { width: 28px; }
 
-  #mode-rating svg { transform: translateX(3px); }
+  #mode-rating svg { transform: translate(1.5px, -1.5px); }
 
   #network { top: 8px; }
 
