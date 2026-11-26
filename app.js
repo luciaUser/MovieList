@@ -5347,16 +5347,134 @@
     });
   }
 
+  /* Login-Animation (gate-sky.js): läuft hinter dem Formular, als Ladebildschirm und beim Übergang in die App */
+  let sky = null;
+  let skyLeaving = false;
+  let skySplash = false;
+  let skyObserver = null;
+  let skyFailed = false;
+
+  function gateNode() {
+    return document.getElementById('gate');
+  }
+
+  function ensureSky() {
+    if (sky || skyFailed) return sky;
+    const gate = gateNode();
+    if (!gate || !globalThis.GateSky || !globalThis.SphereColours) return null;
+    let canvas = gate.querySelector('canvas.gate-sky');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.className = 'gate-sky';
+      canvas.setAttribute('aria-hidden', 'true');
+      gate.prepend(canvas);
+    }
+    sky = globalThis.GateSky.create(canvas);
+    if (!sky) {
+      skyFailed = true;
+      canvas.remove();
+    }
+    return sky;
+  }
+
+  function skyHome() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const card = document.getElementById('gate-card');
+    const filled = card && card.childElementCount > 0;
+    const formTop = !skySplash && filled ? card.getBoundingClientRect().top : H;
+    if (skySplash || !filled) {
+      const r = Math.min(110, Math.max(60, Math.min(W, H) * 0.26));
+      return { x: W / 2, y: H * 0.42, r };
+    }
+    const room = Math.max(140, formTop);
+    const r = Math.min(110, Math.max(44, Math.min(room * 0.3, W * 0.26)));
+    return { x: W / 2, y: Math.max(r + 40, room * 0.5), r };
+  }
+
+  function placeSky() {
+    if (sky && !skyLeaving) sky.setHome(skyHome());
+  }
+
+  window.addEventListener('resize', placeSky);
+
+  function runSky(mode, splash) {
+    const gate = gateNode();
+    if (!gate || gate.hidden || skyLeaving) return;
+    const run = ensureSky();
+    if (!run) return;
+    skySplash = Boolean(splash);
+    document.documentElement.classList.toggle('sky-splash', skySplash);
+    const card = document.getElementById('gate-card');
+    if (!skyObserver && card && 'ResizeObserver' in window) {
+      skyObserver = new ResizeObserver(placeSky);
+      skyObserver.observe(card);
+    }
+    run.setHome(skyHome());
+    if (run.running()) run.setMode(mode);
+    else run.start(mode);
+  }
+
+  function setGateBusy(on) {
+    const gate = gateNode();
+    if (gate) gate.classList.toggle('is-busy', Boolean(on));
+    if (on && gate && gate.contains(document.activeElement)) document.activeElement.blur();
+  }
+
+  function profileTarget() {
+    const node = document.getElementById('mode-profile');
+    if (!node) return null;
+    const box = node.getBoundingClientRect();
+    if (!box.width) return null;
+    return { x: box.left + box.width / 2, y: box.top + box.height / 2, r: box.width / 2 };
+  }
+
+  // Farben der Profilkugel laufen ein, dann fliegt die Kugel an ihren Platz oben links und «YOUR PLOT» erscheint
+  function leaveSky() {
+    const root = document.documentElement;
+    const gate = gateNode();
+    skyLeaving = true;
+    setGateBusy(true);
+    root.classList.add('sky-leaving');
+    root.classList.remove('needs-auth');
+    const wave = globalThis.SphereColours.avatarToWave(avatarColors(account && account.avatar));
+    sky.login(wave, profileTarget, () => {
+      gate.classList.add('is-fading');
+      window.setTimeout(() => {
+        gate.hidden = true;
+        gate.classList.remove('is-fading', 'is-busy');
+        root.classList.remove('sky-leaving', 'sky-splash');
+        root.classList.add('brand-arrive');
+        if (sky) sky.stop();
+        skyLeaving = false;
+        skySplash = false;
+        window.setTimeout(() => root.classList.remove('brand-arrive'), 1000);
+      }, 450);
+    });
+  }
+
   function lockScreen() {
-    document.documentElement.classList.add('needs-auth');
-    const gate = document.getElementById('gate');
-    if (gate) gate.hidden = false;
+    const root = document.documentElement;
+    root.classList.add('needs-auth');
+    root.classList.remove('sky-leaving', 'brand-arrive');
+    skyLeaving = false;
+    const gate = gateNode();
+    if (gate) {
+      gate.hidden = false;
+      gate.classList.remove('is-fading', 'is-busy');
+    }
   }
 
   function unlockScreen() {
-    document.documentElement.classList.remove('needs-auth');
-    const gate = document.getElementById('gate');
+    const gate = gateNode();
+    if (skyLeaving) return;
+    if (sky && sky.running() && gate && !gate.hidden) {
+      leaveSky();
+      return;
+    }
+    document.documentElement.classList.remove('needs-auth', 'sky-splash');
     if (gate) gate.hidden = true;
+    if (sky) sky.stop();
   }
 
   function authText(error) {
@@ -11340,6 +11458,7 @@
       }
       return;
     }
+    if (!(sky && sky.running())) runSky('bw', true);
     let empty = null;
     try {
       empty = await globalThis.Store.cloudEmpty();
@@ -11371,6 +11490,12 @@
   }
 
   function renderAuth(view, notice) {
+    setGateBusy(false);
+    renderAuthForm(view, notice);
+    runSky(view === 'up' ? 'colour' : 'bw', false);
+  }
+
+  function renderAuthForm(view, notice) {
     const card = document.getElementById('gate-card');
     if (!card) return;
     card.replaceChildren();
@@ -11552,6 +11677,9 @@
         return;
       }
       submit.disabled = true;
+      setGateBusy(true);
+      // Registrieren: die gerade sichtbaren Farben der Kugel werden zur persönlichen Profilkugel
+      const caught = !signingIn && sky ? sky.visibleWave() : null;
       try {
         if (signingIn) {
           const data = await globalThis.Cloud.signIn(username, secret);
@@ -11562,7 +11690,17 @@
         if (!data || !data.session) {
           error.textContent = 'Die Anmeldung ist noch nicht frei. Schalte die E-Mail-Bestätigung im Supabase-Dashboard aus.';
           submit.disabled = false;
+          setGateBusy(false);
           return;
+        }
+        if (globalThis.SphereColours && globalThis.Cloud.saveAvatar) {
+          const colours = globalThis.SphereColours;
+          const vivid = caught && caught.every((lab) => lab[0] > 0.2) && caught.some((lab) => colours.chroma(lab) > 0.05);
+          try {
+            await globalThis.Cloud.saveAvatar(colours.waveToAvatar(vivid ? caught : colours.colourWave()));
+          } catch {
+            /* ohne gespeicherte Farben vergibt ensureAvatar beim Laden eine Zufallskugel */
+          }
         }
         if (email && data.session.access_token && await recoveryEnabled()) {
           try {
@@ -11582,6 +11720,7 @@
       } catch (cause) {
         error.textContent = authText(cause);
         submit.disabled = false;
+        setGateBusy(false);
       }
     });
     form.append(el('p', 'auth-note', 'Notizen bleiben privat.'));
@@ -11591,7 +11730,6 @@
 
   async function enterAccount() {
     lockScreen();
-    if (!document.querySelector('#gate-card form')) renderAuth('in');
     await readyCloud();
     if (!globalThis.Cloud || !globalThis.Cloud.enabled) {
       renderAuth('in', globalThis.Cloud && globalThis.Cloud.error ? 'Keine Verbindung.' : 'Anmeldung ist nicht eingerichtet.');
@@ -11614,7 +11752,10 @@
       renderAuth('password');
       return;
     }
-    if (!session) return;
+    if (!session) {
+      if (!document.querySelector('#gate-card form')) renderAuth('in');
+      return;
+    }
     await openSession(session, false);
   }
 
@@ -11622,7 +11763,7 @@
     preloadGrime();
     wall.hidden = true;
     networkEl.hidden = true;
-    if (needsProfile()) renderAuth('in');
+    if (needsProfile()) lockScreen();
     try {
       const response = await fetch('data/added-films.json');
       if (response.ok) {

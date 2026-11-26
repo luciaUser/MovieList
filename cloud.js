@@ -89,6 +89,8 @@ function nextWishColor() {
 }
 
 function randomAvatar() {
+    // neues System (wie die farbige Login-Animation), das alte bleibt als Rückfall
+    if (globalThis.SphereColours) return globalThis.SphereColours.randomAvatar();
     const dir = Math.random() < 0.5 ? -1 : 1;
     const wrap = (hue) => ((hue % 360) + 360) % 360;
     const pick = (min, max) => min + Math.random() * (max - min);
