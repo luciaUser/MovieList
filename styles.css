@@ -456,8 +456,10 @@ header > * { pointer-events: auto; }
   align-items: center;
   gap: 16px;
   margin: 0;
-  padding: 10px 12px 12px 2px;
-  background: #000;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
   white-space: nowrap;
   pointer-events: none;
   clip-path: inset(-12px 100% -12px 0);
@@ -571,7 +573,7 @@ header > * { pointer-events: auto; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   margin-top: 0;
-  padding-top: 112px;
+  padding-top: 120px;
   background: #000;
 }
 
@@ -1987,6 +1989,74 @@ body.is-network {
 }
 
 @media (min-width: 721px) {
+  header { padding-top: 26px; }
+
+  #mode-profile,
+  #mode-profile .avatar,
+  #mode-profile .avatar-slot {
+    width: 30px;
+    height: 30px;
+  }
+
+  .modes { margin-left: 24px; }
+
+  .modes .icon-tab,
+  .add-film,
+  #add-film,
+  #search-open,
+  #search-form {
+    width: 28px;
+    height: 28px;
+  }
+
+  .modes .icon-tab svg,
+  .modes .icon-glyph,
+  .modes button svg,
+  #add-film svg,
+  #search-open svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  .modes .icon-tab svg path,
+  .modes .icon-tab svg circle,
+  #add-film svg path,
+  #search-open svg circle,
+  #search-open svg path {
+    vector-effect: non-scaling-stroke;
+  }
+
+  .modes .icon-tab::after { width: 28px; }
+
+  #mode-rating svg { transform: translateX(3px); }
+
+  #network { top: 8px; }
+
+  #lens-bar { top: 66px; }
+
+  #mode-wish,
+  #mode-network { transition: opacity 0.2s ease; }
+
+  .modes.is-sort-open #mode-wish,
+  .modes.is-sort-open #mode-network {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #mode-director[aria-expanded="true"] { color: #fff; }
+
+  #mode-director[aria-expanded="true"] svg path { stroke: url(#lit-burger); }
+
+  #mode-director:focus {
+    outline: none;
+    box-shadow: none;
+  }
+
+  #mode-director:focus-visible {
+    outline: 1px solid rgba(255, 255, 255, 0.4);
+    outline-offset: 3px;
+  }
+
   body.has-selection #wall,
   body.has-selection #wish-board,
   body.is-wish-search #wish-board { margin-right: min(360px, 100vw); }
@@ -4724,7 +4794,7 @@ body.is-path #profile { visibility: hidden; }
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding-top: 52px;
+  padding-top: 60px;
   background: #000;
   color: #fff;
   user-select: none;
