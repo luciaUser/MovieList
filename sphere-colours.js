@@ -145,7 +145,8 @@
     return FALLBACK.map(cssToLab);
   }
 
-  // wild: maximal gesättigt, mutige Farbsprünge (Komplementär, Dreiklang, Neon) – für den Kugel-Editor
+  // wild, aber ausgewogen: 1–2 Schichten knallig (maximal gesättigt, mutige Farbsprünge),
+  // die übrigen mild – hell-pastell oder tief-dunkel –, damit nie die ganze Kugel grell ist
   function wildWave() {
     const base = R() * 360;
     const scheme = Math.floor(R() * 4);
@@ -155,15 +156,35 @@
     else if (scheme === 1) hues = [base + 180, base + dir * 20, base, base - dir * 35];
     else if (scheme === 2) hues = [base, base + 120, base + 240, base + 120 + dir * 30];
     else hues = [base + 150 + R() * 60, base + dir * 60, base, base + dir * 30];
-    const light = R() < 0.5
-      ? [0.62 + R() * 0.12, 0.48 + R() * 0.12, 0.66 + R() * 0.1, 0.84 + R() * 0.08]
-      : [0.74 + R() * 0.1, 0.56 + R() * 0.1, 0.5 + R() * 0.12, 0.8 + R() * 0.1];
+    const light = [0.66 + R() * 0.1, 0.52 + R() * 0.12, 0.6 + R() * 0.12, 0.82 + R() * 0.08];
+    // der Rand (grösste Fläche) ist nur selten knallig
+    const pool = R() < 0.2 ? [0, 1, 2, 3] : [1, 2, 3];
+    const strong = new Set();
+    const count = R() < 0.55 ? 1 : 2;
+    while (strong.size < count) strong.add(pool[Math.floor(R() * pool.length)]);
     return hues.map((h, i) => {
       const hue = ((h % 360) + 360) % 360;
-      // Gelb/Oliv nur hell (sonst wird es braun-trüb)
-      const L = hue > 30 && hue < 130 ? Math.max(light[i], 0.84) : light[i];
-      return fit(L, 0.34, hue);
+      if (strong.has(i)) {
+        // Gelb/Oliv nur hell (sonst wird es braun-trüb)
+        const L = hue > 30 && hue < 130 ? Math.max(light[i], 0.84) : light[i];
+        return fit(L, 0.34, hue);
+      }
+      const pale = R() < 0.55;
+      const L = pale ? 0.84 + R() * 0.1 : 0.24 + R() * 0.16;
+      const C = pale ? 0.03 + R() * 0.06 : 0.02 + R() * 0.06;
+      return fit(L, C, hue);
     });
+  }
+
+  // wie weich die Übergänge auf der Kugel sein sollen: je härter der Kontrast benachbarter Schichten, desto weicher
+  function edgeOf(colours) {
+    let most = 0;
+    for (let i = 1; i < colours.length; i += 1) {
+      const a = colours[i - 1];
+      const b = colours[i];
+      most = Math.max(most, Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]));
+    }
+    return Math.min(1, Math.max(0, (most - 0.18) / 0.32)) * 0.12;
   }
 
   // selten: Schwarz-, Weiss- oder Grautöne mischen sich in einen Verlauf
@@ -232,6 +253,7 @@
     colourWave,
     rareWave,
     wildWave,
+    edgeOf,
     samplePath,
     chroma,
     lch,

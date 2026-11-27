@@ -27,6 +27,7 @@ uniform float uSoft;
 uniform float uPhase;
 uniform float uCut;
 uniform float uRoll;
+uniform float uEdge;
 
 const float H0 = -0.08;
 const float D = 0.085;
@@ -151,7 +152,7 @@ void main() {
   float a = 1.0 - smoothstep(-0.7, 0.7, dist);
   vec3 sc = vec3(0.0);
   if (a > 0.0) {
-    float soft = mix(0.0, 0.06, uSoft);
+    float soft = mix(0.0, 0.06, uSoft) + uEdge;
     // Rollen um die waagrechte Achse (wegrollen = Vorderseite wandert nach oben), aus v17
     float nz0 = sqrt(max(0.0, 1.0 - rr));
     float cr = cos(uRoll);
@@ -176,7 +177,7 @@ void main() {
 }`;
 
   const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
-  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase', 'uCut', 'uRoll'];
+  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase', 'uCut', 'uRoll', 'uEdge'];
   const ROOM = { curve: 4, depth: 0.2, floor: 0.1, ribs: 0, cycle: 7 };
 
   const easeSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
@@ -615,6 +616,7 @@ void main() {
       this.render({
         stack,
         roll: E.roll || 0,
+        edge: E.isLoginRise ? S().edgeOf([E.target ? E.target[0] : E.cur[0]].concat(E.target || E.cur)) * Math.min(1, E.p * 1.2 + (E.phase === 'rise' ? 0 : 1)) : 0,
         shift: E.phase === 'rise' ? 10 - 8 * E.p : 10,
         phase: 0,
         wall: E.wall,
@@ -647,6 +649,7 @@ void main() {
       gl.uniform1f(u.uPhase, o.phase || 0);
       gl.uniform1f(u.uCut, o.cut ? 1 : 0);
       gl.uniform1f(u.uRoll, o.roll || 0);
+      gl.uniform1f(u.uEdge, o.edge || 0);
       gl.uniform1f(u.uWall, o.wall);
       gl.uniform1f(u.uHorizon, o.horizon);
       gl.uniform3f(u.uSphere, o.sphere.x, o.sphere.y, Math.max(1, o.sphere.r));
@@ -705,8 +708,8 @@ void main() {
         const cT = Math.hypot(coming[1], coming[2]);
         // Übergänge kräftig statt gedämpft, damit auch die Zwischenzustände leuchten
         this.darks[n] = [
-          cT < 0.02 ? [coming[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hT, 0.58), 0.3, hT),
-          cB < 0.02 ? [leaving[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hB, 0.55), 0.28, hB),
+          cT < 0.02 ? [coming[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hT, 0.52), 0.17, hT),
+          cB < 0.02 ? [leaving[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hB, 0.48), 0.15, hB),
         ];
       }
       return this.darks[n];
@@ -827,9 +830,11 @@ void main() {
         roll = this.route.roll(k);
       }
       this.sphere = sphere;
+      const seen = [-1, 0, 1, 2, 3].map((k) => S().samplePath((i) => this.slot(i), X + k));
       this.sky.render({
         stack,
         roll,
+        edge: S().edgeOf(seen),
         shift: X - w0,
         phase: (((w0 + 10) % 8) + 8) % 8,
         wall: this.wall,
@@ -970,6 +975,7 @@ void main() {
       const r = size / 2;
       imageSky.render({
         stack, shift: 10, phase: 0, wall: 0, horizon: 0, sphere: { x: r, y: r, r: r - 0.75 }, roomY: r, soft: 1, cut: true,
+        edge: S().edgeOf([wave[0], wave[0], wave[1], wave[2], wave[3]]),
       });
       let url = '';
       try {
