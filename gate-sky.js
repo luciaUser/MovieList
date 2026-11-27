@@ -720,11 +720,79 @@ void main() {
     }
 
     // Farben der vier Schichten genau an der aktuellen Position (auch zwischen zwei Verläufen)
+    // Die Profilkugel wird später aus nur 4 Farben wieder weich gerechnet. Im Editor zeigt die Kugel aber 5 Stellen
+    // des Verlaufs (vom Rand X-1 bis zur Spitze X+3). Die 4 Farben werden deshalb so bestimmt, dass die geglättete
+    // Profilkugel diese 5 sichtbaren Farben möglichst genau trifft – der Rand (grösste Fläche) zählt am meisten.
     currentWave() {
       if (Math.abs(this.v) < 0.01) return this.waves[0];
       const X = -8 * this.v;
-      const at = (s) => S().samplePath((i) => this.slot(i), s);
-      return [at(X), at(X + 1), at(X + 2), at(X + 3)];
+      const seen = [-1, 0, 1, 2, 3].map((k) => S().samplePath((i) => this.slot(i), X + k));
+      const lch = seen.map((c) => {
+        const C = Math.hypot(c[1], c[2]);
+        return [c[0], C, Math.atan2(c[2], c[1])];
+      });
+      const near = lch.find((c) => c[1] >= 0.02);
+      for (let k = 0; k < lch.length; k += 1) {
+        if (lch[k][1] < 0.02) lch[k][2] = near ? near[2] : 0;
+        if (k > 0) {
+          let d = lch[k][2] - lch[k - 1][2];
+          while (d > Math.PI) d -= 2 * Math.PI;
+          while (d < -Math.PI) d += 2 * Math.PI;
+          lch[k][2] = lch[k - 1][2] + d;
+        }
+      }
+      // Wert der Profilkugel an den Stellen 9..13 aus den 4 Farben (Slots <= 10: Farbe 0, >= 13: Farbe 3)
+      const rows = [
+        [1, 0, 0, 0],
+        [5 / 6, 1 / 6, 0, 0],
+        [1 / 6, 4 / 6, 1 / 6, 0],
+        [0, 1 / 6, 4 / 6, 1 / 6],
+        [0, 0, 1 / 6, 5 / 6],
+      ];
+      const weight = [1.8, 1.3, 1, 1, 1];
+      const fitChannel = (target) => {
+        const A = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+        const y = [0, 0, 0, 0];
+        rows.forEach((row, r) => {
+          for (let i = 0; i < 4; i += 1) {
+            y[i] += weight[r] * row[i] * target[r];
+            for (let j = 0; j < 4; j += 1) A[i][j] += weight[r] * row[i] * row[j];
+          }
+        });
+        // Gauss-Elimination (4x4)
+        for (let i = 0; i < 4; i += 1) {
+          let pivot = i;
+          for (let r = i + 1; r < 4; r += 1) if (Math.abs(A[r][i]) > Math.abs(A[pivot][i])) pivot = r;
+          [A[i], A[pivot]] = [A[pivot], A[i]];
+          [y[i], y[pivot]] = [y[pivot], y[i]];
+          for (let r = i + 1; r < 4; r += 1) {
+            const f = A[r][i] / A[i][i];
+            for (let j = i; j < 4; j += 1) A[r][j] -= f * A[i][j];
+            y[r] -= f * y[i];
+          }
+        }
+        const x = [0, 0, 0, 0];
+        for (let i = 3; i >= 0; i -= 1) {
+          let sum = y[i];
+          for (let j = i + 1; j < 4; j += 1) sum -= A[i][j] * x[j];
+          x[i] = sum / A[i][i];
+        }
+        return x;
+      };
+      const L = fitChannel(lch.map((c) => c[0]));
+      const C = fitChannel(lch.map((c) => c[1]));
+      const H = fitChannel(lch.map((c) => c[2]));
+      // Farbton-Schritte unter 180° halten, sonst nimmt die Glättung den anderen Weg ums Farbrad
+      for (let k = 1; k < 4; k += 1) {
+        const d = H[k] - H[k - 1];
+        if (Math.abs(d) > 2.9) H[k] = H[k - 1] + Math.sign(d) * 2.9;
+      }
+      return [0, 1, 2, 3].map((k) => {
+        const l = Math.min(0.99, Math.max(0.02, L[k]));
+        const ch = Math.max(0, C[k]);
+        const deg = H[k] * 180 / Math.PI;
+        return ch < 0.005 ? [l, 0, 0] : S().fit(l, Math.min(0.37, ch), deg);
+      });
     }
 
     home() {
@@ -742,24 +810,23 @@ void main() {
       const shimmer = S().labToLinear(next).map((x) => Math.max(0, Math.min(1, x)));
       const home = this.home();
       let sphere = home;
+      let roll = 0;
       if (this.state === 'open' && this.from) {
-        const k = easeCubic(this.t / 0.7);
-        sphere = {
-          x: this.from.x + (home.x - this.from.x) * k,
-          y: this.from.y + (home.y - this.from.y) * k,
-          r: this.from.r + (home.r - this.from.r) * k,
-        };
+        const k = easeCubic(this.t / ROLL_TIME);
+        if (!this.openRoute) this.openRoute = rollRoute(home, this.from);
+        sphere = this.openRoute.at(1 - k, this.from);
+        roll = this.openRoute.roll(1 - k);
       } else if (this.state === 'close') {
         const to = (this.opts.target && this.opts.target()) || this.from || home;
         const k = easeCubic(this.t / ROLL_TIME);
         if (!this.route) this.route = rollRoute(this.closeFrom, to);
         sphere = this.route.at(k, to);
-        this.roll = this.route.roll(k);
+        roll = this.route.roll(k);
       }
       this.sphere = sphere;
       this.sky.render({
         stack,
-        roll: this.state === 'close' ? (this.roll || 0) : 0,
+        roll,
         shift: X - w0,
         phase: (((w0 + 10) % 8) + 8) % 8,
         wall: this.wall,
@@ -774,8 +841,8 @@ void main() {
     step(dt) {
       this.t += dt;
       if (this.state === 'open') {
-        this.wall = easeCubic(this.t / 0.7);
-        if (this.t >= 0.7) {
+        this.wall = easeCubic(this.t / ROLL_TIME);
+        if (this.t >= ROLL_TIME) {
           this.state = 'edit';
           this.wall = 1;
         }
