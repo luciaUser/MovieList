@@ -5490,7 +5490,9 @@
     root.classList.add('sky-leaving');
     root.classList.remove('needs-auth');
     const wave = globalThis.SphereColours.avatarToWave(avatarColors(account && account.avatar));
-    sky.login(wave, profileTarget, () => {
+    sky.prepare(wave);
+    // erst nach dem Aufbau der App weiterlaufen lassen (der Aufbau blockiert kurz, die Kugel ist dann fast still)
+    window.setTimeout(() => sky.release(profileTarget, () => {
       gate.classList.add('is-fading');
       window.setTimeout(() => {
         gate.hidden = true;
@@ -5502,7 +5504,14 @@
         skySplash = false;
         window.setTimeout(() => root.classList.remove('brand-arrive'), 1000);
       }, 450);
-    });
+    }), 0);
+  }
+
+  // sobald die Profilfarben bekannt sind, laufen sie ein, auch wenn im Hintergrund noch geladen wird
+  function skyColours() {
+    const gate = gateNode();
+    if (!sky || !sky.running() || skyLeaving || !gate || gate.hidden) return;
+    sky.prepare(globalThis.SphereColours.avatarToWave(avatarColors(account && account.avatar)));
   }
 
   function lockScreen() {
@@ -5541,13 +5550,12 @@
   }
 
   // eigener Begriff + klein und gedimmt der übliche Begriff daneben (z. B. «Plot twist  password»)
-  // der übliche Begriff erscheint erst beim Antippen: Feld antippen zeigt seinen, Titel antippen zeigt alle
+  // die üblichen Begriffe erscheinen erst, wenn man den Titel antippt (nochmals tippen blendet sie aus)
   function authLabel(node, main, plain) {
     node.replaceChildren(document.createTextNode(main));
     if (plain) node.append(el('span', 'auth-plain', plain));
     if (plain && node.dataset.explain !== '1') {
       node.dataset.explain = '1';
-      if (node.tagName === 'LABEL') node.addEventListener('focusin', () => node.classList.add('is-explained'));
       if (node.tagName === 'H1') {
         node.addEventListener('click', () => {
           const card = node.closest('.gate-card');
@@ -11499,6 +11507,7 @@
     applyChrome();
     paintAvatarTab();
     document.body.classList.toggle('is-profile-color', profileColorOn());
+    skyColours();
     watchFollows(session.user.id);
     readWishSeen();
     loadWishlists();
@@ -11528,7 +11537,10 @@
       }
       return;
     }
-    if (!(sky && sky.running())) runSky('bw', true);
+    if (!(sky && sky.running())) {
+      runSky('bw', true);
+      skyColours();
+    }
     let empty = null;
     try {
       empty = await globalThis.Store.cloudEmpty();
@@ -11562,7 +11574,7 @@
   function renderAuth(view, notice) {
     setGateBusy(false);
     renderAuthForm(view, notice);
-    runSky(view === 'up' ? 'colour' : 'bw', false);
+    runSky('bw', false);
   }
 
   function renderAuthForm(view, notice) {
@@ -11749,7 +11761,7 @@
       submit.disabled = true;
       setGateBusy(true);
       // Registrieren: die gerade sichtbaren Farben der Kugel werden zur persönlichen Profilkugel
-      const caught = !signingIn && sky ? sky.visibleWave() : null;
+      const caught = null;
       try {
         if (signingIn) {
           const data = await globalThis.Cloud.signIn(username, secret);

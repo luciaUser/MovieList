@@ -159,7 +159,7 @@ void main() {
 
   const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
   const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft'];
-  const ROOM = { curve: 4, depth: 0.2, floor: 0.1, ribs: 0.5, cycle: 7 };
+  const ROOM = { curve: 4, depth: 0.2, floor: 0.1, ribs: 0, cycle: 7 };
 
   const easeSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
   const easeCubic = (t) => {
@@ -312,21 +312,44 @@ void main() {
       return E.cur;
     }
 
-    login(wave, targetFn, done) {
-      if (!this.ok) {
-        if (done) done();
-        return;
-      }
+    // Profilfarben beginnen einzulaufen, während im Hintergrund noch geladen wird (landen erst nach release)
+    prepare(wave) {
+      if (!this.ok) return;
       if (!this.E) this.start(this.mode);
       const E = this.E;
       if (!E || E.login) return;
       E.login = true;
+      E.waitRelease = true;
       E.loginWave = wave;
+      E.loginAt = E.time;
       E.chromaGoal = 1;
+      if (this.reduce) return;
+      if (E.phase === 'introLine') {
+        E.horizon = 1;
+        E.phase = 'hold';
+        E.t = 0;
+      } else if (E.phase === 'rise' && !E.isLoginRise) {
+        const rem = Math.max(0.01, 1 - E.u);
+        if (rem * E.riseDur > 0.6) E.riseDur = 0.6 / rem;
+      }
+      if (!this.raf) this.startLoop();
+    }
+
+    // alles geladen: Farben landen fertig auf der Kugel, dann fliegt sie an ihren Platz
+    release(targetFn, done) {
+      if (!this.ok) {
+        if (done) done();
+        return;
+      }
       this.targetFn = targetFn;
       this.onDone = done;
+      const E = this.E;
+      if (!E) {
+        this.finish();
+        return;
+      }
       if (this.reduce) {
-        E.cur = wave;
+        E.cur = E.loginWave || E.cur;
         E.target = null;
         E.wall = 0;
         E.horizon = 0;
@@ -337,15 +360,15 @@ void main() {
         window.setTimeout(() => this.finish(), 250);
         return;
       }
-      if (E.phase === 'introLine') {
-        E.horizon = 1;
-        E.phase = 'hold';
-        E.t = 0;
-      } else if (E.phase === 'rise') {
-        const rem = Math.max(0.01, 1 - E.u);
-        if (rem * E.riseDur > 0.5) E.riseDur = 0.5 / rem;
-      }
+      E.waitRelease = false;
+      // mindestens ca. 2.2 s seit Beginn der Profilfarben, damit es auch bei schnellem Laden nicht hetzt
+      E.landBy = Math.max(E.time + 0.9, (E.loginAt || E.time) + 2.2);
       if (!this.raf) this.startLoop();
+    }
+
+    login(wave, targetFn, done) {
+      this.prepare(wave);
+      this.release(targetFn, done);
     }
 
     exitTarget() {
@@ -368,8 +391,9 @@ void main() {
       const E = this.E;
       if (isLogin) {
         E.target = E.loginWave;
-        E.riseDur = 1.2;
+        E.riseDur = 2.4;
         E.isLoginRise = true;
+        if (E.landBy != null) E.landBy = Math.max(E.landBy, E.time + 1.4);
       } else {
         if (!E.target) E.target = this.palette();
         E.riseDur = ROOM.cycle * 0.75;
@@ -443,7 +467,18 @@ void main() {
           E.riseDur = 2.6;
         }
       } else if (E.phase === 'rise') {
-        E.u += dt / E.riseDur;
+        if (E.isLoginRise && E.waitRelease) {
+          // noch am Laden: die Farben steigen weiter, werden aber langsamer und landen noch nicht ganz
+          // bei längerem Laden pendeln sie sanft weiter, damit nichts stillsteht
+          const goal = 0.8 + 0.05 * Math.sin((E.time - (E.loginAt || 0)) * 1.2);
+          E.u += (goal - E.u) * (1 - Math.exp(-dt / 0.9));
+        } else if (E.isLoginRise && E.landBy != null) {
+          const left = Math.max(0.05, E.landBy - E.time);
+          E.u += (1 - E.u) * Math.min(1, dt / left);
+          if (E.landBy - E.time <= 0) E.u = 1;
+        } else {
+          E.u += dt / E.riseDur;
+        }
         E.p = easeSine(E.u);
         if (E.u >= 1) this.completeRise();
       } else if (E.phase === 'hold') {

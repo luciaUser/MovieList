@@ -5720,15 +5720,11 @@ html.brand-arrive .brand-name { animation: brand-arrive 0.7s cubic-bezier(0.2, 0
   transition: opacity 0.25s ease;
 }
 
-.gate-card label.is-explained .auth-plain,
 .gate-card.is-explained .auth-plain { opacity: 1; }
 
 .gate-card h1 { cursor: pointer; }
 
-@media (hover: hover) {
-  .gate-card button:hover .auth-plain,
-  .gate-card h1:hover .auth-plain { opacity: 1; }
-}
+
 
 /* Genre-Felder: Farbkontur an der oberen linken Ecke */
 .pills li.has-genre-color { position: relative; }
