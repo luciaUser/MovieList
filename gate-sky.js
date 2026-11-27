@@ -158,9 +158,12 @@ void main() {
     float cr = cos(uRoll);
     float sr = sin(uRoll);
     vec2 qr = vec2(q.x, q.y * cr - nz0 * sr);
-    float local = softEll(qr, vec3(0.16, 0.955, 0.836), 0.16 + soft)
+    // Punkte, die durchs Rollen von der Rückseite kommen, zeigen die Grundfarbe: so ist eine Umdrehung
+    // auch genau eine sichtbare Umdrehung (das Muster erscheint nicht doppelt)
+    float front = smoothstep(-0.3, 0.0, q.y * sr + nz0 * cr);
+    float local = (softEll(qr, vec3(0.16, 0.955, 0.836), 0.16 + soft)
                 + softEll(qr, vec3(0.16, 0.93, 0.70), 0.15 + soft)
-                + softEll(qr, vec3(0.365, 0.645, 0.48), 0.14 + soft);
+                + softEll(qr, vec3(0.365, 0.645, 0.48), 0.14 + soft)) * front;
     sc = toLin(labAt(uShift + mix(-1.0, 3.0, local / 3.0)));
     float nz = sqrt(max(0.0, 1.0 - rr));
     sc *= 0.92 + 0.08 * nz;
@@ -559,7 +562,7 @@ void main() {
           E.phase = 'exit';
           E.t = 0;
           E.exitFrom = { ...E.sphere };
-          E.route = rollRoute(E.exitFrom, this.exitTarget() || E.exitFrom);
+          E.route = rollRoute(E.exitFrom, this.exitTarget() || E.exitFrom, 1);
         }
       } else if (E.phase === 'exit') {
         E.t += dt;
