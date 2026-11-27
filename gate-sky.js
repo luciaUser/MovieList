@@ -190,7 +190,10 @@ void main() {
   // v17: die Kugel rollt zuerst zurück in den Raum (Richtung Horizont), dann im Bogen zum Ziel, und wird dabei
   // kleiner. Die Drehung folgt der gerollten Strecke und ergibt genau ganze Umdrehungen (landet mit gleicher Ansicht).
   const ROLL_TIME = 1.6;
-  function rollRoute(from, to) {
+  // Editor: schneller und höchstens zwei Umdrehungen
+  const EDIT_ROLL_TIME = 0.95;
+  const EDIT_TURNS = 2;
+  function rollRoute(from, to, maxTurns) {
     const c = {
       x: from.x + (to.x - from.x) * 0.046,
       y: Math.max(from.y - 1.68 * from.r, to.y + 10),
@@ -213,7 +216,8 @@ void main() {
       prev = p;
     }
     const total = cum[n] || 1;
-    const scale = (2 * Math.PI * Math.max(1, Math.round(total / (2 * Math.PI)))) / total;
+    const turns = Math.min(maxTurns || 99, Math.max(1, Math.round(total / (2 * Math.PI))));
+    const scale = (2 * Math.PI * turns) / total;
     const roll = (k) => {
       const f = Math.min(1, Math.max(0, k)) * n;
       const i = Math.min(n - 1, Math.floor(f));
@@ -802,7 +806,7 @@ void main() {
         const l = Math.min(0.99, Math.max(0.02, L[k]));
         const ch = Math.max(0, C[k]);
         const deg = H[k] * 180 / Math.PI;
-        return ch < 0.005 ? [l, 0, 0] : S().fit(l, Math.min(0.37, ch), deg);
+        return ch < 0.005 ? [l, 0, 0] : S().fit(l, Math.min(0.37, ch * 1.12), deg);
       });
     }
 
@@ -823,14 +827,14 @@ void main() {
       let sphere = home;
       let roll = 0;
       if (this.state === 'open' && this.from) {
-        const k = easeCubic(this.t / ROLL_TIME);
-        if (!this.openRoute) this.openRoute = rollRoute(home, this.from);
+        const k = easeCubic(this.t / EDIT_ROLL_TIME);
+        if (!this.openRoute) this.openRoute = rollRoute(home, this.from, EDIT_TURNS);
         sphere = this.openRoute.at(1 - k, this.from);
         roll = this.openRoute.roll(1 - k);
       } else if (this.state === 'close') {
         const to = (this.opts.target && this.opts.target()) || this.from || home;
-        const k = easeCubic(this.t / ROLL_TIME);
-        if (!this.route) this.route = rollRoute(this.closeFrom, to);
+        const k = easeCubic(this.t / EDIT_ROLL_TIME);
+        if (!this.route) this.route = rollRoute(this.closeFrom, to, EDIT_TURNS);
         sphere = this.route.at(k, to);
         roll = this.route.roll(k);
       }
@@ -854,15 +858,15 @@ void main() {
     step(dt) {
       this.t += dt;
       if (this.state === 'open') {
-        this.wall = easeCubic(this.t / ROLL_TIME);
-        if (this.t >= ROLL_TIME) {
+        this.wall = easeCubic(this.t / EDIT_ROLL_TIME);
+        if (this.t >= EDIT_ROLL_TIME) {
           this.state = 'edit';
           this.wall = 1;
         }
       }
       if (this.state === 'close') {
-        this.wall = 1 - easeCubic(this.t / ROLL_TIME);
-        if (this.t >= ROLL_TIME) {
+        this.wall = 1 - easeCubic(this.t / EDIT_ROLL_TIME);
+        if (this.t >= EDIT_ROLL_TIME) {
           this.state = 'done';
           const cb = this.closeDone;
           this.closeDone = null;
