@@ -400,8 +400,14 @@ void main() {
         E.phase = 'hold';
         E.t = 0;
       } else if (E.phase === 'rise' && !E.isLoginRise) {
-        const rem = Math.max(0.01, 1 - E.u);
-        if (rem * E.riseDur > 0.6) E.riseDur = 0.6 / rem;
+        // keine schwarz-weisse Welle mehr fertig laufen lassen: die aufsteigende Welle geht weich
+        // in die Profilfarben über und wird selbst zum Einlaufen der Farben
+        E.darkFrom = this.makeDark(E.target, E.cur[0]);
+        E.fromTarget = E.target;
+        E.blend = 0;
+        E.target = wave;
+        E.isLoginRise = true;
+        E.riseDur = 2.4;
       }
       if (!this.raf) this.startLoop();
     }
@@ -433,7 +439,7 @@ void main() {
       }
       E.waitRelease = false;
       // mindestens ca. 2.2 s seit Beginn der Profilfarben, damit es auch bei schnellem Laden nicht hetzt
-      E.landBy = Math.max(E.time + 0.9, (E.loginAt || E.time) + 2.2);
+      E.landBy = Math.max(E.time + 1.2, (E.loginAt || E.time) + 3.0);
       if (!this.raf) this.startLoop();
     }
 
@@ -464,7 +470,7 @@ void main() {
         E.target = E.loginWave;
         E.riseDur = 2.4;
         E.isLoginRise = true;
-        if (E.landBy != null) E.landBy = Math.max(E.landBy, E.time + 1.4);
+        if (E.landBy != null) E.landBy = Math.max(E.landBy, E.time + 1.8);
       } else {
         if (!E.target) E.target = this.palette();
         E.riseDur = ROOM.cycle * 0.75;
@@ -495,6 +501,7 @@ void main() {
       E.prev = [dk[0], dk[1]];
       E.cur = E.target;
       E.target = null;
+      E.fromTarget = null;
       E.u = 0;
       E.p = 0;
       E.intro = false;
@@ -518,6 +525,7 @@ void main() {
       if (!E) return;
       E.time += dt;
       E.chroma = approach(E.chroma, E.chromaGoal, dt, E.login ? 8 : 2.5);
+      if (E.blend != null && E.blend < 1) E.blend = Math.min(1, E.blend + dt / 0.6);
       E.soft = approach(E.soft, E.softGoal, dt, 2.5);
       if (E.phase !== 'exit' && E.phase !== 'done') {
         const k = 1 - Math.exp(-dt * 6);
@@ -542,7 +550,7 @@ void main() {
           // noch am Laden: die Farben steigen weiter, werden aber langsamer und landen noch nicht ganz
           // bei längerem Laden pendeln sie sanft weiter, damit nichts stillsteht
           const goal = 0.8 + 0.05 * Math.sin((E.time - (E.loginAt || 0)) * 1.2);
-          E.u += (goal - E.u) * (1 - Math.exp(-dt / 0.9));
+          E.u += (goal - E.u) * (1 - Math.exp(-dt / 1.3));
         } else if (E.isLoginRise && E.landBy != null) {
           const left = Math.max(0.05, E.landBy - E.time);
           E.u += (1 - E.u) * Math.min(1, dt / left);
@@ -610,8 +618,14 @@ void main() {
       const E = this.E;
       if (!this.gl || !E) return;
       const base = E.cur[0];
-      const nextW = E.target || [base, base, base, base];
-      const dark = E.target ? this.makeDark(E.target, base) : [base, base];
+      let nextW = E.target || [base, base, base, base];
+      let dark = E.target ? this.makeDark(E.target, base) : [base, base];
+      if (E.fromTarget && E.blend != null && E.blend < 1 && E.target) {
+        const b = E.blend * E.blend * (3 - 2 * E.blend);
+        const mix = (x, y) => [x[0] + (y[0] - x[0]) * b, x[1] + (y[1] - x[1]) * b, x[2] + (y[2] - x[2]) * b];
+        nextW = E.fromTarget.map((c, i) => mix(c, E.target[i]));
+        dark = E.darkFrom.map((c, i) => mix(c, dark[i]));
+      }
       const c = E.chroma;
       const stack = [nextW[0], nextW[0]].concat(nextW, dark, [base, base], E.cur, E.prev)
         .map((v) => [v[0], v[1] * c, v[2] * c]);
