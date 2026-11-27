@@ -833,13 +833,14 @@ void main() {
         const k = easeCubic(this.t / EDIT_ROLL_TIME);
         if (!this.openRoute) this.openRoute = rollRoute(home, this.from, EDIT_TURNS);
         sphere = this.openRoute.at(1 - k, this.from);
-        roll = this.openRoute.roll(1 - k);
+        // gleichmässig verteilt (nicht nach Strecke), damit es sich wie genau eine Drehung anfühlt – wie beim Zurückrollen
+        roll = 2 * Math.PI * (1 - k);
       } else if (this.state === 'close') {
         const to = (this.opts.target && this.opts.target()) || this.from || home;
         const k = easeCubic(this.t / EDIT_ROLL_TIME);
         if (!this.route) this.route = rollRoute(this.closeFrom, to, EDIT_TURNS);
         sphere = this.route.at(k, to);
-        roll = this.route.roll(k);
+        roll = 2 * Math.PI * k;
       }
       this.sphere = sphere;
       const seen = [-1, 0, 1, 2, 3].map((k) => S().samplePath((i) => this.slot(i), X + k));
