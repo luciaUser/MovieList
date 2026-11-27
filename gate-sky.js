@@ -26,6 +26,7 @@ uniform vec3 uShimmer;
 uniform float uSoft;
 uniform float uPhase;
 uniform float uCut;
+uniform float uRoll;
 
 const float H0 = -0.08;
 const float D = 0.085;
@@ -151,9 +152,14 @@ void main() {
   vec3 sc = vec3(0.0);
   if (a > 0.0) {
     float soft = mix(0.0, 0.06, uSoft);
-    float local = softEll(q, vec3(0.16, 0.955, 0.836), 0.16 + soft)
-                + softEll(q, vec3(0.16, 0.93, 0.70), 0.15 + soft)
-                + softEll(q, vec3(0.365, 0.645, 0.48), 0.14 + soft);
+    // Rollen um die waagrechte Achse (wegrollen = Vorderseite wandert nach oben), aus v17
+    float nz0 = sqrt(max(0.0, 1.0 - rr));
+    float cr = cos(uRoll);
+    float sr = sin(uRoll);
+    vec2 qr = vec2(q.x, q.y * cr - nz0 * sr);
+    float local = softEll(qr, vec3(0.16, 0.955, 0.836), 0.16 + soft)
+                + softEll(qr, vec3(0.16, 0.93, 0.70), 0.15 + soft)
+                + softEll(qr, vec3(0.365, 0.645, 0.48), 0.14 + soft);
     sc = toLin(labAt(uShift + mix(-1.0, 3.0, local / 3.0)));
     float nz = sqrt(max(0.0, 1.0 - rr));
     sc *= 0.92 + 0.08 * nz;
@@ -170,7 +176,7 @@ void main() {
 }`;
 
   const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
-  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase', 'uCut'];
+  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase', 'uCut', 'uRoll'];
   const ROOM = { curve: 4, depth: 0.2, floor: 0.1, ribs: 0, cycle: 7 };
 
   const easeSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
@@ -179,6 +185,41 @@ void main() {
     return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
   };
   const approach = (value, goal, dt, rate) => value + (goal - value) * (1 - Math.exp(-dt * rate));
+
+  // v17: die Kugel rollt zuerst zurück in den Raum (Richtung Horizont), dann im Bogen zum Ziel, und wird dabei
+  // kleiner. Die Drehung folgt der gerollten Strecke und ergibt genau ganze Umdrehungen (landet mit gleicher Ansicht).
+  const ROLL_TIME = 1.6;
+  function rollRoute(from, to) {
+    const c = {
+      x: from.x + (to.x - from.x) * 0.046,
+      y: Math.max(from.y - 1.68 * from.r, to.y + 10),
+    };
+    const at = (k, end) => {
+      const e = end || to;
+      const a = 1 - k;
+      return {
+        x: a * a * from.x + 2 * a * k * c.x + k * k * e.x,
+        y: a * a * from.y + 2 * a * k * c.y + k * k * e.y,
+        r: from.r + (e.r - from.r) * (1 - Math.pow(1 - k, 1.6)),
+      };
+    };
+    const n = 200;
+    const cum = [0];
+    let prev = at(0);
+    for (let i = 1; i <= n; i += 1) {
+      const p = at(i / n);
+      cum.push(cum[i - 1] + Math.hypot(p.x - prev.x, p.y - prev.y) / Math.max(p.r, 1));
+      prev = p;
+    }
+    const total = cum[n] || 1;
+    const scale = (2 * Math.PI * Math.max(1, Math.round(total / (2 * Math.PI)))) / total;
+    const roll = (k) => {
+      const f = Math.min(1, Math.max(0, k)) * n;
+      const i = Math.min(n - 1, Math.floor(f));
+      return (cum[i] + (cum[i + 1] - cum[i]) * (f - i)) * scale;
+    };
+    return { at, roll };
+  }
   const black = () => [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
 
   class Sky {
@@ -513,19 +554,18 @@ void main() {
           E.phase = 'exit';
           E.t = 0;
           E.exitFrom = { ...E.sphere };
+          E.route = rollRoute(E.exitFrom, this.exitTarget() || E.exitFrom);
         }
       } else if (E.phase === 'exit') {
         E.t += dt;
-        const k = easeCubic(E.t / 0.8);
+        const k = easeCubic(E.t / ROLL_TIME);
         const to = this.exitTarget() || E.exitFrom;
         E.wall = 1 - k;
         E.horizon = 1 - k;
-        E.sphere = {
-          x: E.exitFrom.x + (to.x - E.exitFrom.x) * k,
-          y: E.exitFrom.y + (to.y - E.exitFrom.y) * k,
-          r: E.exitFrom.r + (to.r - E.exitFrom.r) * k,
-        };
-        if (E.t >= 0.8) {
+        E.sphere = E.route.at(k, to);
+        E.roll = E.route.roll(k);
+        if (E.t >= ROLL_TIME) {
+          E.roll = 0;
           E.phase = 'done';
           this.finish();
         }
@@ -574,6 +614,7 @@ void main() {
       }
       this.render({
         stack,
+        roll: E.roll || 0,
         shift: E.phase === 'rise' ? 10 - 8 * E.p : 10,
         phase: 0,
         wall: E.wall,
@@ -605,6 +646,7 @@ void main() {
       gl.uniform1f(u.uShift, o.shift);
       gl.uniform1f(u.uPhase, o.phase || 0);
       gl.uniform1f(u.uCut, o.cut ? 1 : 0);
+      gl.uniform1f(u.uRoll, o.roll || 0);
       gl.uniform1f(u.uWall, o.wall);
       gl.uniform1f(u.uHorizon, o.horizon);
       gl.uniform3f(u.uSphere, o.sphere.x, o.sphere.y, Math.max(1, o.sphere.r));
@@ -709,16 +751,15 @@ void main() {
         };
       } else if (this.state === 'close') {
         const to = (this.opts.target && this.opts.target()) || this.from || home;
-        const k = easeCubic(this.t / 0.75);
-        sphere = {
-          x: this.closeFrom.x + (to.x - this.closeFrom.x) * k,
-          y: this.closeFrom.y + (to.y - this.closeFrom.y) * k,
-          r: this.closeFrom.r + (to.r - this.closeFrom.r) * k,
-        };
+        const k = easeCubic(this.t / ROLL_TIME);
+        if (!this.route) this.route = rollRoute(this.closeFrom, to);
+        sphere = this.route.at(k, to);
+        this.roll = this.route.roll(k);
       }
       this.sphere = sphere;
       this.sky.render({
         stack,
+        roll: this.state === 'close' ? (this.roll || 0) : 0,
         shift: X - w0,
         phase: (((w0 + 10) % 8) + 8) % 8,
         wall: this.wall,
@@ -740,8 +781,8 @@ void main() {
         }
       }
       if (this.state === 'close') {
-        this.wall = 1 - easeCubic(this.t / 0.75);
-        if (this.t >= 0.75) {
+        this.wall = 1 - easeCubic(this.t / ROLL_TIME);
+        if (this.t >= ROLL_TIME) {
           this.state = 'done';
           const cb = this.closeDone;
           this.closeDone = null;
@@ -801,6 +842,7 @@ void main() {
 
     beginClose(done) {
       this.closeFrom = { ...(this.sphere || this.home()) };
+      this.route = null;
       this.state = 'close';
       this.t = 0;
       this.closeDone = done;
