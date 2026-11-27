@@ -5713,3 +5713,55 @@ html.brand-arrive .brand-name { animation: brand-arrive 0.7s cubic-bezier(0.2, 0
 }
 
 .gate-card h1 .auth-plain { font-size: 13px; letter-spacing: 0.02em; }
+
+/* Login: der übliche Begriff erscheint erst beim Antippen */
+.gate-card .auth-plain {
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.gate-card label.is-explained .auth-plain,
+.gate-card.is-explained .auth-plain { opacity: 1; }
+
+.gate-card h1 { cursor: pointer; }
+
+@media (hover: hover) {
+  .gate-card button:hover .auth-plain,
+  .gate-card h1:hover .auth-plain { opacity: 1; }
+}
+
+/* Genre-Felder: Farbkontur an der oberen linken Ecke */
+.pills li.has-genre-color { position: relative; }
+
+.pills li.has-genre-color::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border: 1.5px solid var(--genre);
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(135deg, #000 0, #000 13px, transparent 22px);
+  mask-image: linear-gradient(135deg, #000 0, #000 13px, transparent 22px);
+}
+
+/* Abschnitts-Übertitel: schmaler Block auf der Linie, so breit wie der Titel */
+.section-head .profile-kicker { position: relative; }
+
+.section-head > .profile-kicker {
+  width: fit-content;
+  max-width: 100%;
+}
+
+.section-head .taste-head .profile-kicker,
+.section-head .rec-kicker .profile-kicker { display: inline-block; }
+
+.section-head .profile-kicker::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0.16em;
+  top: calc(100% + 7px);
+  height: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+}

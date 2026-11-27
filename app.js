@@ -950,7 +950,7 @@
     }
     const count = spotlight.ids.length;
     bar.replaceChildren();
-    bar.append(el('span', null, `${spotlight.title} · ${count === 1 ? '1 Film' : `${count} Filme`}`));
+    bar.append(el('span', null, `${spotlight.title} · ${count === 1 ? t('1 movie') : t('{n} movies', { n: count })}`));
     const close = el('button', null, '×');
     close.type = 'button';
     close.setAttribute('aria-label', 'Hervorhebung beenden');
@@ -1336,7 +1336,7 @@
       )).filter(Boolean);
       const avg = myAverage(films);
       bar.querySelector('.genre-score').textContent = avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`;
-      bar.querySelector('.genre-count').textContent = films.length === 1 ? t('1 film') : t('{n} films', { n: films.length });
+      bar.querySelector('.genre-count').textContent = films.length === 1 ? t('1 movie') : t('{n} movies', { n: films.length });
     });
     if (network) network.paint();
   }
@@ -1706,12 +1706,61 @@
     }
   }
 
+  // Farbe pro Genre (Kontur an der oberen linken Ecke der Genre-Felder)
+  const GENRE_COLORS = {
+    action: '#ff4a1c',
+    abenteuer: '#f4a12a',
+    adventure: '#f4a12a',
+    drama: '#c2407e',
+    'komödie': '#ffd84a',
+    comedy: '#ffd84a',
+    krimi: '#6f93b8',
+    crime: '#6f93b8',
+    thriller: '#17b8a6',
+    mystery: '#8e5cff',
+    horror: '#d4142e',
+    'sci-fi': '#2f8cff',
+    'science fiction': '#2f8cff',
+    'science-fiction': '#2f8cff',
+    fantasy: '#e04bd8',
+    romantik: '#ff6f9c',
+    romance: '#ff6f9c',
+    kriegsfilm: '#8f9e3c',
+    war: '#8f9e3c',
+    western: '#c98a4b',
+    historie: '#c9a24a',
+    history: '#c9a24a',
+    biografie: '#d9c3a0',
+    biography: '#d9c3a0',
+    dokumentation: '#9fb3c8',
+    documentary: '#9fb3c8',
+    animation: '#3fd17a',
+  };
+
+  function genreColor(name) {
+    const key = String(name || '').trim().toLocaleLowerCase('de');
+    if (GENRE_COLORS[key]) return GENRE_COLORS[key];
+    const alias = vocabulary && vocabulary.genreAliases && vocabulary.genreAliases[String(name || '').trim()];
+    if (typeof alias === 'string' && GENRE_COLORS[alias.toLocaleLowerCase('de')]) return GENRE_COLORS[alias.toLocaleLowerCase('de')];
+    return '';
+  }
+
+  function genrePill(name) {
+    const item = el('li', null, name);
+    const color = genreColor(name);
+    if (color) {
+      item.classList.add('has-genre-color');
+      item.style.setProperty('--genre', color);
+    }
+    return item;
+  }
+
   function paintGenrePills(list, names, scale) {
     const shown = names.join('\n');
     if (list.dataset.shown !== shown) {
       list.dataset.shown = shown;
       list.replaceChildren();
-      names.forEach((name) => list.append(el('li', null, name)));
+      names.forEach((name) => list.append(genrePill(name)));
     }
     list.style.setProperty('--pill-scale', String(scale));
   }
@@ -2137,7 +2186,7 @@
       const pills = el('ul', 'pills');
       const names = film.genres.filter(Boolean).slice(0, 3);
       pills.dataset.genres = names.join('\n');
-      names.forEach((name) => pills.append(el('li', null, name)));
+      names.forEach((name) => pills.append(genrePill(name)));
       meta.append(pills);
       bindGenreFit(meta);
     }
@@ -2476,7 +2525,7 @@
     const cover = document.createElement('button');
     cover.type = 'button';
     cover.className = 'path-cover';
-    cover.setAttribute('aria-label', title || 'Film');
+    cover.setAttribute('aria-label', title || t('Movie'));
     if (poster) {
       const image = document.createElement('img');
       image.alt = '';
@@ -2488,7 +2537,7 @@
     } else {
       cover.classList.add('is-blank');
       cover.style.setProperty('--blank', `hsl(${posterHue(id || title || 'film')} 25% 14%)`);
-      cover.append(el('span', 'poster-title', title || 'Film'));
+      cover.append(el('span', 'poster-title', title || t('Movie')));
     }
     parent.append(cover);
     return cover;
@@ -3014,7 +3063,7 @@
     } else {
       cover.classList.add('is-blank');
       cover.style.setProperty('--blank', `hsl(${posterHue(row.tmdbId)} 25% 14%)`);
-      cover.append(el('span', 'poster-title', row.title || 'Film'));
+      cover.append(el('span', 'poster-title', row.title || t('Movie')));
     }
     const copy = el('span', 'link-copy');
     const foot = el('span', 'rec-foot');
@@ -3288,7 +3337,7 @@
     } else {
       poster.classList.add('is-blank');
       poster.style.setProperty('--blank', `hsl(${posterHue(film.id)} 25% 14%)`);
-      poster.append(el('span', 'poster-title', film.title || 'Film'));
+      poster.append(el('span', 'poster-title', film.title || t('Movie')));
     }
     const copy = el('div', 'panel-copy');
     const copyTop = el('div', 'panel-copy-top');
@@ -3343,7 +3392,7 @@
     if (genres.length) {
       const pills = el('ul', 'pills');
       pills.dataset.genres = genres.join('\n');
-      genres.forEach((genre) => pills.append(el('li', null, genre)));
+      genres.forEach((genre) => pills.append(genrePill(genre)));
       meta.append(pills);
       bindGenreFit(meta);
     }
@@ -3423,7 +3472,7 @@
         } else {
           cover.classList.add('is-blank');
           cover.style.setProperty('--blank', `hsl(${posterHue(other.id)} 25% 14%)`);
-          cover.append(el('span', 'poster-title', other.title || 'Film'));
+          cover.append(el('span', 'poster-title', other.title || t('Movie')));
         }
         const copy = el('span', 'link-copy');
         copy.append(
@@ -4300,7 +4349,7 @@
       if (owned) frame.append(el('span', 'add-hit-check', '✓'));
       button.append(
         frame,
-        el('span', 'add-hit-title', film.title || 'Film'),
+        el('span', 'add-hit-title', film.title || t('Movie')),
         el('span', 'add-hit-year', film.year ? String(film.year).slice(0, 4) : ''),
       );
       button.addEventListener('click', () => chooseAddHit(row));
@@ -5492,9 +5541,20 @@
   }
 
   // eigener Begriff + klein und gedimmt der übliche Begriff daneben (z. B. «Plot twist  password»)
+  // der übliche Begriff erscheint erst beim Antippen: Feld antippen zeigt seinen, Titel antippen zeigt alle
   function authLabel(node, main, plain) {
     node.replaceChildren(document.createTextNode(main));
     if (plain) node.append(el('span', 'auth-plain', plain));
+    if (plain && node.dataset.explain !== '1') {
+      node.dataset.explain = '1';
+      if (node.tagName === 'LABEL') node.addEventListener('focusin', () => node.classList.add('is-explained'));
+      if (node.tagName === 'H1') {
+        node.addEventListener('click', () => {
+          const card = node.closest('.gate-card');
+          if (card) card.classList.toggle('is-explained');
+        });
+      }
+    }
     return node;
   }
 
@@ -5950,7 +6010,7 @@
       const avg = scores.length ? scores.reduce((sum, value) => sum + value, 0) / scores.length : null;
       bar.append(
         el('span', 'genre-name', group.label),
-        el('span', 'genre-count', group.films.length === 1 ? '1 Film' : `${group.films.length} Filme`),
+        el('span', 'genre-count', group.films.length === 1 ? t('1 movie') : t('{n} movies', { n: group.films.length })),
         el('span', 'genre-score', avg == null ? '' : `★  ${avg.toFixed(1).replace('.', ',')}`),
       );
       wallBox.append(bar);
@@ -6023,8 +6083,8 @@
       }).slice(0, cap);
     if (!films.length) {
       block.append(el('p', 'profile-note', custom.length
-        ? 'The selected films are no longer in the archive.'
-        : 'Not enough ratings yet'));
+        ? t('The selected movies are no longer in the archive.')
+        : t('Not enough ratings yet')));
       return block;
     }
     const row = el('div', 'top-row');
@@ -6135,7 +6195,7 @@
     const stats = pack.stats || {};
     const numbers = el('div', 'profile-stats');
     numbers.append(
-      statNode(String(Number(stats.films) || 0), 'Films'),
+      statNode(String(Number(stats.films) || 0), t('Movies')),
       statNode(stats.friends == null ? '–' : String(Number(stats.friends) || 0), 'Friends'),
     );
     root.append(numbers);
@@ -7006,8 +7066,8 @@
         ids: filmsWith(kind === 'directors' ? 'director' : 'cast', person.name),
       }));
       const meta = person.count
-        ? `★ ${scoreText(person.avg)} · ${person.count === 1 ? '1 film' : `${person.count} films`}`
-        : (readOnly ? '' : '0 films');
+        ? `★ ${scoreText(person.avg)} · ${person.count === 1 ? t('1 movie') : t('{n} movies', { n: person.count })}`
+        : (readOnly ? '' : t('0 movies'));
       line.append(rank, name);
       if (meta) line.append(el('small', null, meta));
       block.append(line);
@@ -7046,7 +7106,7 @@
     block.append(sectionHead(`Top ${cap}`, { kicker: 'top-kicker', rule: 'top-rule' }));
     const chosen = shownTopFilms();
     if (!chosen.length) {
-      block.append(el('p', 'profile-note', `Rate films, then your top ${cap} show up here`));
+      block.append(el('p', 'profile-note', t('Rate movies, then your top {n} show up here', { n: cap })));
     } else {
       const row = el('div', 'top-row');
       chosen.forEach((film, index) => {
@@ -7408,7 +7468,7 @@
       const count = bar.querySelector('.genre-count');
       if (!count || !bar.dataset.ids) return;
       const films = bar.dataset.ids.split(',').filter(Boolean);
-      count.textContent = films.length === 1 ? t('1 film') : t('{n} films', { n: films.length });
+      count.textContent = films.length === 1 ? t('1 movie') : t('{n} movies', { n: films.length });
     });
   }
 
@@ -8462,7 +8522,7 @@
       button.classList.add('is-blank');
       button.style.setProperty('--blank', `hsl(${posterHue(film.id)} 25% 14%)`);
       if (image) image.hidden = true;
-      const caption = film.title || 'Film';
+      const caption = film.title || t('Movie');
       if (!title) {
         title = el('span', 'poster-title', caption);
         button.append(title);
@@ -8636,7 +8696,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'poster wish-plus';
-    button.setAttribute('aria-label', 'Film hinzufügen');
+    button.setAttribute('aria-label', t('Add a movie'));
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></path></svg>';
     button.addEventListener('click', onClick);
     return button;
@@ -9251,7 +9311,7 @@
       const film = row.film;
       const when = row.fromUpcoming ? releaseStamp(film) : '';
       const year = film.year ? ` (${film.year})` : '';
-      return `${film.title || 'Film'}${when ? ` · ${when}` : year}`;
+      return `${film.title || t('Movie')}${when ? ` · ${when}` : year}`;
     };
 
     const coverNode = (state, row) => {
@@ -9274,7 +9334,7 @@
         node.append(image);
       } else {
         node.classList.add('is-blank');
-        node.append(el('span', 'wish-add-blank', film.title || 'Film'));
+        node.append(el('span', 'wish-add-blank', film.title || t('Movie')));
       }
       if (stamp) node.append(el('span', 'wish-when', stamp));
       const plus = el('span', 'wish-add-plus');
@@ -9856,7 +9916,7 @@
         button.className = 'wish-coming-cover';
         button.dataset.id = film.id;
         const stamp = releaseStamp(film);
-        const label = `${film.title || 'Film'}${stamp ? ` · ${stamp}` : ''}`;
+        const label = `${film.title || t('Movie')}${stamp ? ` · ${stamp}` : ''}`;
         button.title = label;
         button.setAttribute('aria-label', label);
         const image = document.createElement('img');
@@ -9972,14 +10032,14 @@
     const poster = document.createElement('button');
     poster.type = 'button';
     poster.className = 'wish-poster';
-    poster.setAttribute('aria-label', film.title || 'Film');
+    poster.setAttribute('aria-label', film.title || t('Movie'));
     const image = document.createElement('img');
     image.alt = '';
     image.src = posterSrc(film);
     poster.append(image);
     poster.addEventListener('click', () => openListedFilm(wishFilmObject(article._wishItem), list));
     const body = el('div', 'wish-copy');
-    const title = el('button', 'wish-title', film.title || 'Film');
+    const title = el('button', 'wish-title', film.title || t('Movie'));
     title.type = 'button';
     title.addEventListener('click', () => openListedFilm(wishFilmObject(article._wishItem), list));
     const year = film.year ? `${film.year} · ` : '';
@@ -10014,7 +10074,7 @@
     const poster = knownPoster(film);
     if (image && poster && !posterSrcMatches(image, poster)) image.src = poster;
     const title = article.querySelector('.wish-title');
-    const titleText = film.title || 'Film';
+    const titleText = film.title || t('Movie');
     if (title && title.textContent !== titleText) title.textContent = titleText;
     const meta = article.querySelector('.wish-meta');
     const year = film.year ? `${film.year} · ` : '';
@@ -10181,7 +10241,7 @@
               button.className = 'hit-row';
               const origin = (hit.sources || []).join(' · ');
               const label = [origin, hit.film.year].filter(Boolean).join(' · ');
-              button.append(document.createTextNode(hit.film.title || 'Film'), el('small', null, label));
+              button.append(document.createTextNode(hit.film.title || t('Movie')), el('small', null, label));
               button.addEventListener('click', async () => {
                 button.disabled = true;
                 const message = await addFilmToList(list.id, hit.film, hit.facets);
@@ -11033,7 +11093,7 @@
   function tasteFrame(countText) {
     const block = el('section', 'taste-block');
     const head = el('div', 'taste-head');
-    head.append(el('h2', 'profile-kicker', 'AI Film Profile'));
+    head.append(el('h2', 'profile-kicker', t('AI Movie Profile')));
     if (countText) head.append(el('span', 'taste-from', countText));
     const wrap = el('div', 'section-head');
     wrap.append(head, el('span', 'section-rule'));
@@ -11077,13 +11137,13 @@
     const count = ratedTasteFilms().length;
     const block = tasteFrame(`From ${count} ratings`);
     if (count < 15) {
-      block.append(el('p', 'taste-quiet', `A film profile needs 15 rated films (${15 - count} to go).`));
+      block.append(el('p', 'taste-quiet', t('A movie profile needs 15 rated movies ({n} to go).', { n: 15 - count })));
       slot.append(block);
       if (opts.error) slot.append(el('p', 'taste-error', tasteErrorText(opts.error)));
       return;
     }
     if (!taste || !taste.title) {
-      const button = el('button', 'text-line', opts.busy ? 'Creating…' : 'Create film profile');
+      const button = el('button', 'text-line', opts.busy ? t('Creating…') : t('Create movie profile'));
       button.type = 'button';
       button.disabled = Boolean(opts.busy);
       button.addEventListener('click', () => makeTaste(slot));
@@ -11222,7 +11282,7 @@
     root.append(head);
     const stats = el('div', 'profile-stats');
     stats.append(
-      statNode(films, 'Films'),
+      statNode(films, t('Movies')),
       statNode(friends, 'Friends', paintFriends),
       friendInviteNode(),
     );
