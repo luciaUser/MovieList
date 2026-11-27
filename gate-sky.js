@@ -190,9 +190,9 @@ void main() {
   // v17: die Kugel rollt zuerst zurück in den Raum (Richtung Horizont), dann im Bogen zum Ziel, und wird dabei
   // kleiner. Die Drehung folgt der gerollten Strecke und ergibt genau ganze Umdrehungen (landet mit gleicher Ansicht).
   const ROLL_TIME = 1.6;
-  // Editor: schneller und höchstens zwei Umdrehungen
+  // Editor: schneller und genau eine Umdrehung
   const EDIT_ROLL_TIME = 0.95;
-  const EDIT_TURNS = 2;
+  const EDIT_TURNS = 1;
   function rollRoute(from, to, maxTurns) {
     const c = {
       x: from.x + (to.x - from.x) * 0.046,
