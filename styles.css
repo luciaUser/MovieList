@@ -5761,3 +5761,69 @@ html.brand-arrive .brand-name { animation: brand-arrive 0.7s cubic-bezier(0.2, 0
   background: rgba(255, 255, 255, 0.3);
   pointer-events: none;
 }
+
+/* Kugel-Editor (Profil): Vollbild, Farbverläufe von Hand */
+.sphere-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.sphere-editor.is-open { opacity: 1; }
+
+html.is-sphere-editing,
+html.is-sphere-editing body { overflow: hidden; }
+
+.sphere-editor-sky {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sphere-editor-bar {
+  position: absolute;
+  top: calc(18px + env(safe-area-inset-top));
+  left: 20px;
+  right: 20px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.sphere-editor-bar button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.sphere-editor-bar svg { width: 28px; height: 28px; }
+
+.sphere-editor-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(40px + env(safe-area-inset-bottom));
+  margin: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-align: center;
+  pointer-events: none;
+  transition: opacity 0.6s ease;
+}
+
+.sphere-editor-hint.is-gone { opacity: 0; }

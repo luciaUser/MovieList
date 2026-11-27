@@ -145,6 +145,47 @@
     return FALLBACK.map(cssToLab);
   }
 
+  // selten: Schwarz-, Weiss- oder Grautöne mischen sich in einen Verlauf
+  function rareWave() {
+    const pick = Math.floor(R() * 3);
+    if (pick === 0) return greyWave();
+    const w = colourWave();
+    const slot = 1 + Math.floor(R() * 3);
+    if (pick === 1) w[slot === 3 ? 1 : slot] = [0.12 + R() * 0.06, 0, 0];
+    else w[slot] = [0.95 + R() * 0.03, 0, 0];
+    return w;
+  }
+
+  // dieselbe weiche Kurve wie im Shader (B-Spline in OKLCh) an Position s
+  function samplePath(slotAt, s) {
+    const i = Math.floor(s);
+    const t = s - i;
+    const lchOf = (c) => {
+      const C = Math.hypot(c[1], c[2]);
+      return [c[0], C, C > 0.0001 ? Math.atan2(c[2], c[1]) : 0];
+    };
+    const wrap = (d) => (d > Math.PI ? d - 2 * Math.PI : d < -Math.PI ? d + 2 * Math.PI : d);
+    const a = lchOf(slotAt(i - 1));
+    const b = lchOf(slotAt(i));
+    const c = lchOf(slotAt(i + 1));
+    const d = lchOf(slotAt(i + 2));
+    if (b[1] < 0.02) b[2] = c[2];
+    if (c[1] < 0.02) c[2] = b[2];
+    if (a[1] < 0.02) a[2] = b[2];
+    if (d[1] < 0.02) d[2] = c[2];
+    a[2] = b[2] + wrap(a[2] - b[2]);
+    c[2] = b[2] + wrap(c[2] - b[2]);
+    d[2] = c[2] + wrap(d[2] - c[2]);
+    const t2 = t * t;
+    const t3 = t2 * t;
+    const w0 = (1 - 3 * t + 3 * t2 - t3) / 6;
+    const w1 = (3 * t3 - 6 * t2 + 4) / 6;
+    const w2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6;
+    const w3 = t3 / 6;
+    const r = [0, 1, 2].map((k) => a[k] * w0 + b[k] * w1 + c[k] * w2 + d[k] * w3);
+    return [r[0], r[1] * Math.cos(r[2]), r[1] * Math.sin(r[2])];
+  }
+
   function chroma(lab) {
     return Math.hypot(lab[1], lab[2]);
   }
@@ -168,6 +209,8 @@
   globalThis.SphereColours = {
     greyWave,
     colourWave,
+    rareWave,
+    samplePath,
     chroma,
     lch,
     fit,

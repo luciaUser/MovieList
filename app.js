@@ -8319,6 +8319,129 @@
     return cell;
   }
 
+  // Vollbild-Editor: mit Wischen (oder Scrollen) durch die Farbverläufe der Kugel, auch Zwischenzustände wählbar
+  function openSphereEditor(fromNode, onPick) {
+    if (!globalThis.GateSky || !globalThis.SphereColours || document.querySelector('.sphere-editor')) return false;
+    const root = document.documentElement;
+    const layer = el('div', 'sphere-editor');
+    layer.setAttribute('role', 'dialog');
+    layer.setAttribute('aria-label', 'Sphere colours');
+    const canvas = document.createElement('canvas');
+    canvas.className = 'sphere-editor-sky';
+    canvas.setAttribute('aria-hidden', 'true');
+    const bar = el('div', 'sphere-editor-bar');
+    const cancel = el('button', 'sphere-editor-cancel');
+    cancel.type = 'button';
+    cancel.setAttribute('aria-label', 'Cancel');
+    cancel.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+    const save = el('button', 'sphere-editor-save');
+    save.type = 'button';
+    save.setAttribute('aria-label', 'Use these colours');
+    save.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5.5 12.5 10 17 18.5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    bar.append(cancel, save);
+    const touch = window.matchMedia('(hover: none)').matches;
+    const hint = el('p', 'sphere-editor-hint', touch ? 'Swipe up or down to blend colours' : 'Scroll or drag to blend colours');
+    layer.append(canvas, bar, hint);
+    document.body.append(layer);
+    const target = () => {
+      const node = fromNode && fromNode.isConnected ? fromNode.querySelector('.avatar') : null;
+      if (!node) return null;
+      const box = node.getBoundingClientRect();
+      if (!box.width) return null;
+      return { x: box.left + box.width / 2, y: box.top + box.height / 2, r: box.width / 2 };
+    };
+    const start = globalThis.SphereColours.avatarToWave(avatarColors(account && account.avatar));
+    const editor = globalThis.GateSky.editor(canvas, { start, target });
+    if (!editor) {
+      layer.remove();
+      return false;
+    }
+    root.classList.add('is-sphere-editing');
+    requestAnimationFrame(() => layer.classList.add('is-open'));
+    editor.start(target());
+    let busy = false;
+    const finish = () => {
+      layer.classList.remove('is-open');
+      window.setTimeout(() => {
+        editor.stop();
+        layer.remove();
+        root.classList.remove('is-sphere-editing');
+      }, 280);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    const doSave = () => {
+      if (busy) return;
+      busy = true;
+      editor.save((wave) => {
+        onPick(wave);
+        finish();
+      });
+    };
+    const doCancel = () => {
+      if (busy) return;
+      busy = true;
+      editor.cancel(() => finish());
+    };
+    save.addEventListener('click', doSave);
+    cancel.addEventListener('click', doCancel);
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        doCancel();
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        doSave();
+      } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        editor.vel = 0;
+        editor.drag(event.key === 'ArrowUp' ? 0.25 : -0.25);
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    // Wischen: eine Bildschirmhöhe von ca. 45 % entspricht einem ganzen Farbverlauf
+    let drag = null;
+    const span = () => Math.max(240, window.innerHeight * 0.45);
+    layer.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('button')) return;
+      drag = { id: event.pointerId, y: event.clientY, t: performance.now(), samples: [] };
+      editor.dragging = true;
+      editor.vel = 0;
+      try { layer.setPointerCapture(event.pointerId); } catch { /* ohne Capture */ }
+    });
+    layer.addEventListener('pointermove', (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const now = performance.now();
+      const dy = event.clientY - drag.y;
+      drag.y = event.clientY;
+      const delta = -dy / span();
+      editor.drag(delta);
+      drag.samples.push({ t: now, d: delta });
+      while (drag.samples.length && now - drag.samples[0].t > 120) drag.samples.shift();
+      if (editor.moved) hint.classList.add('is-gone');
+    });
+    const release = (event) => {
+      if (!drag || event.pointerId !== drag.id) return;
+      const samples = drag.samples;
+      drag = null;
+      editor.dragging = false;
+      if (samples.length > 1) {
+        const time = (samples[samples.length - 1].t - samples[0].t) / 1000;
+        const dist = samples.reduce((sum, row) => sum + row.d, 0);
+        if (time > 0.01) editor.vel = Math.max(-4, Math.min(4, dist / time));
+      }
+    };
+    layer.addEventListener('pointerup', release);
+    layer.addEventListener('pointercancel', release);
+    layer.addEventListener('wheel', (event) => {
+      event.preventDefault();
+      editor.vel = 0;
+      editor.drag(event.deltaY / 900);
+      if (editor.moved) hint.classList.add('is-gone');
+    }, { passive: false });
+    return true;
+  }
+
   function paintOwnAvatar(size) {
     const wrap = el('div', 'profile-avatar');
     const draw = (avatar) => {
@@ -8386,9 +8509,28 @@
       }
     };
     wrap._commitAvatar = commit;
+    // Farben aus dem Kugel-Editor übernehmen (Form der Kugel bleibt, nur die Farben ändern sich)
+    const pick = (wave) => {
+      if (!account || !globalThis.SphereColours) return;
+      generation += 1;
+      tries = 0;
+      account.avatar = globalThis.SphereColours.waveToAvatar(wave, account.avatar && account.avatar.seed);
+      dirty = true;
+      wrap.classList.add('is-dirty');
+      showNote('');
+      draw(account.avatar);
+      spreadAvatar(account.avatar);
+      commit();
+    };
+    const edit = () => {
+      wrap.classList.remove('is-armed');
+      endTransient(wrap);
+      return openSphereEditor(wrap, pick);
+    };
     roll.addEventListener('click', (event) => {
       event.stopPropagation();
       event.preventDefault();
+      if (edit()) return;
       const cloud = globalThis.Cloud;
       if (!cloud || !cloud.rollAvatar || !account) return;
       generation += 1;
@@ -8411,7 +8553,12 @@
     };
     wrap.addEventListener('click', (event) => {
       if (event.target.closest('.avatar-roll')) return;
-      if (phone && !wrap.classList.contains('is-armed')) armAvatar();
+      if (phone && !wrap.classList.contains('is-armed')) {
+        armAvatar();
+        return;
+      }
+      // zweites Antippen (Handy) bzw. Klick (Desktop): Editor öffnen
+      edit();
     });
     roll.addEventListener('pointerdown', () => {
       if (!phone) armAvatar();

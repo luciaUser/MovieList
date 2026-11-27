@@ -21,6 +21,7 @@ uniform float uFloor;
 uniform float uRibs;
 uniform vec3 uShimmer;
 uniform float uSoft;
+uniform float uPhase;
 
 const float H0 = -0.08;
 const float D = 0.085;
@@ -99,14 +100,15 @@ vec3 wallLight(float h, float sx) {
   float u0 = h - H0;
   float s = (u0 >= 0.0 ? u0 / D : u0 / (D * (1.0 - 11.76 * u0))) + uShift;
   vec3 wc = toLin(labAt(s));
-  float band = mix(0.80 + 0.20 * cos(6.28318531 * s), 0.90 + 0.10 * cos(6.28318531 * s), uSoft);
-  float topd = abs(fract((s - 5.0) / 8.0 + 0.5) - 0.5) * 8.0;
+  float sp = s + uPhase;
+  float band = mix(0.80 + 0.20 * cos(6.28318531 * sp), 0.90 + 0.10 * cos(6.28318531 * sp), uSoft);
+  float topd = abs(fract((sp - 5.0) / 8.0 + 0.5) - 0.5) * 8.0;
   float glow = mix(exp(-topd * topd / 0.045), exp(-topd * topd / 0.11) * 0.8, uSoft);
   float fall = exp(-pow(max(h, 0.0) / 0.24, 2.0)) * exp(-pow(max(-h, 0.0) / 0.27, 2.0));
   float cut = 1.0 - smoothstep(0.22, 0.34, h);
   float side = exp(-pow(abs(sx) / uDepth, 2.0));
   float env = fall * cut * side;
-  float shd = abs(fract((s - 6.6) / 8.0 + 0.5) - 0.5) * 8.0;
+  float shd = abs(fract((sp - 6.6) / 8.0 + 0.5) - 0.5) * 8.0;
   float shim = mix(exp(-shd * shd / 0.02), exp(-shd * shd / 0.06) * 0.7, uSoft) * (1.0 - smoothstep(0.12, 0.24, h));
   return wc * (band * 0.52 + glow * 0.85) * env + mix(wc, vec3(1.0), 0.35) * glow * 0.18 * env
        + uShimmer * shim * 0.22 * env;
@@ -158,7 +160,7 @@ void main() {
 }`;
 
   const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
-  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft'];
+  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase'];
   const ROOM = { curve: 4, depth: 0.2, floor: 0.1, ribs: 0, cycle: 7 };
 
   const easeSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
@@ -537,46 +539,270 @@ void main() {
     }
 
     draw() {
-      const gl = this.gl;
       const E = this.E;
-      const u = this.u;
-      if (!gl || !E) return;
-      this.size();
+      if (!this.gl || !E) return;
       const base = E.cur[0];
       const nextW = E.target || [base, base, base, base];
       const dark = E.target ? this.makeDark(E.target, base) : [base, base];
       const c = E.chroma;
       const stack = [nextW[0], nextW[0]].concat(nextW, dark, [base, base], E.cur, E.prev)
         .map((v) => [v[0], v[1] * c, v[2] * c]);
-      for (let i = 0; i < 16; i += 1) {
-        this.labBuf[i * 3] = stack[i][0];
-        this.labBuf[i * 3 + 1] = stack[i][1];
-        this.labBuf[i * 3 + 2] = stack[i][2];
+      let shimmer = [0, 0, 0];
+      if (E.target && !E.isLoginRise) {
+        const top = E.target[3];
+        shimmer = S().labToLinear([top[0], top[1] * c, top[2] * c]).map((x) => Math.max(0, Math.min(1, x)));
       }
-      const shift = E.phase === 'rise' ? 10 - 8 * E.p : 10;
+      this.render({
+        stack,
+        shift: E.phase === 'rise' ? 10 - 8 * E.p : 10,
+        phase: 0,
+        wall: E.wall,
+        horizon: E.horizon,
+        sphere: E.sphere,
+        roomY: E.room.y,
+        soft: E.soft,
+        shimmer,
+      });
+    }
+
+    render(o) {
+      const gl = this.gl;
+      const u = this.u;
+      if (!gl) return;
+      this.size();
+      for (let i = 0; i < 16; i += 1) {
+        const v = o.stack[i];
+        this.labBuf[i * 3] = v[0];
+        this.labBuf[i * 3 + 1] = v[1];
+        this.labBuf[i * 3 + 2] = v[2];
+      }
       // breite Bildschirme: der Raum wird mit der Breite gestreckt, die Bögen entsprechend flacher
       const k = Math.max(1, (this.W / this.H) / (390 / 844));
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
       gl.uniform2f(u.uRes, this.W, this.H);
       gl.uniform1f(u.uDpr, this.dpr);
       gl.uniform3fv(u.uLab, this.labBuf);
-      gl.uniform1f(u.uShift, shift);
-      gl.uniform1f(u.uWall, E.wall);
-      gl.uniform1f(u.uHorizon, E.horizon);
-      gl.uniform3f(u.uSphere, E.sphere.x, E.sphere.y, Math.max(1, E.sphere.r));
+      gl.uniform1f(u.uShift, o.shift);
+      gl.uniform1f(u.uPhase, o.phase || 0);
+      gl.uniform1f(u.uWall, o.wall);
+      gl.uniform1f(u.uHorizon, o.horizon);
+      gl.uniform3f(u.uSphere, o.sphere.x, o.sphere.y, Math.max(1, o.sphere.r));
       gl.uniform1f(u.uCurve, ROOM.curve / (k * k));
       gl.uniform1f(u.uDepth, ROOM.depth * k);
-      gl.uniform2f(u.uRoom, this.W / 2, E.room.y);
+      gl.uniform2f(u.uRoom, this.W / 2, o.roomY);
       gl.uniform1f(u.uFloor, ROOM.floor);
       gl.uniform1f(u.uRibs, ROOM.ribs);
-      gl.uniform1f(u.uSoft, E.soft);
-      let sh = [0, 0, 0];
-      if (E.target && !E.isLoginRise) {
-        const top = E.target[3];
-        sh = S().labToLinear([top[0], top[1] * c, top[2] * c]).map((x) => Math.max(0, Math.min(1, x)));
-      }
+      gl.uniform1f(u.uSoft, o.soft);
+      const sh = o.shimmer || [0, 0, 0];
       gl.uniform3f(u.uShimmer, sh[0], sh[1], sh[2]);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+  }
+
+  /* ---------- Kugel-Editor: Farbverläufe von Hand durchwischen ---------- */
+
+  // Wellen liegen untereinander: Welle n (0 = aktuelle Kugel) hat ihre Basis bei Index -8n,
+  // darunter zwei Basis-Kopien, zwei Übergangs-Slots und dann die nächste Welle (wie in der Animation).
+  class SphereEditor {
+    constructor(sky, options) {
+      this.sky = sky;
+      this.opts = options || {};
+      this.waves = [this.opts.start || S().colourWave()];
+      this.darks = [];
+      this.v = 0;
+      this.vel = 0;
+      this.dragging = false;
+      this.moved = false;
+      this.state = 'open';
+      this.t = 0;
+      this.wall = 0;
+      this.raf = 0;
+    }
+
+    waveAt(n) {
+      while (this.waves.length <= n) {
+        const index = this.waves.length;
+        // ganz selten (erst nach vielen Verläufen) kommen Schwarz- oder Weisstöne dazu
+        const rare = index >= 8 && Math.random() < 0.07;
+        this.waves.push(rare ? S().rareWave() : S().colourWave());
+      }
+      return this.waves[n];
+    }
+
+    darkAt(n) {
+      if (!this.darks[n]) {
+        const coming = this.waveAt(n + 1)[3];
+        const leaving = this.waveAt(n)[0];
+        const hT = Math.atan2(coming[2], coming[1]) * 180 / Math.PI;
+        const cB = Math.hypot(leaving[1], leaving[2]);
+        const hB = cB < 0.02 ? hT : Math.atan2(leaving[2], leaving[1]) * 180 / Math.PI;
+        const L = (h, l) => (S().isBrownZone(h) ? Math.max(l, 0.72) : l);
+        const cT = Math.hypot(coming[1], coming[2]);
+        this.darks[n] = [
+          cT < 0.02 ? [coming[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hT, 0.52), 0.15, hT),
+          cB < 0.02 ? [leaving[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hB, 0.48), 0.13, hB),
+        ];
+      }
+      return this.darks[n];
+    }
+
+    slot(i) {
+      const n = Math.floor((3 - i) / 8);
+      if (n < 0) return this.waveAt(0)[3];
+      const j = i + 8 * n;
+      const w = this.waveAt(n);
+      if (j >= 0) return w[j];
+      if (j >= -2) return w[0];
+      return this.darkAt(n)[j + 4];
+    }
+
+    // Farben der vier Schichten genau an der aktuellen Position (auch zwischen zwei Verläufen)
+    currentWave() {
+      if (Math.abs(this.v) < 0.01) return this.waves[0];
+      const X = -8 * this.v;
+      const at = (s) => S().samplePath((i) => this.slot(i), s);
+      return [at(X), at(X + 1), at(X + 2), at(X + 3)];
+    }
+
+    home() {
+      const W = window.innerWidth;
+      const H = window.innerHeight;
+      return { x: W / 2, y: H * 0.42, r: Math.min(130, Math.max(70, Math.min(W, H) * 0.28)) };
+    }
+
+    frame() {
+      const X = -8 * this.v;
+      const w0 = Math.floor(X) - 5;
+      const stack = [];
+      for (let k = 0; k < 16; k += 1) stack.push(this.slot(w0 + k));
+      const next = this.waveAt(Math.max(0, Math.floor(this.v)) + 1)[3];
+      const shimmer = S().labToLinear(next).map((x) => Math.max(0, Math.min(1, x)));
+      const home = this.home();
+      let sphere = home;
+      if (this.state === 'open' && this.from) {
+        const k = easeCubic(this.t / 0.7);
+        sphere = {
+          x: this.from.x + (home.x - this.from.x) * k,
+          y: this.from.y + (home.y - this.from.y) * k,
+          r: this.from.r + (home.r - this.from.r) * k,
+        };
+      } else if (this.state === 'close') {
+        const to = (this.opts.target && this.opts.target()) || this.from || home;
+        const k = easeCubic(this.t / 0.75);
+        sphere = {
+          x: this.closeFrom.x + (to.x - this.closeFrom.x) * k,
+          y: this.closeFrom.y + (to.y - this.closeFrom.y) * k,
+          r: this.closeFrom.r + (to.r - this.closeFrom.r) * k,
+        };
+      }
+      this.sphere = sphere;
+      this.sky.render({
+        stack,
+        shift: X - w0,
+        phase: (((w0 + 10) % 8) + 8) % 8,
+        wall: this.wall,
+        horizon: this.wall,
+        sphere,
+        roomY: home.y,
+        soft: 1,
+        shimmer,
+      });
+    }
+
+    step(dt) {
+      this.t += dt;
+      if (this.state === 'open') {
+        this.wall = easeCubic(this.t / 0.7);
+        if (this.t >= 0.7) {
+          this.state = 'edit';
+          this.wall = 1;
+        }
+      }
+      if (this.state === 'close') {
+        this.wall = 1 - easeCubic(this.t / 0.75);
+        if (this.t >= 0.75) {
+          this.state = 'done';
+          const cb = this.closeDone;
+          this.closeDone = null;
+          if (cb) cb();
+          return;
+        }
+      }
+      if (this.state === 'rewind') {
+        this.v += (0 - this.v) * (1 - Math.exp(-dt * 9));
+        if (Math.abs(this.v) < 0.003) {
+          this.v = 0;
+          this.beginClose(this.afterRewind);
+        }
+        return;
+      }
+      if (!this.dragging) {
+        if (Math.abs(this.vel) > 0.0005) {
+          this.v += this.vel * dt;
+          this.vel *= Math.exp(-dt * 3.2);
+        } else this.vel = 0;
+        if (this.v < 0) {
+          this.vel = 0;
+          this.v += (0 - this.v) * (1 - Math.exp(-dt * 10));
+          if (this.v > -0.001) this.v = 0;
+        }
+      }
+    }
+
+    start(from) {
+      this.from = from || null;
+      this.t = 0;
+      this.state = 'open';
+      this.loop();
+    }
+
+    loop() {
+      if (this.raf) return;
+      let last = performance.now();
+      const tick = (now) => {
+        this.raf = 0;
+        const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+        last = now;
+        this.step(dt);
+        if (this.state === 'done') return;
+        this.frame();
+        this.raf = requestAnimationFrame(tick);
+      };
+      this.raf = requestAnimationFrame(tick);
+    }
+
+    drag(deltaWaves) {
+      let next = this.v + deltaWaves;
+      if (next < 0) next = this.v < 0 ? this.v + deltaWaves * 0.3 : next * 0.3;
+      this.v = Math.max(-0.2, next);
+      if (Math.abs(deltaWaves) > 0.002) this.moved = true;
+    }
+
+    beginClose(done) {
+      this.closeFrom = { ...(this.sphere || this.home()) };
+      this.state = 'close';
+      this.t = 0;
+      this.closeDone = done;
+    }
+
+    save(done) {
+      if (this.state !== 'edit' && this.state !== 'open') return;
+      this.vel = 0;
+      const wave = this.currentWave();
+      this.beginClose(() => done && done(wave));
+    }
+
+    cancel(done) {
+      if (this.state !== 'edit' && this.state !== 'open') return;
+      this.vel = 0;
+      this.afterRewind = done;
+      this.state = 'rewind';
+    }
+
+    stop() {
+      if (this.raf) cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.state = 'done';
     }
   }
 
@@ -584,6 +810,10 @@ void main() {
     create(canvas) {
       const sky = new Sky(canvas);
       return sky.ok ? sky : null;
+    },
+    editor(canvas, options) {
+      const sky = new Sky(canvas);
+      return sky.ok ? new SphereEditor(sky, options) : null;
     },
   };
 })();
