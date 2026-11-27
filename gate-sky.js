@@ -687,7 +687,9 @@ void main() {
         const index = this.waves.length;
         // ganz selten (erst nach vielen Verläufen) kommen Schwarz- oder Weisstöne dazu
         const rare = index >= 8 && Math.random() < 0.07;
-        this.waves.push(rare ? S().rareWave() : S().colourWave());
+        // im Editor darf es wild werden: meist knallige Paletten, ab und zu eine ruhigere dazwischen
+        const pick = rare ? S().rareWave() : Math.random() < 0.7 ? S().wildWave() : S().colourWave();
+        this.waves.push(pick);
       }
       return this.waves[n];
     }
@@ -701,9 +703,10 @@ void main() {
         const hB = cB < 0.02 ? hT : Math.atan2(leaving[2], leaving[1]) * 180 / Math.PI;
         const L = (h, l) => (S().isBrownZone(h) ? Math.max(l, 0.72) : l);
         const cT = Math.hypot(coming[1], coming[2]);
+        // Übergänge kräftig statt gedämpft, damit auch die Zwischenzustände leuchten
         this.darks[n] = [
-          cT < 0.02 ? [coming[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hT, 0.52), 0.15, hT),
-          cB < 0.02 ? [leaving[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hB, 0.48), 0.13, hB),
+          cT < 0.02 ? [coming[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hT, 0.58), 0.3, hT),
+          cB < 0.02 ? [leaving[0] * 0.6 + 0.2, 0, 0] : S().fit(L(hB, 0.55), 0.28, hB),
         ];
       }
       return this.darks[n];

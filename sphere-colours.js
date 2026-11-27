@@ -145,6 +145,27 @@
     return FALLBACK.map(cssToLab);
   }
 
+  // wild: maximal gesättigt, mutige Farbsprünge (Komplementär, Dreiklang, Neon) – für den Kugel-Editor
+  function wildWave() {
+    const base = R() * 360;
+    const scheme = Math.floor(R() * 4);
+    const dir = R() < 0.5 ? 1 : -1;
+    let hues;
+    if (scheme === 0) hues = [base, base + dir * 45, base + dir * 95, base + dir * 150];
+    else if (scheme === 1) hues = [base + 180, base + dir * 20, base, base - dir * 35];
+    else if (scheme === 2) hues = [base, base + 120, base + 240, base + 120 + dir * 30];
+    else hues = [base + 150 + R() * 60, base + dir * 60, base, base + dir * 30];
+    const light = R() < 0.5
+      ? [0.62 + R() * 0.12, 0.48 + R() * 0.12, 0.66 + R() * 0.1, 0.84 + R() * 0.08]
+      : [0.74 + R() * 0.1, 0.56 + R() * 0.1, 0.5 + R() * 0.12, 0.8 + R() * 0.1];
+    return hues.map((h, i) => {
+      const hue = ((h % 360) + 360) % 360;
+      // Gelb/Oliv nur hell (sonst wird es braun-trüb)
+      const L = hue > 30 && hue < 130 ? Math.max(light[i], 0.84) : light[i];
+      return fit(L, 0.34, hue);
+    });
+  }
+
   // selten: Schwarz-, Weiss- oder Grautöne mischen sich in einen Verlauf
   function rareWave() {
     const pick = Math.floor(R() * 3);
@@ -210,6 +231,7 @@
     greyWave,
     colourWave,
     rareWave,
+    wildWave,
     samplePath,
     chroma,
     lch,
