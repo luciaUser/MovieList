@@ -616,7 +616,7 @@ void main() {
       this.render({
         stack,
         roll: E.roll || 0,
-        edge: E.isLoginRise ? S().edgeOf([E.target ? E.target[0] : E.cur[0]].concat(E.target || E.cur)) * Math.min(1, E.p * 1.2 + (E.phase === 'rise' ? 0 : 1)) : 0,
+        edge: E.isLoginRise ? this.waveEdge(E.target || E.cur) * Math.min(1, E.p * 1.2 + (E.phase === 'rise' ? 0 : 1)) : 0,
         shift: E.phase === 'rise' ? 10 - 8 * E.p : 10,
         phase: 0,
         wall: E.wall,
@@ -626,6 +626,11 @@ void main() {
         soft: E.soft,
         shimmer,
       });
+    }
+
+    waveEdge(wave) {
+      const stack = (i) => (i <= 10 ? wave[0] : i >= 13 ? wave[3] : wave[i - 10]);
+      return S().edgeOf([9, 10, 11, 12, 13].map((k) => S().samplePath(stack, k)));
     }
 
     render(o) {
@@ -975,7 +980,8 @@ void main() {
       const r = size / 2;
       imageSky.render({
         stack, shift: 10, phase: 0, wall: 0, horizon: 0, sphere: { x: r, y: r, r: r - 0.75 }, roomY: r, soft: 1, cut: true,
-        edge: S().edgeOf([wave[0], wave[0], wave[1], wave[2], wave[3]]),
+        // Weichheit aus den sichtbaren (geglätteten) Farben, genau wie im Editor
+        edge: S().edgeOf([9, 10, 11, 12, 13].map((k) => S().samplePath((i) => stack[Math.max(0, Math.min(15, i))], k))),
       });
       let url = '';
       try {
