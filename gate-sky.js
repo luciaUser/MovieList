@@ -4,6 +4,9 @@
         sky.palette(); sky.login(waveLab, () => ({x,y,r}), done); sky.stop(); */
 (() => {
   const S = () => globalThis.SphereColours;
+  const imageCache = new Map();
+  let imageSky = null;
+  let imageFailed = false;
 
   const FRAG = `
 precision highp float;
@@ -22,6 +25,7 @@ uniform float uRibs;
 uniform vec3 uShimmer;
 uniform float uSoft;
 uniform float uPhase;
+uniform float uCut;
 
 const float H0 = -0.08;
 const float D = 0.085;
@@ -144,23 +148,29 @@ void main() {
   float rr = dot(q, q);
   float dist = (sqrt(rr) - 1.0) * uSphere.z;
   float a = 1.0 - smoothstep(-0.7, 0.7, dist);
+  vec3 sc = vec3(0.0);
   if (a > 0.0) {
     float soft = mix(0.0, 0.06, uSoft);
     float local = softEll(q, vec3(0.16, 0.955, 0.836), 0.16 + soft)
                 + softEll(q, vec3(0.16, 0.93, 0.70), 0.15 + soft)
                 + softEll(q, vec3(0.365, 0.645, 0.48), 0.14 + soft);
-    vec3 sc = toLin(labAt(uShift + mix(-1.0, 3.0, local / 3.0)));
+    sc = toLin(labAt(uShift + mix(-1.0, 3.0, local / 3.0)));
     float nz = sqrt(max(0.0, 1.0 - rr));
     sc *= 0.92 + 0.08 * nz;
     col = mix(col, sc, a);
   }
 
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+  // Profilbild: nur die Kugel, aussen transparent
+  if (uCut > 0.5) {
+    gl_FragColor = vec4(toSrgb(sc) + (n - 0.5) / 255.0, a);
+    return;
+  }
   gl_FragColor = vec4(toSrgb(col) + (n - 0.5) / 255.0, 1.0);
 }`;
 
   const VERT = 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }';
-  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase'];
+  const UNIFORMS = ['uRes', 'uDpr', 'uLab', 'uShift', 'uWall', 'uHorizon', 'uSphere', 'uCurve', 'uDepth', 'uRoom', 'uFloor', 'uRibs', 'uShimmer', 'uSoft', 'uPhase', 'uCut'];
   const ROOM = { curve: 4, depth: 0.2, floor: 0.1, ribs: 0, cycle: 7 };
 
   const easeSine = (t) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
@@ -218,6 +228,16 @@ void main() {
     }
 
     size() {
+      if (this.fixed) {
+        if (this.canvas.width !== this.fixed || this.canvas.height !== this.fixed) {
+          this.canvas.width = this.fixed;
+          this.canvas.height = this.fixed;
+        }
+        this.W = this.fixed;
+        this.H = this.fixed;
+        this.dpr = 1;
+        return;
+      }
       const W = Math.max(1, this.canvas.clientWidth || window.innerWidth);
       const H = Math.max(1, this.canvas.clientHeight || window.innerHeight);
       let dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -584,6 +604,7 @@ void main() {
       gl.uniform3fv(u.uLab, this.labBuf);
       gl.uniform1f(u.uShift, o.shift);
       gl.uniform1f(u.uPhase, o.phase || 0);
+      gl.uniform1f(u.uCut, o.cut ? 1 : 0);
       gl.uniform1f(u.uWall, o.wall);
       gl.uniform1f(u.uHorizon, o.horizon);
       gl.uniform3f(u.uSphere, o.sphere.x, o.sphere.y, Math.max(1, o.sphere.r));
@@ -814,6 +835,38 @@ void main() {
     editor(canvas, options) {
       const sky = new Sky(canvas);
       return sky.ok ? new SphereEditor(sky, options) : null;
+    },
+    // Profilkugel als Bild, mit demselben Shader wie die Animation (scharf und mit feinen Verläufen)
+    sphereImage(wave, px) {
+      if (imageFailed || !Array.isArray(wave) || wave.length !== 4) return '';
+      const size = Math.max(32, Math.round(px || 192));
+      const key = `${size}|${wave.map((c) => c.map((x) => x.toFixed(4)).join(',')).join('|')}`;
+      if (imageCache.has(key)) return imageCache.get(key);
+      if (!imageSky) {
+        const canvas = document.createElement('canvas');
+        imageSky = new Sky(canvas);
+        if (!imageSky.ok) {
+          imageFailed = true;
+          imageSky = null;
+          return '';
+        }
+      }
+      imageSky.fixed = size;
+      const stack = [];
+      for (let i = 0; i < 10; i += 1) stack.push(wave[0]);
+      stack.push(wave[0], wave[1], wave[2], wave[3], wave[3], wave[3]);
+      const r = size / 2;
+      imageSky.render({
+        stack, shift: 10, phase: 0, wall: 0, horizon: 0, sphere: { x: r, y: r, r: r - 0.75 }, roomY: r, soft: 1, cut: true,
+      });
+      let url = '';
+      try {
+        url = imageSky.canvas.toDataURL('image/png');
+      } catch {
+        url = '';
+      }
+      if (url) imageCache.set(key, url);
+      return url;
     },
   };
 })();

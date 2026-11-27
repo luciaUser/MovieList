@@ -1296,6 +1296,7 @@
     if (pathOn) {
       paint();
       requestAnimationFrame(() => pathLayout());
+      if (phoneSheet()) pathHeadIntro();
       return;
     }
     applyNetworkFocus();
@@ -1403,6 +1404,22 @@
 
   function avatarNode(avatar, size) {
     const colors = avatarColors(avatar);
+    // gleiche Darstellung wie die Kugel in der Animation (WebGL); ohne WebGL bleibt das SVG
+    if (globalThis.GateSky && globalThis.GateSky.sphereImage && globalThis.SphereColours) {
+      const url = globalThis.GateSky.sphereImage(globalThis.SphereColours.avatarToWave(colors), 192);
+      if (url) {
+        const img = document.createElement('img');
+        img.className = 'avatar';
+        img.alt = '';
+        img.setAttribute('aria-hidden', 'true');
+        img.draggable = false;
+        img.decoding = 'sync';
+        img.width = size || 32;
+        img.height = size || 32;
+        img.src = url;
+        return img;
+      }
+    }
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const serial = ++avatarSerial;
     const rand = mulberry32(avatar && avatar.seed);
@@ -2195,7 +2212,9 @@
   function showRecommendation(row) {
     const film = filmFromRecommendation(row);
     if (!pathLock) {
-      if (pathOn) pathPick(film);
+      const fromOrigin = pathOn && pathState && pathState.origin && panelFilm && panelFilm.id === pathState.origin.id;
+      if (fromOrigin) pathChoose(0, film);
+      else if (pathOn) pathPick(film);
       else if (panelFilm) pathEnter(panelFilm, film);
     }
     panelList = null;
@@ -2227,20 +2246,30 @@
 
   function exitPath() {
     if (!pathOn) return;
-    const origin = pathState && pathState.origin;
     closePath();
     document.body.classList.remove('is-path-panel');
-    if (!origin) {
-      hidePanel();
-      paint();
-      return;
-    }
-    selectedId = origin.id;
-    links = linksFor(origin);
-    activeLinkId = (links.find((link) => link.group) || links[0] || {}).id || null;
-    panelFilm = origin;
-    renderPanel(origin);
-    paint();
+    clearSelection();
+  }
+
+  // die Plotline-Zeile gleitet von oben herein, damit klar ist, wo man ist
+  function pathHeadIntro() {
+    const head = document.querySelector('#path-view .path-head');
+    if (!head) return;
+    head.classList.remove('is-arriving');
+    void head.offsetWidth;
+    head.classList.add('is-arriving');
+    window.setTimeout(() => head.classList.remove('is-arriving'), 700);
+  }
+
+  // Ursprungsfilm unten in der Plotline: öffnet sein Fenster
+  function pathOpenOrigin() {
+    if (!pathOn || !pathState || !pathState.origin) return;
+    const origin = pathState.origin;
+    pathLock = true;
+    panelList = null;
+    renderPanel(byId.get(origin.id) || origin, { quiet: true });
+    document.body.classList.add('is-path-panel');
+    pathLock = false;
   }
 
   function pathRow(film) {
@@ -2563,11 +2592,13 @@
     const film = pathState.origin;
     const cover = pathPoster(origin, film.poster, film.title, film.id);
     cover.classList.add('is-origin');
+    cover.addEventListener('click', () => pathOpenOrigin());
     origin.append(el('div', 'path-routes'));
     row.append(origin);
     scroller.append(row);
     root.append(head, scroller);
     document.body.append(root);
+    if (!phoneSheet()) requestAnimationFrame(pathHeadIntro);
     pathObserver = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (!entry.isIntersecting) return;

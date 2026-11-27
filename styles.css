@@ -5756,9 +5756,9 @@ html.brand-arrive .brand-name { animation: brand-arrive 0.7s cubic-bezier(0.2, 0
   position: absolute;
   left: 0;
   right: 0.16em;
-  top: calc(100% + 7px);
-  height: 4px;
-  background: rgba(255, 255, 255, 0.3);
+  top: calc(100% + 8px);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.22);
   pointer-events: none;
 }
 
@@ -5827,3 +5827,11 @@ html.is-sphere-editing body { overflow: hidden; }
 }
 
 .sphere-editor-hint.is-gone { opacity: 0; }
+
+/* Plotline: die Kopfzeile gleitet beim Ankommen von oben herein */
+.path-head.is-arriving { animation: path-head-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+@keyframes path-head-in {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: none; }
+}
