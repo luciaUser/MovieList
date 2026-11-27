@@ -335,6 +335,9 @@ function randomAvatar() {
         language,
       });
     },
+    async translateTaste() {
+      return tasteRequest('PUT');
+    },
     async createTaste(summary) {
       return tasteRequest('POST', summary);
     },

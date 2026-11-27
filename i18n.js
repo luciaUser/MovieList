@@ -232,6 +232,113 @@
     'A movie profile needs 15 rated movies ({n} to go).': 'Ein Filmprofil braucht 15 bewertete Filme (noch {n}).',
     'You watched {title} together – rate it now': 'Ihr habt {title} zusammen geschaut – jetzt bewerten',
     'She rated it highly, you have not seen it': 'Hat sie hoch bewertet, du noch nicht gesehen',
+    'Adventure': 'Abenteuer',
+    'Comedy': 'Komödie',
+    'Crime': 'Krimi',
+    'Romance': 'Romantik',
+    'War': 'Kriegsfilm',
+    'History': 'Historie',
+    'Biography': 'Biografie',
+    'Documentary': 'Dokumentation',
+    'Upcoming': 'Demnächst',
+    'Upcoming:': 'Demnächst:',
+    'UPCOMING': 'DEMNÄCHST',
+    'Upcoming in cinemas': 'Demnächst im Kino',
+    'Released titles': 'Schon erschienen',
+    'Not out yet? Add it under UPCOMING': 'Noch nicht erschienen? Unter DEMNÄCHST hinzufügen',
+    'Nothing found – try with a year, e.g. The Invisible Man (2020)': 'Nichts gefunden – mit Jahr versuchen, z. B. The Invisible Man (2020)',
+    'Add “{q}” as custom entry': '«{q}» als eigenen Eintrag hinzufügen',
+    'Year': 'Jahr',
+    'Add {label}': '{label} hinzufügen',
+    'Name :': 'Name :',
+    'creator :': 'Ersteller :',
+    'Movies :': 'Filme :',
+    'Name': 'Name',
+    'Want it · {n}': 'Will ich · {n}',
+    'Votes': 'Stimmen',
+    'Newest': 'Neueste',
+    'Manage': 'Verwalten',
+    'Rename': 'Umbenennen',
+    'Create': 'Anlegen',
+    'Members': 'Mitglieder',
+    'Invite member': 'Mitglied einladen',
+    'No mutual follows yet.': 'Noch keine gegenseitigen Folgen.',
+    '{name} (invited)': '{name} (eingeladen)',
+    'Someone': 'Jemand',
+    'Found on TMDB: {title} – link it': 'Auf TMDB gefunden: {title} – verknüpfen',
+    'Out on {date}': 'Erscheint am {date}',
+    'Friends': 'Freunde',
+    'Add friend': 'Freund hinzufügen',
+    'Already friends': 'Schon befreundet',
+    'Request sent': 'Anfrage gesendet',
+    'No one found': 'Niemand gefunden',
+    'Favorite actors': 'Lieblingsschauspieler',
+    'Favorite directors': 'Lieblingsregie',
+    'Hidden from friends': 'Für Freunde verborgen',
+    'Visible to friends': 'Für Freunde sichtbar',
+    'Following': 'Folgt',
+    'Followers': 'Follower',
+    'Requested': 'Angefragt',
+    'Accept': 'Annehmen',
+    'Unfollow': 'Entfolgen',
+    'Me': 'Ich',
+    'Other': 'Andere',
+    'Yes': 'Ja',
+    'No': 'Nein',
+    'Nothing yet.': 'Noch nichts.',
+    'Nobody yet.': 'Noch niemand.',
+    'Move left': 'Nach links',
+    'Move right': 'Nach rechts',
+    'Only possible if you follow each other.': 'Das geht nur bei gegenseitigem Folgen.',
+    'Unpin {name}': '{name} lösen',
+    'Pin {name}': '{name} anpinnen',
+    '{title} · you {mine} · them {their}': '{title} · du {mine} · sie {their}',
+    'From now on, sign in with: {name}': 'Login ab jetzt mit: {name}',
+    'Login name: {name}': 'Login-Name: {name}',
+    'Regenerate': 'Neu erstellen',
+    'From {n} ratings': 'Aus {n} Bewertungen',
+    'from {date}': 'ab {date}',
+    'You can create a new one again from {time}.': 'Neu erstellen geht wieder ab {time}.',
+    'Your ratings are sent to Google Gemini for this, without names or notes.': 'Deine Bewertungen werden dafür an Google Gemini geschickt, ohne Namen und Notizen.',
+    '{label}: tap the icon again to confirm': '{label}: zum Bestätigen nochmals aufs Icon tippen',
+    'Sphere colours': 'Kugelfarben',
+    'Use these colours': 'Diese Farben übernehmen',
+    'Swipe up or down to blend colours': 'Nach oben oder unten wischen, um die Farben zu mischen',
+    'Scroll or drag to blend colours': 'Scrollen oder ziehen, um die Farben zu mischen',
+    'Remove route': 'Route entfernen',
+    'sign in': 'anmelden',
+    'register': 'registrieren',
+    'username': 'Benutzername',
+    'password': 'Passwort',
+    'repeat password': 'Passwort wiederholen',
+    'new password': 'neues Passwort',
+    'set password': 'Passwort setzen',
+    'reset password': 'Passwort zurücksetzen',
+    'reset email': 'E-Mail zum Zurücksetzen',
+    'back to sign in': 'zurück zur Anmeldung',
+    'optional, only for resets': 'freiwillig, nur zum Zurücksetzen',
+    'Backup email': 'Backup-E-Mail',
+    'Send link': 'Link schicken',
+    'Cancelled': 'Abgebrochen',
+    'CSV file': 'CSV-Datei',
+    'Actor': 'Darsteller',
+    'Start empty': 'Leer starten',
+    'How do you want to start?': 'Womit willst du starten?',
+    'Not found': 'Nicht gefunden',
+    'Search again': 'nochmals suchen',
+    'Removed · ': 'Entfernt · ',
+    'this movie': 'diesen Film',
+    '{n} not found': '{n} nicht gefunden',
+    'Filed as {genre} · {sub}': 'Eingeordnet als {genre} · {sub}',
+    'Filed as {genre}': 'Eingeordnet als {genre}',
+    'Intensity: {n}': 'Intensität: {n}',
+    'rating': 'Wertung',
+    'ratings': 'Wertungen',
+    'correction': 'Korrektur',
+    'corrections': 'Korrekturen',
+    'The password is too short.': 'Das Passwort ist zu kurz.',
+    'Couldn\'t find a movie for that.': 'Dazu finde ich keinen Film.',
+    'Contact Luciano.': 'Melde dich bei Luciano.',
   };
 
   const KEY = 'moviebylucia-lang';
@@ -255,6 +362,25 @@
     return applyVars(text, vars);
   }
 
+  // umgekehrt: deutscher Text -> englischer Schlüssel (für ältere, fest deutsch geschriebene Stellen)
+  let back = null;
+  function reverse() {
+    if (back) return back;
+    back = {};
+    Object.keys(de).forEach((key) => {
+      const value = de[key];
+      if (value && value !== key && !(value in back)) back[value] = key;
+    });
+    return back;
+  }
+
+  function any(text, vars) {
+    if (typeof text !== 'string' || !text) return text;
+    if (lang === 'de') return applyVars(de[text] || text, vars);
+    const key = reverse()[text];
+    return applyVars(key || text, vars);
+  }
+
   function set(next) {
     lang = next === 'de' ? 'de' : 'en';
     try { localStorage.setItem(KEY, lang); } catch { /* bleibt in dieser Sitzung */ }
@@ -266,6 +392,7 @@
 
   globalThis.I18n = {
     t,
+    any,
     set,
     lang: () => lang,
   };

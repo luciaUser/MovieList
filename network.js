@@ -302,7 +302,8 @@
       node.setAttribute('y', at.y.toFixed(1));
       node.setAttribute('text-anchor', 'middle');
       node.setAttribute('dominant-baseline', 'middle');
-      node.textContent = text;
+      // Genre-Namen u. ä. in der eingestellten Sprache
+      node.textContent = globalThis.I18n && globalThis.I18n.any ? globalThis.I18n.any(text) : text;
       return node;
     }
 

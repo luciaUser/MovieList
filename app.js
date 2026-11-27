@@ -22,7 +22,8 @@
 
   function t(key, vars) {
     const api = globalThis.I18n;
-    return api ? api.t(key, vars) : key;
+    if (!api || typeof key !== 'string') return key;
+    return api.any ? api.any(key, vars) : api.t(key, vars);
   }
 
   function uiLang() {
@@ -153,7 +154,7 @@
     if (!note) return;
     note.classList.remove('is-sync');
     note.hidden = false;
-    note.textContent = 'Der Speicher ist voll. Neue Änderungen bleiben nur in dieser Sitzung.';
+    note.textContent = t('Der Speicher ist voll. Neue Änderungen bleiben nur in dieser Sitzung.');
   }
 
   function showSyncState(failed) {
@@ -171,7 +172,7 @@
     note.replaceChildren(document.createTextNode('Nicht gespeichert – '));
     const retry = document.createElement('button');
     retry.type = 'button';
-    retry.textContent = 'erneut versuchen';
+    retry.textContent = t('erneut versuchen');
     retry.addEventListener('click', () => {
       retry.disabled = true;
       retrySync().finally(() => { retry.disabled = false; });
@@ -953,7 +954,7 @@
     bar.append(el('span', null, `${spotlight.title} · ${count === 1 ? t('1 movie') : t('{n} movies', { n: count })}`));
     const close = el('button', null, '×');
     close.type = 'button';
-    close.setAttribute('aria-label', 'Hervorhebung beenden');
+    close.setAttribute('aria-label', t('Hervorhebung beenden'));
     close.addEventListener('click', clearHighlight);
     bar.append(close);
     bar.hidden = false;
@@ -1571,7 +1572,7 @@
   function el(tag, className, text) {
     const node = document.createElement(tag);
     if (className) node.className = className;
-    if (text != null) node.textContent = text;
+    if (text != null) node.textContent = typeof text === 'string' ? t(text) : text;
     return node;
   }
 
@@ -2169,7 +2170,7 @@
       const name = el('button', 'credit-link', film.director);
       name.type = 'button';
       name.addEventListener('click', () => highlight({
-        title: `Regie: ${film.director}`,
+        title: t('Director: {name}', { name: film.director }),
         style: 'director',
         ids: filmsWith('director', film.director),
       }));
@@ -2184,7 +2185,7 @@
         const person = el('button', 'cast-link', personName);
         person.type = 'button';
         person.addEventListener('click', () => highlight({
-          title: `Mit: ${personName}`,
+          title: t('With: {name}', { name: personName }),
           style: 'cast',
           ids: filmsWith('cast', personName),
         }));
@@ -2968,7 +2969,7 @@
       const close = document.createElement('button');
       close.type = 'button';
       close.className = 'path-x';
-      close.setAttribute('aria-label', 'Remove route');
+      close.setAttribute('aria-label', t('Remove route'));
       close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
       close.addEventListener('click', (event) => {
         event.stopPropagation();
@@ -3312,17 +3313,17 @@
 
     const remove = el('button', 'panel-remove');
     remove.type = 'button';
-    remove.setAttribute('aria-label', 'Aus meinem Archiv entfernen');
+    remove.setAttribute('aria-label', t('Aus meinem Archiv entfernen'));
     remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg><span>Remove</span>';
     remove.addEventListener('click', () => removeFilm(film.id));
     const closeIcon = el('button', 'panel-close');
     closeIcon.type = 'button';
-    closeIcon.setAttribute('aria-label', 'Schließen');
+    closeIcon.setAttribute('aria-label', t('Schließen'));
     closeIcon.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
     closeIcon.addEventListener('click', clearSelection);
     const wish = el('button', 'panel-wish');
     wish.type = 'button';
-    wish.setAttribute('aria-label', 'To list');
+    wish.setAttribute('aria-label', t('To list'));
     wish.setAttribute('aria-expanded', 'false');
     wish.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>To list</span>';
     const pick = el('div', 'wish-pick');
@@ -3381,7 +3382,7 @@
       const name = el('button', 'credit-link', full.director);
       name.type = 'button';
       name.addEventListener('click', () => highlight({
-        title: `Regie: ${full.director}`,
+        title: t('Director: {name}', { name: full.director }),
         style: 'director',
         ids: filmsWith('director', full.director),
       }));
@@ -3398,7 +3399,7 @@
         const person = el('button', 'cast-link', name);
         person.type = 'button';
         person.addEventListener('click', () => highlight({
-          title: `Mit: ${name}`,
+          title: t('With: {name}', { name }),
           style: 'cast',
           ids: filmsWith('cast', name),
         }));
@@ -3539,7 +3540,7 @@
     button.type = 'button';
     button.append(el('small', null, label), el('span', null, value));
     button.addEventListener('click', () => highlight({
-      title: `${label}: ${value}`,
+      title: `${label}: ${t(value)}`,
       style: 'content',
       ids: filmsWith(kind, value),
     }));
@@ -3661,8 +3662,8 @@
     const find = document.createElement('input');
     find.type = 'search';
     find.className = 'facet-find';
-    find.placeholder = 'Suchen';
-    find.setAttribute('aria-label', `${label} suchen`);
+    find.placeholder = t('Suchen');
+    find.setAttribute('aria-label', t('Search {label}', { label: t(label) }));
     find.autocomplete = 'off';
     const list = el('div', 'chips');
     const draw = () => {
@@ -3770,7 +3771,7 @@
       for (let mark = 1; mark <= 5; mark += 1) dots.append(el('span', mark <= full.intensity ? 'on' : ''));
       button.append(el('small', null, t('Intensity')), dots);
       button.addEventListener('click', () => highlight({
-        title: `Intensität: ${full.intensity}`,
+        title: t('Intensity: {n}', { n: full.intensity }),
         style: 'content',
         ids: filmsWith('intensity', full.intensity),
       }));
@@ -3874,7 +3875,7 @@
     const person = lensPack && lensPack.profile;
     const visible = person && (mode === 'network' || mode === 'rating');
     bar.hidden = !visible;
-    if (label) label.textContent = visible ? `Ansicht von ${person.display_name || person.username || 'Profil'}` : '';
+    if (label) label.textContent = visible ? t('View of {name}', { name: person.display_name || person.username || t('Profile') }) : '';
   }
 
   function clearLens() {
@@ -4133,7 +4134,7 @@
         search.value = person.name;
         results.hidden = true;
         highlight({
-          title: person.kind === 'director' ? `Regie: ${person.name}` : `Mit: ${person.name}`,
+          title: person.kind === 'director' ? t('Director: {name}', { name: person.name }) : t('With: {name}', { name: person.name }),
           style: person.kind === 'director' ? 'director' : 'cast',
           ids: filmsWith(person.kind, person.name),
         });
@@ -4441,7 +4442,7 @@
     try {
       const query = addQuery.value.trim();
       if (!query) {
-        addStatus.textContent = 'Titel oder Link eintragen.';
+        addStatus.textContent = t('Titel oder Link eintragen.');
         return;
       }
       if (!addQueryIsLink(query) && query.length >= 2) {
@@ -4452,18 +4453,18 @@
           return;
         }
       }
-      addStatus.textContent = 'Ich hole Daten von TMDB …';
+      addStatus.textContent = t('Ich hole Daten von TMDB …');
       addForm.querySelector('button[type=submit]').disabled = true;
       try {
         const response = await fetch(`/api/film?q=${encodeURIComponent(query)}`);
         const data = await response.json().catch(() => null);
         if (!response.ok || !data?.film || !data?.facets) {
-          addStatus.textContent = (data && data.error) || 'Dazu finde ich keinen Film.';
+          addStatus.textContent = t((data && data.error) || 'Dazu finde ich keinen Film.');
           return;
         }
         placeFilm(data.film, data.facets);
       } catch {
-        addStatus.textContent = 'Der Abruf ist gerade nicht möglich.';
+        addStatus.textContent = t('Der Abruf ist gerade nicht möglich.');
       } finally {
         addForm.querySelector('button[type=submit]').disabled = false;
       }
@@ -4625,7 +4626,7 @@
     film = withCanonicalId(film, facets);
     const existing = findExisting(film, facets);
     if (existing) {
-      addStatus.textContent = 'Den Film gibt es schon.';
+      addStatus.textContent = t('Den Film gibt es schon.');
       revealFilm(adopt(existing));
       return;
     }
@@ -4638,9 +4639,9 @@
     seatProvisional(film);
     const genre = (facets.genres || [])[0];
     const sub = (facets.subgenres || [])[0];
-    if (genre && sub) addStatus.textContent = `Eingeordnet als ${genre} · ${sub}`;
-    else if (genre) addStatus.textContent = `Eingeordnet als ${genre}`;
-    else addStatus.textContent = 'Eingeordnet.';
+    if (genre && sub) addStatus.textContent = t('Filed as {genre} · {sub}', { genre: t(genre), sub: t(sub) });
+    else if (genre) addStatus.textContent = t('Filed as {genre}', { genre: t(genre) });
+    else addStatus.textContent = t('Eingeordnet.');
     addQuery.value = '';
     revealFilm(film).then(() => scheduleRelayout());
   }
@@ -5319,7 +5320,7 @@
       input.value = miss.query;
       const search = document.createElement('button');
       search.type = 'button';
-      search.textContent = 'suchen';
+      search.textContent = t('suchen');
       const note = el('p', 'miss-note', miss.message);
       search.addEventListener('click', async () => {
         const query = input.value.trim();
@@ -5330,13 +5331,13 @@
           if (placeImported(data.film, data.facets)) {
             row.remove();
             showRoster();
-            status.textContent = 'Abgelegt.';
+            status.textContent = t('Abgelegt.');
           } else {
-            note.textContent = 'Den Film gibt es schon.';
+            note.textContent = t('Den Film gibt es schon.');
             row.remove();
           }
         } catch (error) {
-          note.textContent = error && error.message ? error.message : 'Dazu finde ich keinen Film.';
+          note.textContent = t(error && error.message ? error.message : 'Dazu finde ich keinen Film.');
         } finally {
           search.disabled = false;
         }
@@ -5352,7 +5353,7 @@
     const box = document.createElement('div');
     box.append(el('h2', null, 'Eigene Liste einfügen'));
     const field = document.createElement('textarea');
-    field.placeholder = 'Ein Titel pro Zeile. Optional: Titel (Jahr) oder ein Link.';
+    field.placeholder = t('Ein Titel pro Zeile. Optional: Titel (Jahr) oder ein Link.');
     const file = document.createElement('input');
     file.type = 'file';
     file.accept = '.csv,text/csv';
@@ -5377,7 +5378,7 @@
       if (importBusy) {
         requestCancel();
         cancel.disabled = true;
-        status.textContent = 'Wird abgebrochen …';
+        status.textContent = t('Wird abgebrochen …');
         return;
       }
       if (gate && !archive) openSheet(gateView());
@@ -5386,26 +5387,26 @@
     go.addEventListener('click', async () => {
       const queries = csvText ? queriesFromCsv(csvText) : queriesFromText(field.value);
       if (!queries.length) {
-        status.textContent = 'Trag mindestens einen Titel ein.';
+        status.textContent = t('Trag mindestens einen Titel ein.');
         return;
       }
       if (!archive) adoptArchive(globalThis.Store.create('leer'));
       go.disabled = true;
       importCancel = false;
       importBusy = true;
-      cancel.textContent = 'Abbrechen';
+      cancel.textContent = t('Abbrechen');
       const result = await importQueries(queries, (done, total) => {
         status.textContent = `${done} / ${total}`;
       });
       importBusy = false;
       cancel.disabled = false;
-      cancel.textContent = 'Schließen';
+      cancel.textContent = t('Schließen');
       await startApp();
       showRoster();
       const parts = [];
-      if (result.addedCount) parts.push(`${result.addedCount} hinzugefügt`);
-      if (result.skipped) parts.push(`${result.skipped} übersprungen`);
-      if (result.misses.length) parts.push(`${result.misses.length} nicht gefunden`);
+      if (result.addedCount) parts.push(t('{n} added', { n: result.addedCount }));
+      if (result.skipped) parts.push(t('{n} skipped', { n: result.skipped }));
+      if (result.misses.length) parts.push(t('{n} not found', { n: result.misses.length }));
       if (importCancel) parts.unshift('Abgebrochen');
       status.textContent = parts.join(', ') || 'Nichts Neues.';
       if (result.misses.length && !importCancel) renderMisses(misses, result.misses, status);
@@ -5758,7 +5759,7 @@
     const num = document.createElement('b');
     num.textContent = value;
     const caption = document.createElement('span');
-    caption.textContent = label;
+    caption.textContent = t(label);
     node.append(num, caption);
     if (onClick) node.addEventListener('click', onClick);
     return node;
@@ -5768,7 +5769,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'text-line';
-    button.textContent = label;
+    button.textContent = t(label);
     return button;
   }
 
@@ -6088,7 +6089,7 @@
     block.append(el('h2', 'profile-kicker', `Top ${topCap()}`));
     const films = pack.headFilms || [];
     if (!films.length) {
-      block.append(el('p', 'profile-note', 'Noch zu wenig Wertungen'));
+      block.append(el('p', 'profile-note', 'Not enough ratings yet'));
       return block;
     }
     const row = el('div', 'top-row');
@@ -6177,15 +6178,15 @@
     });
     const mineAvg = meanScore(myScores);
     const theirAvg = meanScore(theirScores);
-    section.append(el('p', 'compare-line', `Ihr habt beide gesehen: ${both}`));
-    section.append(el('p', 'compare-line', `Durchschnitt: du ${mineAvg == null ? '–' : scoreText(mineAvg)} · sie ${theirAvg == null ? '–' : scoreText(theirAvg)}`));
+    section.append(el('p', 'compare-line', t('You both watched: {names}', { names: both })));
+    section.append(el('p', 'compare-line', t('Average: you {mine} · them {their}', { mine: mineAvg == null ? '–' : scoreText(mineAvg), their: theirAvg == null ? '–' : scoreText(theirAvg) })));
     gaps.sort((a, b) => b.gap - a.gap || String(a.film.title || '').localeCompare(b.film.title || '', 'de'));
     const picked = gaps.slice(0, 3);
     if (picked.length) {
       const block = document.createElement('div');
       block.append(el('p', 'profile-kicker', 'Euer grösster Unterschied'));
       picked.forEach((item) => {
-        const line = el('button', 'text-line', `${item.film.title} · du ${scoreText(item.mine)} · sie ${scoreText(item.theirs)}`);
+        const line = el('button', 'text-line', t('{title} · you {mine} · them {their}', { title: item.film.title, mine: scoreText(item.mine), their: scoreText(item.theirs) }));
         line.type = 'button';
         line.addEventListener('click', () => openFilm(item.film));
         block.append(line);
@@ -6225,7 +6226,7 @@
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'back';
-    back.textContent = 'Zurück';
+    back.textContent = t('Zurück');
     back.addEventListener('click', () => renderProfile());
     root.append(back);
     const head = el('div', 'profile-head');
@@ -6343,8 +6344,8 @@
     const block = el('div', 'profile-find');
     const input = document.createElement('input');
     input.type = 'search';
-    input.placeholder = 'Profile suchen';
-    input.setAttribute('aria-label', 'Profile suchen');
+    input.placeholder = t('Profile suchen');
+    input.setAttribute('aria-label', t('Profile suchen'));
     input.autocomplete = 'off';
     const hits = el('div', 'profile-hits');
     let token = 0;
@@ -6391,7 +6392,7 @@
       const url = `${location.origin}${location.pathname}?profil=${encodeURIComponent(name)}`;
       try {
         await navigator.clipboard.writeText(url);
-        note.textContent = 'Link kopiert.';
+        note.textContent = t('Link kopiert.');
       } catch {
         note.textContent = url;
       }
@@ -6433,7 +6434,7 @@
     const input = host.querySelector('input');
     if (input) {
       input.value = '';
-      input.placeholder = '';
+      input.placeholder = t('');
     }
     const suggest = host.querySelector('.friend-suggest');
     if (suggest) {
@@ -6459,7 +6460,7 @@
     const plus = document.createElement('button');
     plus.type = 'button';
     plus.className = 'friend-plus';
-    plus.setAttribute('aria-label', 'Add Friend');
+    plus.setAttribute('aria-label', t('Add Friend'));
     plus.setAttribute('aria-expanded', 'false');
     const mark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     mark.setAttribute('viewBox', '0 0 24 24');
@@ -6469,14 +6470,14 @@
     const slot = el('div', 'line-slot');
     const input = document.createElement('input');
     input.type = 'text';
-    input.setAttribute('aria-label', 'Benutzername');
+    input.setAttribute('aria-label', t('Benutzername'));
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.maxLength = 20;
     const send = document.createElement('button');
     send.type = 'button';
     send.className = 'friend-send';
-    send.setAttribute('aria-label', 'Anfrage senden');
+    send.setAttribute('aria-label', t('Anfrage senden'));
     send.innerHTML = friendArrow;
     slot.append(input, send);
     row.append(plus, slot);
@@ -6487,7 +6488,7 @@
       box.classList.add('is-open');
       box.classList.remove('is-error', 'is-ok');
       plus.setAttribute('aria-expanded', 'true');
-      input.placeholder = '';
+      input.placeholder = t('');
       requestAnimationFrame(() => input.focus());
       openTransient(box, () => resetFriendInvite(box));
     };
@@ -6644,7 +6645,7 @@
   function archiveAddButton(film, remove) {
     const button = el('button', 'panel-add');
     button.type = 'button';
-    button.setAttribute('aria-label', 'Add');
+    button.setAttribute('aria-label', t('Add'));
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg><span>Add</span>';
     button.addEventListener('click', () => {
       if (!addFilmQuiet(film)) return;
@@ -6821,7 +6822,7 @@
     if (bar) {
       bar.hidden = false;
       const label = bar.querySelector('span');
-      if (label) label.textContent = `Vergleich mit ${compareName}`;
+      if (label) label.textContent = t('Compare with {name}', { name: compareName });
     }
     const pop = document.getElementById('compare-pop');
     if (pop) pop.hidden = true;
@@ -6925,10 +6926,10 @@
     button.type = 'button';
     button.className = kind === 'remove' ? 'friend-remove' : 'friend-wish';
     if (kind === 'wish') {
-      button.setAttribute('aria-label', 'Wunschliste');
+      button.setAttribute('aria-label', t('Wunschliste'));
       button.innerHTML = '<svg viewBox="11.6 8.9 23.8 21.2" aria-hidden="true"><path d="M34.1683 20.7058V29.0678H12.71V20.7058" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.6153 21.0938L15.7784 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M34.3842 21.0938L31.2211 15.5959" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12.7305 21.0974H29.6584M34.2682 21.0974H28.8838" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M23.4995 9.93219V18.6407" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19.1455 14.2865L27.854 14.2865" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     } else {
-      button.setAttribute('aria-label', 'Freundschaft entfernen');
+      button.setAttribute('aria-label', t('Freundschaft entfernen'));
       button.innerHTML = '<svg viewBox="0 0 23.8 21.2" aria-hidden="true"><path d="M0.9 0.9 22.9 20.3M22.9 0.9 0.9 20.3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
     }
     return button;
@@ -6960,13 +6961,13 @@
       window.clearTimeout(timer);
       remove.classList.remove('is-confirm');
       remove.textContent = '';
-      remove.setAttribute('aria-label', 'Freundschaft entfernen');
+      remove.setAttribute('aria-label', t('Freundschaft entfernen'));
       remove.innerHTML = friendGlyph('remove').innerHTML;
     };
     remove.addEventListener('click', async () => {
       if (!remove.classList.contains('is-confirm')) {
         remove.classList.add('is-confirm');
-        remove.textContent = 'Entfernen?';
+        remove.textContent = t('Entfernen?');
         window.clearTimeout(timer);
         timer = window.setTimeout(() => {
           endTransient(remove);
@@ -6999,7 +7000,7 @@
         remove.classList.remove('is-confirm');
         remove.textContent = '';
         remove.innerHTML = friendGlyph('remove').innerHTML;
-        remove.setAttribute('aria-label', 'Freundschaft entfernen');
+        remove.setAttribute('aria-label', t('Freundschaft entfernen'));
       }
     });
     const tools = el('div', 'friend-tools');
@@ -7019,7 +7020,7 @@
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'friend-back';
-    back.setAttribute('aria-label', 'Zurück');
+    back.setAttribute('aria-label', t('Zurück'));
     back.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6.5 8.5 12 15 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
     back.addEventListener('click', closeFriends);
     root.append(back);
@@ -7043,7 +7044,7 @@
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'back';
-    back.textContent = 'Zurück';
+    back.textContent = t('Zurück');
     back.addEventListener('click', () => {
       profileMode = 'home';
       listKind = '';
@@ -7092,7 +7093,7 @@
       rank.className = 'person-rank';
       rank.textContent = String(index + 1);
       if (!readOnly) {
-        rank.setAttribute('aria-label', person.pinned ? `${person.name} lösen` : `${person.name} anpinnen`);
+        rank.setAttribute('aria-label', person.pinned ? t('Unpin {name}', { name: person.name }) : t('Pin {name}', { name: person.name }));
         rank.addEventListener('click', () => togglePin(kind, person.name, person.pinned));
       }
       const name = document.createElement('button');
@@ -7100,7 +7101,7 @@
       name.className = 'person-name';
       name.textContent = person.name;
       name.addEventListener('click', () => highlight({
-        title: kind === 'directors' ? `Regie: ${person.name}` : `Mit: ${person.name}`,
+        title: kind === 'directors' ? t('Director: {name}', { name: person.name }) : t('With: {name}', { name: person.name }),
         style: kind === 'directors' ? 'director' : 'cast',
         ids: filmsWith(kind === 'directors' ? 'director' : 'cast', person.name),
       }));
@@ -7187,15 +7188,15 @@
         image.src = posterSrc(film);
         const tools = el('div', 'top-tools');
         const left = lineButton('‹');
-        left.setAttribute('aria-label', 'Nach links');
+        left.setAttribute('aria-label', t('Nach links'));
         left.disabled = index === 0;
         left.addEventListener('click', () => shiftTop(ids, index, -1, redraw));
         const right = lineButton('›');
-        right.setAttribute('aria-label', 'Nach rechts');
+        right.setAttribute('aria-label', t('Nach rechts'));
         right.disabled = index === ids.length - 1;
         right.addEventListener('click', () => shiftTop(ids, index, 1, redraw));
         const remove = lineButton('×');
-        remove.setAttribute('aria-label', 'Entfernen');
+        remove.setAttribute('aria-label', t('Entfernen'));
         remove.addEventListener('click', () => {
           ids.splice(index, 1);
           redraw();
@@ -7208,8 +7209,8 @@
       root.append(row);
       const search = document.createElement('input');
       search.type = 'text';
-      search.placeholder = 'Im Archiv suchen';
-      search.setAttribute('aria-label', 'Im Archiv suchen');
+      search.placeholder = t('Im Archiv suchen');
+      search.setAttribute('aria-label', t('Im Archiv suchen'));
       search.autocomplete = 'off';
       const hits = document.createElement('div');
       const status = el('p', 'profile-status', ids.length >= 5 ? 'Höchstens 5 Filme.' : '');
@@ -7228,7 +7229,7 @@
           hit.textContent = film.year ? `${film.title} · ${film.year}` : film.title;
           hit.addEventListener('click', () => {
             if (ids.length >= 5) {
-              status.textContent = 'Höchstens 5 Filme.';
+              status.textContent = t('Höchstens 5 Filme.');
               return;
             }
             ids.push(film.id);
@@ -7247,7 +7248,7 @@
           profileMode = 'home';
           paintProfile();
         } catch (error) {
-          status.textContent = profileFail(error);
+          status.textContent = t(profileFail(error));
           save.disabled = false;
         }
       });
@@ -7261,7 +7262,7 @@
           profileMode = 'home';
           paintProfile();
         } catch (error) {
-          status.textContent = profileFail(error);
+          status.textContent = t(profileFail(error));
           reset.disabled = false;
         }
       });
@@ -7345,11 +7346,11 @@
     nameInput.maxLength = 20;
     nameInput.spellcheck = false;
     nameInput.dataset.saved = savedName;
-    nameInput.setAttribute('aria-label', 'Display name');
+    nameInput.setAttribute('aria-label', t('Display name'));
     const saveName = document.createElement('button');
     saveName.type = 'button';
     saveName.className = 'name-save';
-    saveName.textContent = 'Save';
+    saveName.textContent = t('Save');
     saveName.hidden = true;
     const syncSave = () => {
       nameField.classList.remove('is-error');
@@ -7358,12 +7359,12 @@
     const showNameMessage = (message) => {
       nameField.classList.add('is-error');
       nameInput.value = '';
-      nameInput.placeholder = message;
+      nameInput.placeholder = t(message);
       saveName.hidden = true;
       window.setTimeout(() => {
         if (!nameInput.isConnected) return;
         nameField.classList.remove('is-error');
-        nameInput.placeholder = '';
+        nameInput.placeholder = t('');
         nameInput.value = nameInput.dataset.saved || '';
         saveName.hidden = true;
       }, 1400);
@@ -7371,7 +7372,7 @@
     const showLoginNow = (name) => {
       const old = stack.querySelector('.login-now');
       if (old) old.remove();
-      const note = el('p', 'login-now', `Login ab jetzt mit: ${name}`);
+      const note = el('p', 'login-now', t('From now on, sign in with: {name}', { name }));
       nameField.after(note);
       window.setTimeout(() => {
         if (note.isConnected) note.remove();
@@ -7423,11 +7424,11 @@
     const loginName = String((account && account.username) || '');
     if (displayName && loginName !== displayName.toLowerCase()) {
       const hint = el('p', 'login-sync');
-      hint.append(document.createTextNode(`Login-Name: ${loginName}`));
+      hint.append(document.createTextNode(t('Login name: {name}', { name: loginName })));
       const align = document.createElement('button');
       align.type = 'button';
       align.className = 'text-line';
-      align.textContent = 'angleichen';
+      align.textContent = t('angleichen');
       align.addEventListener('click', async () => {
         if (!globalThis.Cloud || !globalThis.Cloud.renameAccount) return;
         align.disabled = true;
@@ -7572,7 +7573,7 @@
         await leave();
         return true;
       } catch (error) {
-        status.textContent = profileFail(error);
+        status.textContent = t(profileFail(error));
         return false;
       }
     };
@@ -7597,7 +7598,7 @@
         if (!row.classList.contains('is-sure')) {
           status.textContent = '';
           row.classList.add('is-sure');
-          row.setAttribute('aria-label', `${label}: tap the icon again to confirm`);
+          row.setAttribute('aria-label', t('{label}: tap the icon again to confirm', { label }));
           window.clearTimeout(timer);
           timer = window.setTimeout(() => {
             endTransient(row);
@@ -7641,18 +7642,18 @@
     const input = document.createElement('input');
     input.type = 'email';
     input.autocomplete = 'email';
-    input.placeholder = 'E-Mail (freiwillig, nur zum Zurücksetzen)';
+    input.placeholder = t('E-Mail (freiwillig, nur zum Zurücksetzen)');
     input.value = profileMail && profileMail.email ? profileMail.email : '';
-    input.setAttribute('aria-label', 'E-Mail (freiwillig, nur zum Zurücksetzen)');
+    input.setAttribute('aria-label', t('E-Mail (freiwillig, nur zum Zurücksetzen)'));
     const status = el('p', 'profile-status', '');
     status.setAttribute('role', 'status');
     const save = document.createElement('button');
     save.type = 'button';
-    save.textContent = profileMail && profileMail.email ? 'Ändern' : 'Hinzufügen';
+    save.textContent = profileMail && profileMail.email ? t('Ändern') : t('Hinzufügen');
     save.addEventListener('click', async () => {
       const email = input.value.trim();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        status.textContent = 'Die E-Mail sieht ungültig aus.';
+        status.textContent = t('Die E-Mail sieht ungültig aus.');
         return;
       }
       save.disabled = true;
@@ -7671,7 +7672,7 @@
         profileMail = { email, verified: false };
         paintProfile();
       } catch (error) {
-        status.textContent = profileFail(error);
+        status.textContent = t(profileFail(error));
         save.disabled = false;
       }
     });
@@ -7679,7 +7680,7 @@
     if (profileMail && profileMail.email) {
       const remove = document.createElement('button');
       remove.type = 'button';
-      remove.textContent = 'Entfernen';
+      remove.textContent = t('Entfernen');
       remove.addEventListener('click', async () => {
         remove.disabled = true;
         try {
@@ -7687,7 +7688,7 @@
           profileMail = null;
           paintProfile();
         } catch (error) {
-          status.textContent = profileFail(error);
+          status.textContent = t(profileFail(error));
           remove.disabled = false;
         }
       });
@@ -7701,11 +7702,11 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.autocomplete = 'off';
-    input.placeholder = 'zurücksetzen';
-    input.setAttribute('aria-label', 'zurücksetzen eingeben');
+    input.placeholder = t('zurücksetzen');
+    input.setAttribute('aria-label', t('zurücksetzen eingeben'));
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = 'Archiv zurücksetzen';
+    button.textContent = t('Archiv zurücksetzen');
     button.disabled = true;
     input.addEventListener('input', () => {
       button.disabled = input.value.trim().toLocaleLowerCase('de') !== 'zurücksetzen';
@@ -7731,11 +7732,11 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.autocomplete = 'off';
-    input.placeholder = 'löschen';
-    input.setAttribute('aria-label', 'löschen eingeben');
+    input.placeholder = t('löschen');
+    input.setAttribute('aria-label', t('löschen eingeben'));
     const button = document.createElement('button');
     button.type = 'button';
-    button.textContent = 'Konto löschen';
+    button.textContent = t('Konto löschen');
     button.disabled = true;
     const status = el('p', 'profile-status', '');
     status.setAttribute('role', 'status');
@@ -7748,7 +7749,7 @@
         await globalThis.Cloud.deleteAccount();
         await leave();
       } catch (error) {
-        status.textContent = profileFail(error);
+        status.textContent = t(profileFail(error));
         button.disabled = false;
       }
     });
@@ -7865,14 +7866,16 @@
     if (day <= soon) return `${day.getDate()}.${day.getMonth() + 1}.`;
     const far = new Date(start.getFullYear(), start.getMonth() + 18, start.getDate());
     if (day > far) return String(day.getFullYear());
-    const names = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ'];
+    const names = uiLang() === 'de'
+      ? ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ']
+      : ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
     return `${names[day.getMonth()]} ${String(day.getFullYear()).slice(2)}`;
   }
 
   function releaseLine(film) {
     const day = localDay(filmReleaseIso(film));
     if (!day) return 'Erscheinungsdatum noch offen';
-    return `Erscheint am ${day.getDate()}.${day.getMonth() + 1}.${day.getFullYear()}`;
+    return t('Out on {date}', { date: `${day.getDate()}.${day.getMonth() + 1}.${day.getFullYear()}` });
   }
 
   function filmCatalogPayload(film, facets) {
@@ -8277,7 +8280,7 @@
     swatch.className = 'wish-swatch';
     swatch.style.color = color;
     swatch.innerHTML = '<svg viewBox="4.4 5.4 23.2 17.6" fill="none" aria-hidden="true"><path d="M26.6986 13.7058V22.0678H5.24023V13.7058" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5.14551 14.0937L9.76053 6.1003" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M26.7983 14.0937L22.1833 6.1003" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5.26074 14.0974H22.1887M26.7985 14.0974H21.4141" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9.32764 6.18579H22.6211" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M9.76074 11.5291H22.022" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path><path d="M11.0137 9.0127H20.9253" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
-    if (accepted) swatch.setAttribute('aria-label', 'Farbe');
+    if (accepted) swatch.setAttribute('aria-label', t('Farbe'));
     const label = el('span', 'wish-title', list.title || (invited ? 'Liste' : ''));
     label.style.color = color;
     cell.append(swatch, label);
@@ -8356,18 +8359,18 @@
     const root = document.documentElement;
     const layer = el('div', 'sphere-editor');
     layer.setAttribute('role', 'dialog');
-    layer.setAttribute('aria-label', 'Sphere colours');
+    layer.setAttribute('aria-label', t('Sphere colours'));
     const canvas = document.createElement('canvas');
     canvas.className = 'sphere-editor-sky';
     canvas.setAttribute('aria-hidden', 'true');
     const bar = el('div', 'sphere-editor-bar');
     const cancel = el('button', 'sphere-editor-cancel');
     cancel.type = 'button';
-    cancel.setAttribute('aria-label', 'Cancel');
+    cancel.setAttribute('aria-label', t('Cancel'));
     cancel.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
     const save = el('button', 'sphere-editor-save');
     save.type = 'button';
-    save.setAttribute('aria-label', 'Use these colours');
+    save.setAttribute('aria-label', t('Use these colours'));
     save.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5.5 12.5 10 17 18.5 7.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     bar.append(cancel, save);
     const touch = window.matchMedia('(hover: none)').matches;
@@ -8485,7 +8488,7 @@
     const roll = document.createElement('button');
     roll.type = 'button';
     roll.className = 'avatar-roll';
-    roll.setAttribute('aria-label', 'Profilbild neu würfeln');
+    roll.setAttribute('aria-label', t('Profilbild neu würfeln'));
     roll.append(dangerIcon('reset'));
     draw(account && account.avatar);
     wrap.append(roll);
@@ -8499,7 +8502,7 @@
     let tries = 0;
     const phone = window.matchMedia('(hover: none), (max-width: 720px)').matches;
     const showNote = (message) => {
-      note.textContent = message || '';
+      note.textContent = t(message || '');
     };
     const commit = async () => {
       window.clearTimeout(timer);
@@ -8640,7 +8643,7 @@
   function wishDrop(item, list, film) {
     const control = el('span', 'wish-drop');
     control.setAttribute('role', 'button');
-    control.setAttribute('aria-label', 'Aus der Liste entfernen');
+    control.setAttribute('aria-label', t('Aus der Liste entfernen'));
     control.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
     control.addEventListener('click', (event) => {
       event.preventDefault();
@@ -8789,7 +8792,7 @@
       openFilm(withCanonicalId({ ...next, id: payload.id }, resolved.facets || null));
     } catch (error) {
       button.disabled = false;
-      button.textContent = wishFail(error);
+      button.textContent = t(wishFail(error));
     }
   }
 
@@ -8805,7 +8808,7 @@
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'text-line';
-        button.textContent = `Auf TMDB gefunden: ${match.film.title} – verknüpfen`;
+        button.textContent = t('Found on TMDB: {title} – link it', { title: match.film.title });
         button.addEventListener('click', () => linkCustomFilm(film, match, button));
         const line = el('p', 'custom-link');
         line.append(button);
@@ -8902,7 +8905,7 @@
     const name = account && person.id === account.id
       ? (account.username || person.username || 'Profil')
       : (person.username || 'Profil');
-    return invited ? `${name} (eingeladen)` : name;
+    return invited ? t('{name} (invited)', { name }) : name;
   }
 
   function wishPersonNode(person) {
@@ -8959,8 +8962,8 @@
     input.type = 'text';
     input.className = 'wish-name';
     input.value = current;
-    input.placeholder = 'Name :';
-    input.setAttribute('aria-label', 'Name');
+    input.placeholder = t('Name :');
+    input.setAttribute('aria-label', t('Name'));
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.style.color = list.color || '';
@@ -9043,7 +9046,7 @@
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'wish-member-input';
-    input.setAttribute('aria-label', 'Freund einladen');
+    input.setAttribute('aria-label', t('Freund einladen'));
     input.autocomplete = 'off';
     input.spellcheck = false;
     const pop = el('div', 'wish-member-hits');
@@ -9111,7 +9114,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'wish-add-member';
-    button.setAttribute('aria-label', 'Mitglied einladen');
+    button.setAttribute('aria-label', t('Mitglied einladen'));
     button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5v15M4.5 12h15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>';
     button.addEventListener('click', (event) => {
       event.stopPropagation();
@@ -9125,7 +9128,7 @@
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'wish-x';
-    button.setAttribute('aria-label', 'Liste entfernen');
+    button.setAttribute('aria-label', t('Liste entfernen'));
     const sure = el('span', 'wish-sure', 'sure?');
     button.append(sure);
     button.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5 17.5 17.5M17.5 6.5 6.5 17.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg>');
@@ -9171,7 +9174,7 @@
       const owner = (list.members || []).find((person) => person.role === 'owner') || {};
       const row = el('div', 'wish-invite');
       row.dataset.list = list.id;
-      const text = el('p', null, `${owner.username || 'Jemand'} lädt dich zu «${list.title || 'Liste'}» ein`);
+      const text = el('p', null, t('{name} invites you to «{list}»', { name: owner.username || t('Someone'), list: list.title || t('List') }));
       const yes = lineButton('Ja');
       const no = lineButton('Nein');
       const lock = () => {
@@ -9211,8 +9214,8 @@
     const name = document.createElement('input');
     name.type = 'text';
     name.className = 'wish-name';
-    name.placeholder = 'Name :';
-    name.setAttribute('aria-label', 'Name');
+    name.placeholder = t('Name :');
+    name.setAttribute('aria-label', t('Name'));
     name.autocomplete = 'off';
     name.spellcheck = false;
     nameCell.append(name);
@@ -9233,7 +9236,7 @@
           name.disabled = false;
           pending = null;
           const note = bar.querySelector('.genre-count');
-          if (note) note.textContent = wishFail(error);
+          if (note) note.textContent = t(wishFail(error));
           return null;
         }
       })();
@@ -9427,7 +9430,7 @@
     const bar = el('div', 'wish-add-bar panel-bar');
     const closeIcon = el('button', 'panel-close');
     closeIcon.type = 'button';
-    closeIcon.setAttribute('aria-label', 'Close');
+    closeIcon.setAttribute('aria-label', t('Close'));
     closeIcon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
     closeIcon.addEventListener('click', clearSelection);
     bar.append(el('span', 'panel-grab'), closeIcon);
@@ -9449,7 +9452,7 @@
       const go = document.createElement('button');
       go.type = 'button';
       go.className = 'wish-add-go';
-      go.setAttribute('aria-label', 'Add');
+      go.setAttribute('aria-label', t('Add'));
       go.innerHTML = plusMark;
       line.append(input, go);
       const note = el('p', 'wish-add-note');
@@ -9510,7 +9513,7 @@
       const stamp = row.fromUpcoming ? releaseStamp(film) : '';
       const label = coverLabel(row);
       node.title = label;
-      node.setAttribute('aria-label', `Add ${label}`);
+      node.setAttribute('aria-label', t('Add {label}', { label }));
       const src = knownPoster(film);
       if (src) {
         const image = document.createElement('img');
@@ -9544,7 +9547,7 @@
       state.covers.replaceChildren(...nodes);
       const current = shown[state.cursor];
       if (current) state.note.textContent = coverLabel(current);
-      else state.note.textContent = state.message || '';
+      else state.note.textContent = t(state.message || '');
       state.go.disabled = !current && !(state === upcoming && state.query.length >= 2 && state.message);
       return shown;
     };
@@ -9653,8 +9656,8 @@
       year.className = 'wish-year';
       year.inputMode = 'numeric';
       year.maxLength = 4;
-      year.placeholder = 'Year';
-      year.setAttribute('aria-label', 'Year');
+      year.placeholder = t('Year');
+      year.setAttribute('aria-label', t('Year'));
       year.autocomplete = 'off';
       upcoming.extra.append(year);
       year.focus();
@@ -9729,7 +9732,7 @@
         }
         if (mine !== upcoming.token || !wishSearchList) return;
         upcoming.busy = false;
-        setPool(upcoming, found, `Add “${query}” as custom entry`);
+        setPool(upcoming, found, t('Add “{q}” as custom entry', { q: query }));
       }, 250);
     });
 
@@ -10086,7 +10089,7 @@
     name.append(el('span', null, 'Upcoming:'));
     bar.append(name);
     const strip = el('div', 'wish-coming');
-    strip.setAttribute('aria-label', 'Upcoming in cinemas');
+    strip.setAttribute('aria-label', t('Upcoming in cinemas'));
     wrap.append(bar, strip);
     loadUpcomingFeed().then((rows) => {
       const sorted = rows.slice().sort((a, b) => {
@@ -10229,8 +10232,8 @@
     title.type = 'button';
     title.addEventListener('click', () => openListedFilm(wishFilmObject(article._wishItem), list));
     const year = film.year ? `${film.year} · ` : '';
-    body.append(title, el('p', 'wish-meta', `${year}hinzugefügt von ${item.addedName}`));
-    const vote = el('button', 'wish-vote', `Will ich · ${item.votes.length}`);
+    body.append(title, el('p', 'wish-meta', `${year}${t('added by {name}', { name: item.addedName })}`));
+    const vote = el('button', 'wish-vote', t('Want it · {n}', { n: item.votes.length }));
     vote.type = 'button';
     vote.setAttribute('aria-pressed', item.mine ? 'true' : 'false');
     vote.addEventListener('click', () => changeWishVote(article._wishItem));
@@ -10264,10 +10267,10 @@
     if (title && title.textContent !== titleText) title.textContent = titleText;
     const meta = article.querySelector('.wish-meta');
     const year = film.year ? `${film.year} · ` : '';
-    const metaText = `${year}hinzugefügt von ${item.addedName}`;
+    const metaText = `${year}${t('added by {name}', { name: item.addedName })}`;
     if (meta && meta.textContent !== metaText) meta.textContent = metaText;
     const vote = article.querySelector('.wish-vote');
-    const voteText = `Will ich · ${item.votes.length}`;
+    const voteText = t('Want it · {n}', { n: item.votes.length });
     if (vote) {
       if (vote.textContent !== voteText) vote.textContent = voteText;
       vote.setAttribute('aria-pressed', item.mine ? 'true' : 'false');
@@ -10328,7 +10331,7 @@
       details = document.createElement('details');
       details.className = 'wish-done';
       const summary = document.createElement('summary');
-      summary.textContent = 'Zusammen geschaut';
+      summary.textContent = t('Zusammen geschaut');
       details.append(summary);
       doneHost.replaceChildren(details);
     }
@@ -10355,8 +10358,8 @@
       const names = list.members.map((person) => person.username).filter(Boolean).join(' · ');
       if (handle && handle.textContent !== names) handle.textContent = names;
       root.querySelectorAll('.wish-sort button').forEach((button) => {
-        const pressed = (button.textContent === 'Stimmen' && wishSort === 'votes')
-          || (button.textContent === 'Neueste' && wishSort === 'new');
+        const pressed = (button.dataset.sort === 'votes' && wishSort === 'votes')
+          || (button.dataset.sort === 'new' && wishSort === 'new');
         button.setAttribute('aria-pressed', pressed ? 'true' : 'false');
       });
     } else if (!(searching && document.getElementById('wish-items'))) {
@@ -10365,7 +10368,7 @@
       const back = document.createElement('button');
       back.type = 'button';
       back.className = 'back';
-      back.textContent = 'Zurück';
+      back.textContent = t('Zurück');
       back.addEventListener('click', () => renderProfile());
       const title = el('h1', null, list.title);
       title.dataset.wishList = list.id;
@@ -10374,6 +10377,7 @@
       root.append(paintWishManage(list));
       const sort = el('div', 'wish-sort');
       const byVotes = el('button', null, 'Stimmen');
+    byVotes.dataset.sort = 'votes';
       byVotes.type = 'button';
       byVotes.setAttribute('aria-pressed', wishSort === 'votes' ? 'true' : 'false');
       byVotes.addEventListener('click', () => {
@@ -10381,6 +10385,7 @@
         paintWishlist();
       });
       const byNew = el('button', null, 'Neueste');
+    byNew.dataset.sort = 'new';
       byNew.type = 'button';
       byNew.setAttribute('aria-pressed', wishSort === 'new' ? 'true' : 'false');
       byNew.addEventListener('click', () => {
@@ -10393,8 +10398,8 @@
       const search = document.createElement('input');
       search.id = 'wish-search';
       search.type = 'search';
-      search.placeholder = 'Film suchen';
-      search.setAttribute('aria-label', 'Film suchen');
+      search.placeholder = t('Film suchen');
+      search.setAttribute('aria-label', t('Film suchen'));
       search.autocomplete = 'off';
       search.hidden = true;
       const hits = el('div', 'profile-hits');
@@ -10473,14 +10478,14 @@
     const details = document.createElement('details');
     details.className = 'wish-manage';
     const summary = document.createElement('summary');
-    summary.textContent = 'Verwalten';
+    summary.textContent = t('Verwalten');
     details.append(summary);
     const me = account && account.id;
     if (list.role === 'owner') {
       const name = document.createElement('input');
       name.type = 'text';
       name.value = list.title;
-      name.setAttribute('aria-label', 'Titel');
+      name.setAttribute('aria-label', t('Titel'));
       const rename = lineButton('Umbenennen');
       rename.addEventListener('click', async () => {
         const title = name.value.trim();
@@ -10540,8 +10545,8 @@
       });
       const wipe = document.createElement('input');
       wipe.type = 'text';
-      wipe.placeholder = 'löschen';
-      wipe.setAttribute('aria-label', 'löschen eingeben');
+      wipe.placeholder = t('löschen');
+      wipe.setAttribute('aria-label', t('löschen eingeben'));
       const destroy = lineButton('Liste löschen');
       destroy.disabled = true;
       wipe.addEventListener('input', () => {
@@ -10850,13 +10855,13 @@
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'back';
-    back.textContent = 'Zurück';
+    back.textContent = t('Zurück');
     back.addEventListener('click', () => renderProfile());
     root.append(back, el('h1', null, 'Neue Wunschliste'));
     const input = document.createElement('input');
     input.type = 'text';
-    input.placeholder = 'Titel';
-    input.setAttribute('aria-label', 'Titel');
+    input.placeholder = t('Titel');
+    input.setAttribute('aria-label', t('Titel'));
     root.append(input, el('h2', 'profile-kicker', 'Mitglieder'));
     const picked = new Set();
     const people = mutualPeople();
@@ -10879,7 +10884,7 @@
     save.addEventListener('click', async () => {
       const title = input.value.trim();
       if (!title) {
-        status.textContent = 'Titel eintragen.';
+        status.textContent = t('Titel eintragen.');
         return;
       }
       save.disabled = true;
@@ -10889,7 +10894,7 @@
         openWishlist(id);
       } catch (error) {
         save.disabled = false;
-        status.textContent = wishFail(error, true);
+        status.textContent = t(wishFail(error, true));
       }
     });
     root.append(chips, save, status);
@@ -11039,7 +11044,7 @@
   }
 
   function paintWishSlot(slot, film) {
-    const button = lineButton('Zu Wunschliste hinzufügen');
+    const button = lineButton('Add to wishlist');
     const box = el('div', 'wish-choices');
     button.addEventListener('click', async () => {
       box.replaceChildren();
@@ -11092,7 +11097,7 @@
       };
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = `Ihr habt ${film.title} zusammen geschaut – jetzt bewerten`;
+      button.textContent = t('You watched {title} together – rate it now', { title: film.title });
       button.addEventListener('click', () => {
         host.hidden = true;
         openFilm(film);
@@ -11260,7 +11265,7 @@
     if (code === 'not_configured') return 'Die KI ist noch nicht eingerichtet.';
     if (code === 'cooldown') {
       const clock = error.retryAt ? new Date(error.retryAt).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : '';
-      return clock ? `Neu erstellen geht wieder ab ${clock}.` : 'Hat nicht geklappt. Bitte später nochmals versuchen.';
+      return clock ? t('You can create a new one again from {time}.', { time: clock }) : 'Hat nicht geklappt. Bitte später nochmals versuchen.';
     }
     if (code === 'quota') return 'Für heute ist das KI-Kontingent aufgebraucht. Morgen wieder.';
     if (code === 'too_few') return 'Zu wenige Bewertungen (mindestens 15).';
@@ -11287,7 +11292,9 @@
     return block;
   }
 
-  function tasteView(taste) {
+  function tasteView(source) {
+    // englische Fassung, wenn die App auf Englisch steht und es sie gibt
+    const taste = uiLang() === 'en' && source.en && source.en.title ? { ...source, ...source.en } : source;
     const block = el('div', 'taste-body');
     if (taste.title) block.append(el('h2', 'taste-title', taste.title));
     if (taste.taste) block.append(el('p', 'taste-copy', taste.taste));
@@ -11315,13 +11322,30 @@
   let tasteBusy = false;
   let tasteSerial = 0;
 
+  // eigenes Profil gibt es nur auf Deutsch: auf Englisch einmalig übersetzen lassen und dazuspeichern
+  function ensureTasteEnglish(slot, taste) {
+    const cloud = globalThis.Cloud;
+    if (uiLang() !== 'en' || !taste || !taste.title || (taste.en && taste.en.title)) return;
+    if (!cloud || !cloud.translateTaste || slot._translating) return;
+    slot._translating = true;
+    cloud.translateTaste().then((next) => {
+      slot._translating = false;
+      if (!next || !next.en || !slot.isConnected || slot._taste !== taste) return;
+      paintOwnTaste(slot, next);
+    }).catch((error) => {
+      slot._translating = false;
+      console.error('[taste]', error);
+    });
+  }
+
   function paintOwnTaste(slot, taste, options) {
     const opts = options || {};
     slot._taste = taste || null;
+    ensureTasteEnglish(slot, taste);
     slot.replaceChildren();
     if (!tasteCloudReady()) return;
     const count = ratedTasteFilms().length;
-    const block = tasteFrame(`From ${count} ratings`);
+    const block = tasteFrame(t('From {n} ratings', { n: count }));
     if (count < 15) {
       block.append(el('p', 'taste-quiet', t('A movie profile needs 15 rated movies ({n} to go).', { n: 15 - count })));
       slot.append(block);
@@ -11347,7 +11371,7 @@
     if (opts.busy) label = 'Creating…';
     else if (!open) {
       const until = new Date(made + 20 * 60 * 60 * 1000);
-      if (!Number.isNaN(until.getTime())) label = `from ${until.getDate()}.${until.getMonth() + 1}`;
+      if (!Number.isNaN(until.getTime())) label = t('from {date}', { date: `${until.getDate()}.${until.getMonth() + 1}` });
     }
     const tools = el('div', 'taste-tools');
     const again = document.createElement('button');
@@ -11444,7 +11468,7 @@
       if (token !== otherToken || viewingId !== personId) return;
       const slot = root.querySelector('.taste-slot');
       if (!slot || !taste || !taste.title) return;
-      const frame = tasteFrame(taste.rated_count ? `From ${taste.rated_count} ratings` : '');
+      const frame = tasteFrame(taste.rated_count ? t('From {n} ratings', { n: taste.rated_count }) : '');
       frame.append(tasteView(taste));
       slot.replaceChildren(frame);
     }).catch((error) => {
@@ -11620,7 +11644,7 @@
     }
     const box = document.createElement('div');
     box.append(el('h2', null, 'Lokales Archiv in dein Profil übernehmen?'));
-    box.append(el('p', null, `${countWord(preview.ratings, 'Wertung', 'Wertungen')}, ${countWord(preview.films, 'Film', 'Filme')}, ${countWord(preview.corrections, 'Korrektur', 'Korrekturen')}`));
+    box.append(el('p', null, `${countWord(preview.ratings, t('Wertung'), t('Wertungen'))}, ${countWord(preview.films, t('Film'), t('Filme'))}, ${countWord(preview.corrections, t('Korrektur'), t('Korrekturen'))}`));
     const take = choiceButton('Übernehmen');
     const skip = choiceButton('Nicht übernehmen');
     take.addEventListener('click', async () => {
@@ -11775,11 +11799,11 @@
         event.preventDefault();
         const password = first.input.value;
         if (password.length < 6) {
-          error.textContent = 'Das Passwort ist zu kurz.';
+          error.textContent = t('Das Passwort ist zu kurz.');
           return;
         }
         if (password !== second.input.value) {
-          error.textContent = 'Die Passwörter stimmen nicht überein.';
+          error.textContent = t('Die Passwörter stimmen nicht überein.');
           return;
         }
         save.disabled = true;
@@ -11788,7 +11812,7 @@
           const session = await globalThis.Cloud.getSession();
           await openSession(session, false);
         } catch (cause) {
-          error.textContent = authText(cause);
+          error.textContent = t(authText(cause));
           save.disabled = false;
         }
       });
@@ -11818,7 +11842,7 @@
           event.preventDefault();
           const username = name.input.value.trim().toLowerCase();
           if (!/^[a-z0-9_]{3,20}$/.test(username)) {
-            error.textContent = 'Der Benutzername braucht 3 bis 20 Zeichen: a–z, 0–9 oder _.';
+            error.textContent = t('Der Benutzername braucht 3 bis 20 Zeichen: a–z, 0–9 oder _.');
             return;
           }
           send.disabled = true;
@@ -11830,12 +11854,12 @@
             });
             const data = await response.json().catch(() => null);
             if (response.status === 503) {
-              error.textContent = 'Melde dich bei Luciano.';
+              error.textContent = t('Melde dich bei Luciano.');
               return;
             }
-            error.textContent = (data && data.message) || 'Falls eine bestätigte E-Mail hinterlegt ist, wurde ein Link verschickt.';
+            error.textContent = t((data && data.message) || 'Falls eine bestätigte E-Mail hinterlegt ist, wurde ein Link verschickt.');
           } catch {
-            error.textContent = 'Keine Verbindung.';
+            error.textContent = t('Keine Verbindung.');
             send.disabled = false;
           }
         });
@@ -11870,7 +11894,7 @@
           return;
         }
         if (!/^[a-z0-9_]{3,20}$/.test(value)) {
-          nameHint.textContent = '3 bis 20 Zeichen: a–z, 0–9 oder _.';
+          nameHint.textContent = t('3 bis 20 Zeichen: a–z, 0–9 oder _.');
           return;
         }
         nameHint.textContent = '';
@@ -11879,10 +11903,10 @@
           try {
             const free = await globalThis.Cloud.usernameAvailable(value);
             if (token !== nameToken) return;
-            nameHint.textContent = free ? '' : 'Dieser Benutzername ist vergeben.';
+            nameHint.textContent = free ? '' : t('Dieser Benutzername ist vergeben.');
           } catch {
             if (token !== nameToken) return;
-            nameHint.textContent = 'Keine Verbindung.';
+            nameHint.textContent = t('Keine Verbindung.');
           }
         }, 400);
       });
@@ -11912,28 +11936,28 @@
       const username = name.input.value.trim().toLowerCase();
       const secret = password.input.value;
       if (!username || !secret) {
-        error.textContent = 'Bitte Benutzername und Passwort eintragen.';
+        error.textContent = t('Bitte Benutzername und Passwort eintragen.');
         return;
       }
       if (!/^[a-z0-9_]{3,20}$/.test(username)) {
-        error.textContent = 'Der Benutzername braucht 3 bis 20 Zeichen: a–z, 0–9 oder _.';
+        error.textContent = t('Der Benutzername braucht 3 bis 20 Zeichen: a–z, 0–9 oder _.');
         return;
       }
       if (secret.length < 6) {
-        error.textContent = 'Das Passwort ist zu kurz.';
+        error.textContent = t('Das Passwort ist zu kurz.');
         return;
       }
       if (repeat && secret !== repeat.input.value) {
-        error.textContent = 'Die Passwörter stimmen nicht überein.';
+        error.textContent = t('Die Passwörter stimmen nicht überein.');
         return;
       }
-      if (!signingIn && nameHint && nameHint.textContent === 'Dieser Benutzername ist vergeben.') {
-        error.textContent = 'Dieser Benutzername ist vergeben.';
+      if (!signingIn && nameHint && nameHint.textContent === t('Dieser Benutzername ist vergeben.')) {
+        error.textContent = t('Dieser Benutzername ist vergeben.');
         return;
       }
       const email = mail && mail.input.value.trim();
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        error.textContent = 'Die E-Mail sieht ungültig aus.';
+        error.textContent = t('Die E-Mail sieht ungültig aus.');
         return;
       }
       submit.disabled = true;
@@ -11948,7 +11972,7 @@
         }
         const data = await globalThis.Cloud.signUp(username, secret, email || undefined);
         if (!data || !data.session) {
-          error.textContent = 'Die Anmeldung ist noch nicht frei. Schalte die E-Mail-Bestätigung im Supabase-Dashboard aus.';
+          error.textContent = t('Die Anmeldung ist noch nicht frei. Schalte die E-Mail-Bestätigung im Supabase-Dashboard aus.');
           submit.disabled = false;
           setGateBusy(false);
           return;
@@ -11978,7 +12002,7 @@
         }
         await openSession(data.session, true);
       } catch (cause) {
-        error.textContent = authText(cause);
+        error.textContent = t(authText(cause));
         submit.disabled = false;
         setGateBusy(false);
       }
